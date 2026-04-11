@@ -55,6 +55,8 @@ export const enMessages = {
   },
   common: {
     switchLanguage: "Switch language",
+    skipToContent: "Skip to main content",
+    primaryNavigation: "Primary navigation",
     demoState: "Demo data only",
     lead: "Lead",
     currentOwner: "Current owner",

@@ -41,6 +41,7 @@ Start every session by reading:
 
 ## Browser Testing
 
+- `pnpm test:web-a11y` runs accessibility-focused Playwright coverage for the seeded shell routes.
 - `pnpm test:web-smoke` runs the fast critical-path Playwright checks and excludes visual snapshot tests.
 - `pnpm test:web-visual` runs opt-in visual regression coverage for top demo routes.
 - `pnpm test:web-visual:update` refreshes visual baselines when an intentional UI change is accepted.

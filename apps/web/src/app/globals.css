@@ -45,11 +45,39 @@ a {
   text-decoration: none;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid rgba(75, 176, 255, 0.92);
+  outline-offset: 3px;
+}
+
 button,
 input,
 select,
 textarea {
   font: inherit;
+}
+
+.skip-link {
+  position: fixed;
+  inset-inline-start: 1rem;
+  top: 1rem;
+  z-index: 40;
+  border-radius: 999px;
+  padding: 0.8rem 1.1rem;
+  background: #f7f4ed;
+  color: #07111f;
+  font-weight: 700;
+  transform: translateY(-180%);
+  transition: transform 180ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
 }
 
 .app-body::before {

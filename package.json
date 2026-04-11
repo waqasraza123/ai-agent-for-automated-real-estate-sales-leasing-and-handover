@@ -13,13 +13,15 @@
     "safe-push": "bash ./scripts/safe-push.sh",
     "test": "pnpm test:fast && pnpm test:web-smoke",
     "test:fast": "vitest run",
-    "test:web-smoke": "playwright test --grep-invert @visual",
+    "test:web-a11y": "playwright test --grep @a11y",
+    "test:web-smoke": "playwright test --grep-invert \"@visual|@a11y\"",
     "test:web-visual": "playwright test --grep @visual",
     "test:web-visual:update": "playwright test --grep @visual --update-snapshots",
     "typecheck": "turbo run typecheck",
     "verify:push": "bash ./scripts/verify-push.sh"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@eslint/js": "^9.25.1",
     "@next/eslint-plugin-next": "^15.3.0",
     "@playwright/test": "^1.53.0",

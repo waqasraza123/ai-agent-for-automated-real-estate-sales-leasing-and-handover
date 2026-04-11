@@ -42,6 +42,10 @@ export function AppChrome(props: {
 
   return (
     <div className="chrome-shell" data-testid="app-chrome">
+      <a className="skip-link" href="#main-content">
+        {props.messages.common.skipToContent}
+      </a>
+
       <header className="chrome-header">
         <div className="chrome-brand">
           <strong>{props.messages.app.name}</strong>
@@ -64,10 +68,15 @@ export function AppChrome(props: {
       <div className="chrome-layout">
         <aside className="chrome-sidebar">
           <p className="sidebar-label">{props.messages.app.phaseLabel}</p>
-          <nav aria-label={props.messages.common.manager} className="sidebar-stack" data-testid="primary-navigation">
+          <nav
+            aria-label={props.messages.common.primaryNavigation}
+            className="sidebar-stack"
+            data-testid="primary-navigation"
+          >
             {navigation.map((item) => (
               <Link
                 key={item.href}
+                aria-current={pathname === item.href ? "page" : undefined}
                 className={cx("sidebar-link", pathname === item.href && "sidebar-link-active")}
                 href={item.href}
               >
@@ -78,7 +87,7 @@ export function AppChrome(props: {
           </nav>
         </aside>
 
-        <main className="chrome-main" data-testid="chrome-main">
+        <main className="chrome-main" data-testid="chrome-main" id="main-content" tabIndex={-1}>
           {props.children}
         </main>
       </div>

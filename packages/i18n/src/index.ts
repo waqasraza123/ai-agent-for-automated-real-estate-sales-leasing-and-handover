@@ -58,6 +58,8 @@ export interface AppMessages {
   };
   common: {
     switchLanguage: string;
+    skipToContent: string;
+    primaryNavigation: string;
     demoState: string;
     lead: string;
     currentOwner: string;

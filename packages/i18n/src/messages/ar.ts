@@ -55,6 +55,8 @@ export const arMessages = {
   },
   common: {
     switchLanguage: "تبديل اللغة",
+    skipToContent: "تخطي إلى المحتوى الرئيسي",
+    primaryNavigation: "التنقل الرئيسي",
     demoState: "بيانات تجريبية فقط",
     lead: "العميل",
     currentOwner: "المسؤول الحالي",
