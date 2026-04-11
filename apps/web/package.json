@@ -1,0 +1,20 @@
+{
+  "name": "@real-estate-ai/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev --port 3000",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@real-estate-ai/domain": "workspace:*",
+    "@real-estate-ai/i18n": "workspace:*",
+    "@real-estate-ai/ui": "workspace:*",
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}

@@ -2,5 +2,12 @@
 .env
 .env.*
 !.env.example
+node_modules/
+.next/
+.turbo/
+coverage/
+dist/
+playwright-report/
+test-results/
 
 docs/_local/

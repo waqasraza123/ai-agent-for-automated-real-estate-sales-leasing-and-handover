@@ -1,0 +1,31 @@
+{
+  "name": "ai-agent-for-automated-real-estate-sales-leasing-and-handover",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.11.1",
+  "scripts": {
+    "build": "turbo run build",
+    "clean": "rm -rf .turbo node_modules apps/web/.next coverage playwright-report test-results",
+    "dev": "pnpm --filter @real-estate-ai/web dev",
+    "dev:web": "pnpm --filter @real-estate-ai/web dev",
+    "lint": "eslint .",
+    "test": "pnpm test:fast && pnpm test:web-smoke",
+    "test:fast": "vitest run",
+    "test:web-smoke": "playwright test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.1",
+    "@next/eslint-plugin-next": "^15.3.0",
+    "@playwright/test": "^1.53.0",
+    "@types/node": "^22.15.17",
+    "@types/react": "^19.1.5",
+    "@types/react-dom": "^19.1.5",
+    "eslint": "^9.25.1",
+    "globals": "^16.0.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.31.1",
+    "vitest": "^3.1.2"
+  }
+}
