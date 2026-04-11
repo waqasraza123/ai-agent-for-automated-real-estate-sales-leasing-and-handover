@@ -5,6 +5,7 @@ import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
+import { StatefulStack } from "@/components/stateful-stack";
 
 interface PageProps {
   params: Promise<{ locale: SupportedLocale }>;
@@ -20,8 +21,11 @@ export default async function ManagerPage(props: PageProps) {
 
       <div className="two-column-grid">
         <Panel title={messages.manager.title}>
-          <div className="stack-list">
-            {demoDataset.managerAlerts.map((alert) => (
+          <StatefulStack
+            emptySummary={messages.states.emptyAlertsSummary}
+            emptyTitle={messages.states.emptyAlertsTitle}
+            items={demoDataset.managerAlerts}
+            renderItem={(alert) => (
               <article key={alert.id} className={`alert-row alert-row-${alert.severity}`}>
                 <div className="row-between">
                   <h3>{getLocalizedText(alert.title, locale)}</h3>
@@ -29,13 +33,16 @@ export default async function ManagerPage(props: PageProps) {
                 </div>
                 <p>{getLocalizedText(alert.detail, locale)}</p>
               </article>
-            ))}
-          </div>
+            )}
+          />
         </Panel>
 
         <Panel title={messages.leads.title}>
-          <div className="stack-list">
-            {demoDataset.cases.map((caseItem) => (
+          <StatefulStack
+            emptySummary={messages.states.emptyCasesSummary}
+            emptyTitle={messages.states.emptyCasesTitle}
+            items={demoDataset.cases}
+            renderItem={(caseItem) => (
               <Link key={caseItem.id} className="case-link-card" href={`/${locale}/leads/${caseItem.id}`}>
                 <div>
                   <p className="case-link-meta">{caseItem.referenceCode}</p>
@@ -44,8 +51,8 @@ export default async function ManagerPage(props: PageProps) {
                 </div>
                 <StatusBadge>{caseItem.owner}</StatusBadge>
               </Link>
-            ))}
-          </div>
+            )}
+          />
         </Panel>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { ScreenIntro } from "@/components/screen-intro";
+import { StatefulStack } from "@/components/stateful-stack";
 
 interface PageProps {
   params: Promise<{ locale: SupportedLocale; handoverCaseId: string }>;
@@ -30,8 +31,11 @@ export default async function HandoverPage(props: PageProps) {
       />
 
       <Panel title={handoverCase.customerName}>
-        <div className="stack-list">
-          {handoverCase.milestones.map((milestone) => (
+        <StatefulStack
+          emptySummary={messages.states.emptyMilestonesSummary}
+          emptyTitle={messages.states.emptyMilestonesTitle}
+          items={handoverCase.milestones}
+          renderItem={(milestone) => (
             <article key={milestone.id} className="milestone-card">
               <div className="row-between">
                 <div>
@@ -47,8 +51,8 @@ export default async function HandoverPage(props: PageProps) {
                 <span>{milestone.dueDate}</span>
               </div>
             </article>
-          ))}
-        </div>
+          )}
+        />
       </Panel>
 
       <PlaceholderNotice locale={locale} />

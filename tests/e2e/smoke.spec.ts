@@ -24,3 +24,17 @@ test("conversation shell shows the seeded thread", async ({ page }) => {
   await expect(page.getByTestId("conversation-thread")).toBeVisible();
   await expect(page.getByText("Fixture-backed agent draft")).toBeVisible();
 });
+
+test("documents shell renders seeded checklist states", async ({ page }) => {
+  await page.goto(smokeRoutes.leadDocuments);
+
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Document center");
+  await expect(page.getByText("missing")).toBeVisible();
+});
+
+test("handover shell renders milestone readiness", async ({ page }) => {
+  await page.goto(smokeRoutes.handover);
+
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Handover workspace");
+  await expect(page.getByText("blocked", { exact: true })).toBeVisible();
+});

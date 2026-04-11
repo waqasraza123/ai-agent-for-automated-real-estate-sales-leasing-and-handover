@@ -44,11 +44,35 @@ export function MetricTile(props: {
 export function EmptyState(props: {
   title: string;
   summary: string;
+  action?: ReactNode;
+  testId?: string;
 }) {
   return (
-    <div className="empty-state">
+    <div className="empty-state" data-testid={props.testId}>
       <h3>{props.title}</h3>
       <p>{props.summary}</p>
+      {props.action ? <div className="empty-state-action">{props.action}</div> : null}
+    </div>
+  );
+}
+
+export function SkeletonBlock(props: {
+  className?: string;
+}) {
+  return <div className={cx("skeleton-block", props.className)} />;
+}
+
+export function SkeletonLines(props: {
+  className?: string;
+  lines?: number;
+}) {
+  const lineCount = props.lines ?? 3;
+
+  return (
+    <div className={cx("skeleton-lines", props.className)}>
+      {Array.from({ length: lineCount }, (_, index) => (
+        <div key={index} className="skeleton-line" />
+      ))}
     </div>
   );
 }

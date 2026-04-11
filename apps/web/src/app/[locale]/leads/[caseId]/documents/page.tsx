@@ -7,6 +7,7 @@ import { Panel, StatusBadge } from "@real-estate-ai/ui";
 import { CaseRouteTabs } from "@/components/case-route-tabs";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { ScreenIntro } from "@/components/screen-intro";
+import { StatefulStack } from "@/components/stateful-stack";
 
 interface PageProps {
   params: Promise<{ locale: SupportedLocale; caseId: string }>;
@@ -28,8 +29,11 @@ export default async function DocumentsPage(props: PageProps) {
       <CaseRouteTabs caseId={caseItem.id} locale={locale} />
 
       <Panel title={messages.common.documents}>
-        <div className="stack-list">
-          {caseItem.documents.map((documentItem) => (
+        <StatefulStack
+          emptySummary={messages.states.emptyDocumentsSummary}
+          emptyTitle={messages.states.emptyDocumentsTitle}
+          items={caseItem.documents}
+          renderItem={(documentItem) => (
             <article key={documentItem.id} className="document-row">
               <div>
                 <h3>{getLocalizedText(documentItem.name, locale)}</h3>
@@ -39,8 +43,8 @@ export default async function DocumentsPage(props: PageProps) {
                 {documentItem.status}
               </StatusBadge>
             </article>
-          ))}
-        </div>
+          )}
+        />
       </Panel>
 
       <PlaceholderNotice locale={locale} />

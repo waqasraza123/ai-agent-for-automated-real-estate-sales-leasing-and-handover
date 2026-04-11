@@ -220,6 +220,10 @@ textarea {
   gap: 1.4rem;
 }
 
+.page-transition {
+  animation: page-enter 280ms ease;
+}
+
 .hero-shell,
 .two-column-grid {
   display: grid;
@@ -294,6 +298,27 @@ textarea {
   padding: 0.75rem 1.15rem;
   border-radius: 999px;
   transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.75rem 1.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--ocean), #a6d9ff);
+  color: #04101d;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.primary-button:hover,
+.primary-button:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
 }
 
 .primary-link {
@@ -621,6 +646,80 @@ textarea {
   flex-direction: column;
   gap: 0.6rem;
   color: var(--muted);
+}
+
+.empty-state-action {
+  margin-top: 0.35rem;
+}
+
+.skeleton-block,
+.skeleton-line {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.skeleton-block::after,
+.skeleton-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+.skeleton-heading {
+  width: 44%;
+  height: 0.95rem;
+}
+
+.skeleton-metric {
+  width: 58%;
+  height: 2.2rem;
+  margin: 0.6rem 0;
+}
+
+.skeleton-detail {
+  width: 72%;
+  height: 0.85rem;
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.skeleton-line {
+  height: 0.95rem;
+}
+
+.skeleton-line:nth-child(2n) {
+  width: 76%;
+}
+
+.skeleton-line:nth-child(2n + 1) {
+  width: 92%;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 1080px) {

@@ -70,5 +70,24 @@ export const enMessages = {
     manager: "Manager",
     placeholderNotice:
       "This screen is intentionally fixture-backed in Phase 1A so the repo can lock its structure before real workflow services are added."
+  },
+  states: {
+    loadingTitle: "Preparing the shell",
+    loadingSummary: "Loading the premium bilingual surface so the route transition stays clear and intentional.",
+    errorTitle: "The shell could not finish rendering",
+    errorSummary: "The app frame is intact, but this route needs another attempt before the next slice continues.",
+    retry: "Try again",
+    emptyAlertsTitle: "No manager alerts in this fixture set",
+    emptyAlertsSummary: "The shell is ready to present intervention signals as soon as the seeded or live data layer provides them.",
+    emptyCasesTitle: "No seeded cases available",
+    emptyCasesSummary: "This view is wired for pipeline visibility, but the current dataset did not provide any cases.",
+    emptyMessagesTitle: "No conversation history yet",
+    emptyMessagesSummary: "The thread surface is ready, but this case fixture does not currently include messages.",
+    emptyDocumentsTitle: "No document blockers yet",
+    emptyDocumentsSummary: "The checklist shell is prepared for future document workflow states.",
+    emptyTimelineTitle: "No timeline events yet",
+    emptyTimelineSummary: "This route can already display timeline context once seeded or persisted events arrive.",
+    emptyMilestonesTitle: "No handover milestones yet",
+    emptyMilestonesSummary: "The handover shell is ready, but this fixture set does not include active milestones."
   }
 } as const;

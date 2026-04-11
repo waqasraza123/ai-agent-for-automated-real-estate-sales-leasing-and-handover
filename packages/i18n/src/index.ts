@@ -73,6 +73,25 @@ export interface AppMessages {
     manager: string;
     placeholderNotice: string;
   };
+  states: {
+    loadingTitle: string;
+    loadingSummary: string;
+    errorTitle: string;
+    errorSummary: string;
+    retry: string;
+    emptyAlertsTitle: string;
+    emptyAlertsSummary: string;
+    emptyCasesTitle: string;
+    emptyCasesSummary: string;
+    emptyMessagesTitle: string;
+    emptyMessagesSummary: string;
+    emptyDocumentsTitle: string;
+    emptyDocumentsSummary: string;
+    emptyTimelineTitle: string;
+    emptyTimelineSummary: string;
+    emptyMilestonesTitle: string;
+    emptyMilestonesSummary: string;
+  };
 }
 
 export const locales: SupportedLocale[] = ["en", "ar"];

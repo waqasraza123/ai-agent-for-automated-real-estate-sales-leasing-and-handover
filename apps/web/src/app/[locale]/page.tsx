@@ -4,6 +4,8 @@ import { demoDataset, getLocalizedText, type SupportedLocale } from "@real-estat
 import { getMessages } from "@real-estate-ai/i18n";
 import { MetricTile, Panel, StatusBadge } from "@real-estate-ai/ui";
 
+import { StatefulStack } from "@/components/stateful-stack";
+
 interface PageProps {
   params: Promise<{ locale: SupportedLocale }>;
 }
@@ -50,20 +52,26 @@ export default async function LandingPage(props: PageProps) {
       <div className="two-column-grid">
         <Panel title={messages.dashboard.title}>
           <p className="panel-summary">{messages.dashboard.summary}</p>
-          <div className="stack-list">
-            {demoDataset.managerAlerts.map((alert) => (
+          <StatefulStack
+            emptySummary={messages.states.emptyAlertsSummary}
+            emptyTitle={messages.states.emptyAlertsTitle}
+            items={demoDataset.managerAlerts}
+            renderItem={(alert) => (
               <article key={alert.id} className={`alert-row alert-row-${alert.severity}`}>
                 <h3>{getLocalizedText(alert.title, locale)}</h3>
                 <p>{getLocalizedText(alert.detail, locale)}</p>
               </article>
-            ))}
-          </div>
+            )}
+          />
         </Panel>
 
         <Panel title={messages.leads.title}>
           <p className="panel-summary">{messages.leads.summary}</p>
-          <div className="stack-list">
-            {demoDataset.cases.map((caseItem) => (
+          <StatefulStack
+            emptySummary={messages.states.emptyCasesSummary}
+            emptyTitle={messages.states.emptyCasesTitle}
+            items={demoDataset.cases}
+            renderItem={(caseItem) => (
               <Link key={caseItem.id} className="case-link-card" href={`/${locale}/leads/${caseItem.id}`}>
                 <div>
                   <p className="case-link-meta">{caseItem.referenceCode}</p>
@@ -72,8 +80,8 @@ export default async function LandingPage(props: PageProps) {
                 </div>
                 <StatusBadge>{getLocalizedText(caseItem.stage, locale)}</StatusBadge>
               </Link>
-            ))}
-          </div>
+            )}
+          />
         </Panel>
       </div>
     </div>

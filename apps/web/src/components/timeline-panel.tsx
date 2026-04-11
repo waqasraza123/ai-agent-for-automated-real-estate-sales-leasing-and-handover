@@ -1,12 +1,20 @@
 import { getLocalizedText, type JourneyEvent, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { Panel } from "@real-estate-ai/ui";
+import { EmptyState, Panel } from "@real-estate-ai/ui";
 
 export function TimelinePanel(props: {
   events: JourneyEvent[];
   locale: SupportedLocale;
 }) {
   const messages = getMessages(props.locale);
+
+  if (props.events.length === 0) {
+    return (
+      <Panel title={messages.common.timeline}>
+        <EmptyState summary={messages.states.emptyTimelineSummary} title={messages.states.emptyTimelineTitle} />
+      </Panel>
+    );
+  }
 
   return (
     <Panel title={messages.common.timeline}>

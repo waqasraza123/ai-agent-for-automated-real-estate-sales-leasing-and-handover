@@ -3,6 +3,7 @@ import { getMessages } from "@real-estate-ai/i18n";
 import { MetricTile, Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
+import { StatefulStack } from "@/components/stateful-stack";
 
 interface PageProps {
   params: Promise<{ locale: SupportedLocale }>;
@@ -34,8 +35,11 @@ export default async function DashboardPage(props: PageProps) {
 
       <div className="two-column-grid">
         <Panel eyebrow={messages.common.demoState} title={messages.manager.title}>
-          <div className="stack-list">
-            {demoDataset.managerAlerts.map((alert) => (
+          <StatefulStack
+            emptySummary={messages.states.emptyAlertsSummary}
+            emptyTitle={messages.states.emptyAlertsTitle}
+            items={demoDataset.managerAlerts}
+            renderItem={(alert) => (
               <article key={alert.id} className={`alert-row alert-row-${alert.severity}`}>
                 <div className="row-between">
                   <h3>{getLocalizedText(alert.title, locale)}</h3>
@@ -43,13 +47,16 @@ export default async function DashboardPage(props: PageProps) {
                 </div>
                 <p>{getLocalizedText(alert.detail, locale)}</p>
               </article>
-            ))}
-          </div>
+            )}
+          />
         </Panel>
 
         <Panel eyebrow={messages.common.nextAction} title={messages.leads.title}>
-          <div className="stack-list">
-            {demoDataset.cases.map((caseItem) => (
+          <StatefulStack
+            emptySummary={messages.states.emptyCasesSummary}
+            emptyTitle={messages.states.emptyCasesTitle}
+            items={demoDataset.cases}
+            renderItem={(caseItem) => (
               <article key={caseItem.id} className="case-stack-card">
                 <p className="case-link-meta">{caseItem.referenceCode}</p>
                 <h3>{caseItem.customerName}</h3>
@@ -59,8 +66,8 @@ export default async function DashboardPage(props: PageProps) {
                   <StatusBadge>{getLocalizedText(caseItem.stage, locale)}</StatusBadge>
                 </div>
               </article>
-            ))}
-          </div>
+            )}
+          />
         </Panel>
       </div>
     </div>
