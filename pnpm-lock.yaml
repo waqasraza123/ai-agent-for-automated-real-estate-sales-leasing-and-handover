@@ -74,6 +74,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@real-estate-ai/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@real-estate-ai/domain':
         specifier: workspace:*
         version: link:../../packages/domain

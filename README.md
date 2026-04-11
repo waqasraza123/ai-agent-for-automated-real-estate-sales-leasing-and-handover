@@ -35,12 +35,13 @@ The repository is past bootstrap and currently contains a production-grade Phase
 - TypeScript monorepo with `pnpm` workspaces and `turbo`
 - Next.js App Router web shell in `apps/web`
 - Fastify API foundation in `apps/api`
-- shared `contracts`, `database`, and `workflows` backend packages for the first persisted workflow slice
+- shared `contracts`, `database`, and `workflows` backend packages for persisted workflow slices
 - shared `domain`, `i18n`, `ui`, and `testing` packages
 - English and Arabic locale routing with RTL-aware rendering
-- fixture-backed premium demo surfaces for landing, dashboard, leads, conversation, scheduling, documents, handover, and manager views
+- hybrid web routes that fall back to premium seeded demo data when the API is unavailable
+- live alpha workflow for website lead intake, qualification, visit scheduling, document tracking, and manager review
 - Playwright smoke tests and opt-in visual regression baselines
-- integration-tested website lead capture and manager-readable persisted case APIs
+- integration-tested website lead capture, qualification, visit scheduling, document updates, and manager-readable persisted case APIs
 - versioned safe-push verification via `.githooks/pre-push`
 
 Not implemented yet:
@@ -50,6 +51,7 @@ Not implemented yet:
 - authentication and authorization
 - provider integrations
 - real AI execution and workflow automation
+- persisted handover lifecycle beyond the demo shell
 
 ## Product Positioning
 
@@ -132,6 +134,8 @@ pnpm dev
 pnpm dev:api
 ```
 
+For the live alpha path, run both the web app and the API. When `apps/api` is not running, the web app keeps falling back to the seeded premium demo routes.
+
 Default local route examples:
 
 - `http://localhost:3000/en`
@@ -165,6 +169,8 @@ Push verification:
 pnpm verify:push
 pnpm safe-push -- origin main
 ```
+
+`pnpm verify:push` now runs typecheck, lint, fast tests, integration tests, and the production build.
 
 ## Roadmap Snapshot
 

@@ -13,7 +13,9 @@ run_step() {
 }
 
 run_step "Typecheck" pnpm typecheck
+run_step "Lint" pnpm lint
 run_step "Fast tests" pnpm test:fast
+run_step "Integration tests" pnpm test:integration
 run_step "Production build" pnpm build
 
 printf '\nPush verification passed.\n'

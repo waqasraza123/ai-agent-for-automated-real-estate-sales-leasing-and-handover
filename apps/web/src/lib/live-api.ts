@@ -1,0 +1,123 @@
+import type {
+  CreateWebsiteLeadInput,
+  CreateWebsiteLeadResult,
+  PersistedCaseDetail,
+  PersistedCaseSummary,
+  QualifyCaseInput,
+  ScheduleVisitInput,
+  UpdateDocumentRequestInput
+} from "@real-estate-ai/contracts";
+
+const defaultApiBaseUrl = "http://127.0.0.1:4000";
+
+interface ApiRequestOptions {
+  cache?: RequestCache;
+  method?: "GET" | "POST" | "PATCH";
+  payload?: unknown;
+}
+
+export class WebApiError extends Error {
+  body: unknown;
+  status: number;
+
+  constructor(message: string, status: number, body: unknown) {
+    super(message);
+    this.body = body;
+    this.status = status;
+  }
+}
+
+export async function createWebsiteLead(input: CreateWebsiteLeadInput) {
+  return requestJson<CreateWebsiteLeadResult>("/v1/website-leads", {
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function getPersistedCaseDetailFromApi(caseId: string) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}`, {
+    cache: "no-store"
+  });
+}
+
+export async function listPersistedCasesFromApi() {
+  const payload = await requestJson<{
+    cases: PersistedCaseSummary[];
+  }>("/v1/cases", {
+    cache: "no-store"
+  });
+
+  return payload.cases;
+}
+
+export async function qualifyCase(caseId: string, input: QualifyCaseInput) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/qualification`, {
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function scheduleVisit(caseId: string, input: ScheduleVisitInput) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/visits`, {
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function tryGetPersistedCaseDetail(caseId: string) {
+  try {
+    return await getPersistedCaseDetailFromApi(caseId);
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 404) {
+      return null;
+    }
+
+    return null;
+  }
+}
+
+export async function tryListPersistedCases() {
+  try {
+    return await listPersistedCasesFromApi();
+  } catch {
+    return [];
+  }
+}
+
+export async function updateDocumentRequest(caseId: string, documentRequestId: string, input: UpdateDocumentRequestInput) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/documents/${documentRequestId}`, {
+    method: "PATCH",
+    payload: input
+  });
+}
+
+export function getWebApiBaseUrl() {
+  const configuredBaseUrl = process.env.WEB_API_BASE_URL ?? defaultApiBaseUrl;
+
+  return configuredBaseUrl.replace(/\/$/, "");
+}
+
+async function requestJson<T>(path: string, options?: ApiRequestOptions) {
+  const requestInit: RequestInit = {
+    cache: options?.cache ?? "no-store",
+    headers: {
+      "content-type": "application/json"
+    },
+    method: options?.method ?? "GET",
+    signal: AbortSignal.timeout(8000)
+  };
+
+  if (options?.payload) {
+    requestInit.body = JSON.stringify(options.payload);
+  }
+
+  const response = await fetch(`${getWebApiBaseUrl()}${path}`, requestInit);
+
+  const responseBody = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new WebApiError(`web_api_request_failed:${response.status}`, response.status, responseBody);
+  }
+
+  return responseBody as T;
+}

@@ -9,6 +9,7 @@ test("landing shell renders in English", async ({ page }) => {
     "Turn lead response, follow-up discipline, and handover visibility into a product advantage."
   );
   await expect(page.getByTestId("landing-shell-note")).toBeVisible();
+  await expect(page.getByLabel("Customer name")).toBeVisible();
 });
 
 test("dashboard route renders in Arabic with rtl direction", async ({ page }) => {

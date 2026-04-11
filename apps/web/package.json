@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@real-estate-ai/contracts": "workspace:*",
     "@real-estate-ai/domain": "workspace:*",
     "@real-estate-ai/i18n": "workspace:*",
     "@real-estate-ai/ui": "workspace:*",

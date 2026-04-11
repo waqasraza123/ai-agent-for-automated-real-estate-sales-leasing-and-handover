@@ -4,7 +4,10 @@ import { demoDataset, getLocalizedText, type SupportedLocale } from "@real-estat
 import { getMessages } from "@real-estate-ai/i18n";
 import { MetricTile, Panel, StatusBadge } from "@real-estate-ai/ui";
 
+import { LeadCaptureForm } from "@/components/lead-capture-form";
 import { StatefulStack } from "@/components/stateful-stack";
+import { buildCaseReferenceCode, getPersistedCaseStageLabel } from "@/lib/persisted-case-presenters";
+import { tryListPersistedCases } from "@/lib/live-api";
 
 interface PageProps {
   params: Promise<{ locale: SupportedLocale }>;
@@ -13,6 +16,8 @@ interface PageProps {
 export default async function LandingPage(props: PageProps) {
   const { locale } = await props.params;
   const messages = getMessages(locale);
+  const persistedCases = await tryListPersistedCases();
+  const highlightedCases = persistedCases.slice(0, 3);
 
   return (
     <div className="page-stack">
@@ -50,38 +55,50 @@ export default async function LandingPage(props: PageProps) {
       </section>
 
       <div className="two-column-grid">
-        <Panel title={messages.dashboard.title}>
-          <p className="panel-summary">{messages.dashboard.summary}</p>
-          <StatefulStack
-            emptySummary={messages.states.emptyAlertsSummary}
-            emptyTitle={messages.states.emptyAlertsTitle}
-            items={demoDataset.managerAlerts}
-            renderItem={(alert) => (
-              <article key={alert.id} className={`alert-row alert-row-${alert.severity}`}>
-                <h3>{getLocalizedText(alert.title, locale)}</h3>
-                <p>{getLocalizedText(alert.detail, locale)}</p>
-              </article>
-            )}
-          />
+        <Panel title={locale === "ar" ? "التشغيل الحي" : "Live alpha intake"}>
+          <p className="panel-summary">
+            {locale === "ar"
+              ? "هذا هو المسار الأول الذي ينتقل من واجهة الويب إلى `apps/api` ثم يعود إلى شاشات الإدارة والحالة المحفوظة."
+              : "This is the first live path that leaves the web shell, persists into `apps/api`, and returns to manager-facing views."}
+          </p>
+          <LeadCaptureForm locale={locale} />
         </Panel>
 
         <Panel title={messages.leads.title}>
           <p className="panel-summary">{messages.leads.summary}</p>
-          <StatefulStack
-            emptySummary={messages.states.emptyCasesSummary}
-            emptyTitle={messages.states.emptyCasesTitle}
-            items={demoDataset.cases}
-            renderItem={(caseItem) => (
-              <Link key={caseItem.id} className="case-link-card" href={`/${locale}/leads/${caseItem.id}`}>
-                <div>
-                  <p className="case-link-meta">{caseItem.referenceCode}</p>
-                  <h3>{caseItem.customerName}</h3>
-                  <p>{getLocalizedText(caseItem.summary, locale)}</p>
-                </div>
-                <StatusBadge>{getLocalizedText(caseItem.stage, locale)}</StatusBadge>
-              </Link>
-            )}
-          />
+          {highlightedCases.length > 0 ? (
+            <StatefulStack
+              emptySummary={messages.states.emptyCasesSummary}
+              emptyTitle={messages.states.emptyCasesTitle}
+              items={highlightedCases}
+              renderItem={(item) => (
+                <Link key={item.caseId} className="case-link-card" href={`/${locale}/leads/${item.caseId}`}>
+                  <div>
+                    <p className="case-link-meta">{buildCaseReferenceCode(item.caseId)}</p>
+                    <h3>{item.customerName}</h3>
+                    <p>{item.nextAction}</p>
+                  </div>
+                  <StatusBadge>{getPersistedCaseStageLabel(locale, item.stage)}</StatusBadge>
+                </Link>
+              )}
+            />
+          ) : (
+            <StatefulStack
+              emptySummary={messages.states.emptyCasesSummary}
+              emptyTitle={messages.states.emptyCasesTitle}
+              items={demoDataset.cases}
+              renderItem={(item) => (
+                <Link key={item.id} className="case-link-card" href={`/${locale}/leads/${item.id}`}>
+                  <div>
+                    <p className="case-link-meta">{item.referenceCode}</p>
+                    <h3>{item.customerName}</h3>
+                    <p>{getLocalizedText(item.summary, locale)}</p>
+                  </div>
+                  <StatusBadge>{getLocalizedText(item.stage, locale)}</StatusBadge>
+                </Link>
+              )}
+            />
+          )}
         </Panel>
       </div>
     </div>

@@ -22,7 +22,7 @@ describe("lead capture api", () => {
     await store.close();
   });
 
-  it("creates a persisted website lead case", async () => {
+  it("creates a persisted website lead case with seeded document requests", async () => {
     const response = await app.inject({
       method: "POST",
       payload: {
@@ -43,11 +43,19 @@ describe("lead capture api", () => {
 
     expect(createdCase.stage).toBe("new");
     expect(createdCase.source).toBe("website");
-    expect(createdCase.customerName).toBe("Aisha Rahman");
-    expect(createdCase.projectInterest).toBe("Sunrise Residences");
+    expect(createdCase.ownerName).toBe("Revenue Ops Queue");
+    expect(createdCase.followUpStatus).toBe("on_track");
+
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${createdCase.caseId}`
+    });
+
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json().documentRequests).toHaveLength(3);
   });
 
-  it("lists the same persisted case for manager review", async () => {
+  it("qualifies a case, schedules a visit, and updates document workflow state", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
@@ -62,6 +70,48 @@ describe("lead capture api", () => {
 
     const createdCase = createResponse.json();
 
+    const qualificationResponse = await app.inject({
+      method: "POST",
+      payload: {
+        budgetBand: "SAR 1.9M to 2.2M",
+        intentSummary: "Family buyer with high intent and flexible weekend availability.",
+        moveInTimeline: "Within 60 days",
+        readiness: "high"
+      },
+      url: `/v1/cases/${createdCase.caseId}/qualification`
+    });
+
+    expect(qualificationResponse.statusCode).toBe(200);
+    expect(qualificationResponse.json().stage).toBe("qualified");
+    expect(qualificationResponse.json().qualificationSnapshot.readiness).toBe("high");
+
+    const visitResponse = await app.inject({
+      method: "POST",
+      payload: {
+        location: "Palm Horizon Discovery Center",
+        scheduledAt: "2026-04-15T12:30:00.000Z"
+      },
+      url: `/v1/cases/${createdCase.caseId}/visits`
+    });
+
+    expect(visitResponse.statusCode).toBe(200);
+    expect(visitResponse.json().stage).toBe("visit_scheduled");
+    expect(visitResponse.json().currentVisit.location).toBe("Palm Horizon Discovery Center");
+
+    const documentRequestId = visitResponse.json().documentRequests[0]?.documentRequestId;
+
+    const documentResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "under_review"
+      },
+      url: `/v1/cases/${createdCase.caseId}/documents/${documentRequestId}`
+    });
+
+    expect(documentResponse.statusCode).toBe(200);
+    expect(documentResponse.json().stage).toBe("documents_in_progress");
+    expect(documentResponse.json().documentRequests[0]?.status).toBe("under_review");
+
     const listResponse = await app.inject({
       method: "GET",
       url: "/v1/cases"
@@ -69,20 +119,11 @@ describe("lead capture api", () => {
 
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json().cases).toHaveLength(1);
-    expect(listResponse.json().cases[0]?.caseId).toBe(createdCase.caseId);
-
-    const detailResponse = await app.inject({
-      method: "GET",
-      url: `/v1/cases/${createdCase.caseId}`
-    });
-
-    expect(detailResponse.statusCode).toBe(200);
-    expect(detailResponse.json().auditEvents).toHaveLength(1);
-    expect(detailResponse.json().auditEvents[0]?.eventType).toBe("website_lead_received");
+    expect(listResponse.json().cases[0]?.stage).toBe("documents_in_progress");
   });
 
-  it("rejects an invalid website lead payload", async () => {
-    const response = await app.inject({
+  it("rejects invalid payloads for mutation endpoints", async () => {
+    const createResponse = await app.inject({
       method: "POST",
       payload: {
         customerName: "X",
@@ -91,7 +132,19 @@ describe("lead capture api", () => {
       url: "/v1/website-leads"
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json().error).toBe("invalid_request");
+    expect(createResponse.statusCode).toBe(400);
+
+    const missingCaseResponse = await app.inject({
+      method: "POST",
+      payload: {
+        budgetBand: "USD 1M",
+        intentSummary: "Valid qualification summary for a missing case lookup.",
+        moveInTimeline: "Soon",
+        readiness: "high"
+      },
+      url: "/v1/cases/00000000-0000-0000-0000-000000000000/qualification"
+    });
+
+    expect(missingCaseResponse.statusCode).toBe(404);
   });
 });
