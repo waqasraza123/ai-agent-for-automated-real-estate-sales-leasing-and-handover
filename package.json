@@ -9,10 +9,13 @@
     "dev": "pnpm --filter @real-estate-ai/web dev",
     "dev:web": "pnpm --filter @real-estate-ai/web dev",
     "lint": "eslint .",
+    "setup:githooks": "git config core.hooksPath .githooks && chmod +x .githooks/pre-push scripts/verify-push.sh scripts/safe-push.sh",
+    "safe-push": "bash ./scripts/safe-push.sh",
     "test": "pnpm test:fast && pnpm test:web-smoke",
     "test:fast": "vitest run",
     "test:web-smoke": "playwright test",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "verify:push": "bash ./scripts/verify-push.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.1",

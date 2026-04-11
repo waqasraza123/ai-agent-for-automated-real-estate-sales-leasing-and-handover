@@ -10,7 +10,7 @@
 ## Current Architecture
 - Implemented architecture now includes a TypeScript monorepo foundation with `apps/web`
 - Shared packages implemented in Phase 1A are `domain`, `i18n`, `ui`, and `testing`
-- Root tooling now includes `pnpm` workspaces, `turbo`, TypeScript base config, ESLint, Vitest, and Playwright
+- Root tooling now includes `pnpm` workspaces, `turbo`, TypeScript base config, ESLint, Vitest, Playwright, and a versioned pre-push safety system
 - The web application is a Next.js App Router shell with EN and AR routes, RTL-aware layout switching, seeded fixtures, and placeholder Phase 1 surfaces
 - `apps/api`, `apps/worker`, `contracts`, `database`, `workflows`, `integrations`, `analytics`, and `config` remain planned but unimplemented
 - Durable memory is kept in `docs/project-state.md`
@@ -40,6 +40,7 @@
 - Added planning docs for repo architecture, domain model, user journeys, roadmap, testing, i18n, and Intel Mac local development
 - Implemented `Phase 1A: Flagship Demo Core`
 - Added the monorepo workspace, shared package shells, Next.js web shell, bilingual routing, premium landing/dashboard/inbox/profile/conversation/scheduling/documents/handover/manager screens, and smoke-test coverage
+- Added a versioned safe-push system with `.githooks/pre-push`, `scripts/verify-push.sh`, `scripts/safe-push.sh`, and root push-verification scripts
 
 ## Important Decisions
 - `docs/product-spec.md` is the durable product source of truth until implementation matures
@@ -52,6 +53,9 @@
 - PostgreSQL with Drizzle is the planned persistence direction
 - The first implementation phase is `Phase 1A: Flagship Demo Core`, which is web-first and fixture-backed
 - Phase 1A intentionally uses seeded local fixtures instead of real persistence, live AI execution, or external providers
+- The repository uses a versioned `core.hooksPath` pointing to `.githooks`
+- Normal `git push` runs `scripts/verify-push.sh` via `.githooks/pre-push`
+- `pnpm safe-push` is the preferred AI-facing push command
 
 ## Deferred / Not Yet Implemented
 - Backend services
@@ -81,4 +85,5 @@
 - `pnpm test:web-smoke`
 - `pnpm build`
 - `pnpm lint`
+- `pnpm verify:push`
 - `git check-ignore -v docs/_local/current-session.md`
