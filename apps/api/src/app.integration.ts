@@ -866,9 +866,203 @@ describe("lead capture api", () => {
     expect(allowedArchiveStatusResponse.statusCode).toBe(200);
     expect(allowedArchiveStatusResponse.json().archiveStatus.status).toBe("ready");
   }, 50000);
+
+  it("enforces role-aware follow-up, automation, blocker, and execution controls", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Rami Saeed",
+        email: "rami@example.com",
+        message: "Need a manager-owned follow-up path before my scheduled visit.",
+        preferredLocale: "en",
+        projectInterest: "Sunrise Residences"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const createdCase = createResponse.json();
+
+    const forbiddenFollowUpResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "POST",
+      payload: {
+        nextAction: "Confirm tomorrow's discovery-call slot with the buyer and re-arm manager visibility.",
+        nextActionDueAt: "2026-04-16T09:00:00.000Z",
+        ownerName: "Sales Desk"
+      },
+      url: `/v1/cases/${createdCase.caseId}/follow-up-plan`
+    });
+
+    expect(forbiddenFollowUpResponse.statusCode).toBe(403);
+    expect(forbiddenFollowUpResponse.json().permission).toBe("manage_case_follow_up");
+
+    const allowedFollowUpResponse = await app.inject({
+      headers: {
+        "x-operator-role": "sales_manager"
+      },
+      method: "POST",
+      payload: {
+        nextAction: "Confirm tomorrow's discovery-call slot with the buyer and re-arm manager visibility.",
+        nextActionDueAt: "2026-04-16T09:00:00.000Z",
+        ownerName: "Sales Desk"
+      },
+      url: `/v1/cases/${createdCase.caseId}/follow-up-plan`
+    });
+
+    expect(allowedFollowUpResponse.statusCode).toBe(200);
+    expect(allowedFollowUpResponse.json().nextAction).toContain("discovery-call");
+
+    const forbiddenAutomationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "POST",
+      payload: {
+        status: "paused"
+      },
+      url: `/v1/cases/${createdCase.caseId}/automation`
+    });
+
+    expect(forbiddenAutomationResponse.statusCode).toBe(403);
+    expect(forbiddenAutomationResponse.json().permission).toBe("manage_case_automation");
+
+    const allowedAutomationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "admin"
+      },
+      method: "POST",
+      payload: {
+        status: "paused"
+      },
+      url: `/v1/cases/${createdCase.caseId}/automation`
+    });
+
+    expect(allowedAutomationResponse.statusCode).toBe(200);
+    expect(allowedAutomationResponse.json().automationStatus).toBe("paused");
+
+    const scheduledHandoverRecord = await createScheduledHandoverRecord(app);
+
+    const forbiddenBlockerCreateResponse = await app.inject({
+      headers: {
+        "x-operator-role": "sales_manager"
+      },
+      method: "POST",
+      payload: {
+        dueAt: "2026-04-22T09:00:00.000Z",
+        ownerName: "Project Defects Desk",
+        severity: "warning",
+        status: "open",
+        summary: "A sales manager attempted to log a snag without a handover execution role.",
+        type: "unit_snag"
+      },
+      url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/blockers`
+    });
+
+    expect(forbiddenBlockerCreateResponse.statusCode).toBe(403);
+    expect(forbiddenBlockerCreateResponse.json().permission).toBe("manage_handover_blockers");
+
+    const allowedBlockerCreateResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "POST",
+      payload: {
+        dueAt: "2026-04-22T09:00:00.000Z",
+        ownerName: "Project Defects Desk",
+        severity: "warning",
+        status: "open",
+        summary: "A unit snag was logged for the entryway touch-up before handover-day execution starts.",
+        type: "unit_snag"
+      },
+      url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/blockers`
+    });
+
+    expect(allowedBlockerCreateResponse.statusCode).toBe(201);
+    expect(allowedBlockerCreateResponse.json().blockers).toHaveLength(1);
+
+    const blockerId = allowedBlockerCreateResponse.json().blockers[0]?.blockerId;
+
+    const forbiddenExecutionResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        status: "in_progress"
+      },
+      url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/execution`
+    });
+
+    expect(forbiddenExecutionResponse.statusCode).toBe(403);
+    expect(forbiddenExecutionResponse.json().permission).toBe("manage_handover_execution");
+
+    const allowedBlockerResolveResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        dueAt: "2026-04-22T11:00:00.000Z",
+        ownerName: "Project Defects Desk",
+        severity: "warning",
+        status: "resolved",
+        summary: "The entryway touch-up was completed and the snag was cleared."
+      },
+      url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/blockers/${blockerId}`
+    });
+
+    expect(allowedBlockerResolveResponse.statusCode).toBe(200);
+    expect(allowedBlockerResolveResponse.json().blockers[0]?.status).toBe("resolved");
+
+    const allowedExecutionResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
+      method: "PATCH",
+      payload: {
+        status: "in_progress"
+      },
+      url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/execution`
+    });
+
+    expect(allowedExecutionResponse.statusCode).toBe(200);
+    expect(allowedExecutionResponse.json().status).toBe("in_progress");
+
+    const forbiddenCompletionResponse = await app.inject({
+      headers: {
+        "x-operator-role": "sales_manager"
+      },
+      method: "PATCH",
+      payload: {
+        completionSummary: "A sales manager attempted to close the handover without the execution role.",
+        status: "completed"
+      },
+      url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/completion`
+    });
+
+    expect(forbiddenCompletionResponse.statusCode).toBe(403);
+    expect(forbiddenCompletionResponse.json().permission).toBe("manage_handover_execution");
+
+    const allowedCompletionResponse = await app.inject({
+      headers: {
+        "x-operator-role": "admin"
+      },
+      method: "PATCH",
+      payload: {
+        completionSummary: "The manager-approved handover execution was completed and the record is now closed.",
+        status: "completed"
+      },
+      url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/completion`
+    });
+
+    expect(allowedCompletionResponse.statusCode).toBe(200);
+    expect(allowedCompletionResponse.json().status).toBe("completed");
+  }, 50000);
 });
 
-async function createCompletedHandoverRecord(app: ReturnType<typeof buildApiApp>) {
+async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>) {
   const createResponse = await app.inject({
     method: "POST",
     payload: {
@@ -1040,7 +1234,7 @@ async function createCompletedHandoverRecord(app: ReturnType<typeof buildApiApp>
     url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${appointmentConfirmationId}/delivery`
   });
 
-  await app.inject({
+  const scheduledResponse = await app.inject({
     method: "PATCH",
     payload: {
       status: "ready_to_dispatch"
@@ -1048,12 +1242,22 @@ async function createCompletedHandoverRecord(app: ReturnType<typeof buildApiApp>
     url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${appointmentConfirmationId}/dispatch-ready`
   });
 
+  return {
+    caseId: createdCase.caseId,
+    handoverCaseId,
+    handoverStatus: scheduledResponse.json().status
+  };
+}
+
+async function createCompletedHandoverRecord(app: ReturnType<typeof buildApiApp>) {
+  const scheduledHandoverRecord = await createScheduledHandoverRecord(app);
+
   await app.inject({
     method: "PATCH",
     payload: {
       status: "in_progress"
     },
-    url: `/v1/handover-cases/${handoverCaseId}/execution`
+    url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/execution`
   });
 
   const completionResponse = await app.inject({
@@ -1062,12 +1266,12 @@ async function createCompletedHandoverRecord(app: ReturnType<typeof buildApiApp>
       completionSummary: "Keys were released, the walkthrough was acknowledged, and the live handover record is complete.",
       status: "completed"
     },
-    url: `/v1/handover-cases/${handoverCaseId}/completion`
+    url: `/v1/handover-cases/${scheduledHandoverRecord.handoverCaseId}/completion`
   });
 
   return {
-    caseId: createdCase.caseId,
-    handoverCaseId,
+    caseId: scheduledHandoverRecord.caseId,
+    handoverCaseId: scheduledHandoverRecord.handoverCaseId,
     handoverStatus: completionResponse.json().status
   };
 }

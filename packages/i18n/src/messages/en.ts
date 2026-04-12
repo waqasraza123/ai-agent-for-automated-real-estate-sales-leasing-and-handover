@@ -57,7 +57,7 @@ export const enMessages = {
     switchLanguage: "Switch language",
     operatorRole: "Operator role",
     applyRole: "Apply role",
-    roleGuardNote: "Post-completion and archive controls require handover manager or admin.",
+    roleGuardNote: "Sensitive follow-up, execution, and closure controls depend on the local operator role.",
     skipToContent: "Skip to main content",
     primaryNavigation: "Primary navigation",
     demoState: "Demo data only",

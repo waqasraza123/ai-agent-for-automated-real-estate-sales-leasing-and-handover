@@ -2,6 +2,13 @@ import { z } from "zod";
 
 export const supportedLocaleSchema = z.enum(["en", "ar"]);
 export const operatorRoleSchema = z.enum(["sales_manager", "handover_coordinator", "handover_manager", "admin"]);
+export const operatorPermissionSchema = z.enum([
+  "manage_case_follow_up",
+  "manage_case_automation",
+  "manage_handover_blockers",
+  "manage_handover_execution",
+  "manage_handover_governance"
+]);
 export const leadSourceSchema = z.enum(["website"]);
 export const caseStageSchema = z.enum(["new", "qualified", "visit_scheduled", "documents_in_progress", "handover_initiated"]);
 export const followUpStatusSchema = z.enum(["on_track", "attention"]);
@@ -167,6 +174,12 @@ export const saveHandoverArchiveReviewInputSchema = z.object({
 export const updateHandoverArchiveStatusInputSchema = z.object({
   status: handoverArchiveStatusSchema,
   summary: z.string().trim().min(10).max(280)
+});
+
+export const insufficientRoleErrorSchema = z.object({
+  error: z.literal("insufficient_role"),
+  permission: operatorPermissionSchema,
+  requiredRoles: z.array(operatorRoleSchema).min(1)
 });
 
 export const persistedQualificationSnapshotSchema = z.object({
@@ -402,6 +415,7 @@ export type MarkHandoverCustomerUpdateDispatchReadyInput = z.infer<typeof markHa
 export type ManagerInterventionSeverity = z.infer<typeof managerInterventionSeveritySchema>;
 export type ManagerInterventionStatus = z.infer<typeof managerInterventionStatusSchema>;
 export type ManagerInterventionType = z.infer<typeof managerInterventionTypeSchema>;
+export type OperatorPermission = z.infer<typeof operatorPermissionSchema>;
 export type OperatorRole = z.infer<typeof operatorRoleSchema>;
 export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
@@ -437,3 +451,20 @@ export type UpdateDocumentRequestInput = z.infer<typeof updateDocumentRequestInp
 export type UpdateHandoverArchiveStatusInput = z.infer<typeof updateHandoverArchiveStatusInputSchema>;
 export type UpdateHandoverBlockerInput = z.infer<typeof updateHandoverBlockerInputSchema>;
 export type UpdateHandoverTaskStatusInput = z.infer<typeof updateHandoverTaskStatusInputSchema>;
+export type InsufficientRoleError = z.infer<typeof insufficientRoleErrorSchema>;
+
+const operatorPermissionRequirements = {
+  manage_case_automation: ["sales_manager", "handover_manager", "admin"],
+  manage_case_follow_up: ["sales_manager", "handover_manager", "admin"],
+  manage_handover_blockers: ["handover_coordinator", "handover_manager", "admin"],
+  manage_handover_execution: ["handover_manager", "admin"],
+  manage_handover_governance: ["handover_manager", "admin"]
+} as const satisfies Record<OperatorPermission, readonly OperatorRole[]>;
+
+export function getRequiredOperatorRoles(permission: OperatorPermission): OperatorRole[] {
+  return [...operatorPermissionRequirements[permission]];
+}
+
+export function canOperatorRolePerform(permission: OperatorPermission, operatorRole: OperatorRole) {
+  return getRequiredOperatorRoles(permission).includes(operatorRole);
+}

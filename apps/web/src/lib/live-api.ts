@@ -85,8 +85,9 @@ export async function listPersistedCasesFromApi() {
   return payload.cases;
 }
 
-export async function manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput) {
+export async function manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput, operatorRole?: OperatorRole) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/follow-up-plan`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "POST",
     payload: input
   });
@@ -138,8 +139,9 @@ export async function tryListPersistedCases() {
   }
 }
 
-export async function updateAutomationStatus(caseId: string, input: UpdateAutomationStatusInput) {
+export async function updateAutomationStatus(caseId: string, input: UpdateAutomationStatusInput, operatorRole?: OperatorRole) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/automation`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "POST",
     payload: input
   });
@@ -159,8 +161,9 @@ export async function updateHandoverTask(handoverCaseId: string, handoverTaskId:
   });
 }
 
-export async function createHandoverBlocker(handoverCaseId: string, input: CreateHandoverBlockerInput) {
+export async function createHandoverBlocker(handoverCaseId: string, input: CreateHandoverBlockerInput, operatorRole?: OperatorRole) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/blockers`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "POST",
     payload: input
   });
@@ -169,23 +172,31 @@ export async function createHandoverBlocker(handoverCaseId: string, input: Creat
 export async function updateHandoverBlocker(
   handoverCaseId: string,
   blockerId: string,
-  input: UpdateHandoverBlockerInput
+  input: UpdateHandoverBlockerInput,
+  operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/blockers/${blockerId}`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "PATCH",
     payload: input
   });
 }
 
-export async function startHandoverExecution(handoverCaseId: string, input: StartHandoverExecutionInput) {
+export async function startHandoverExecution(
+  handoverCaseId: string,
+  input: StartHandoverExecutionInput,
+  operatorRole?: OperatorRole
+) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/execution`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "PATCH",
     payload: input
   });
 }
 
-export async function completeHandover(handoverCaseId: string, input: CompleteHandoverInput) {
+export async function completeHandover(handoverCaseId: string, input: CompleteHandoverInput, operatorRole?: OperatorRole) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/completion`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "PATCH",
     payload: input
   });

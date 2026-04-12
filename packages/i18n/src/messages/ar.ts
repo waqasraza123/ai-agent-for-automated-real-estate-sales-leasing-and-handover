@@ -57,7 +57,7 @@ export const arMessages = {
     switchLanguage: "تبديل اللغة",
     operatorRole: "دور المشغل",
     applyRole: "تطبيق الدور",
-    roleGuardNote: "ضوابط ما بعد التسليم والأرشفة تتطلب مدير التسليم أو المشرف.",
+    roleGuardNote: "ضوابط المتابعة والتنفيذ والإغلاق الحساسة تعتمد على دور المشغل المحلي.",
     skipToContent: "تخطي إلى المحتوى الرئيسي",
     primaryNavigation: "التنقل الرئيسي",
     demoState: "بيانات تجريبية فقط",

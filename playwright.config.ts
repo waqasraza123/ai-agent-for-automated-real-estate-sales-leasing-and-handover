@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const useProductionServer = process.env.PLAYWRIGHT_WEB_SERVER_MODE === "prod";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -9,7 +11,9 @@ export default defineConfig({
     trace: "on-first-retry"
   },
   webServer: {
-    command: "pnpm --dir apps/web exec next dev --hostname 127.0.0.1 --port 3100",
+    command: useProductionServer
+      ? "pnpm --dir apps/web exec next start --hostname 127.0.0.1 --port 3100"
+      : "pnpm --dir apps/web exec next dev --hostname 127.0.0.1 --port 3100",
     env: {
       FORCE_COLOR: "0"
     },

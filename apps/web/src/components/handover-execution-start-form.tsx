@@ -10,6 +10,8 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getHandoverExecutionCopy } from "@/lib/live-copy";
 
 export function HandoverExecutionStartForm(props: {
+  canManage: boolean;
+  disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   returnPath: string;
@@ -31,6 +33,10 @@ export function HandoverExecutionStartForm(props: {
         {alreadyStarted ? (
           <button className="primary-button" disabled type="button">
             {props.locale === "ar" ? "تم البدء" : "Already started"}
+          </button>
+        ) : !props.canManage ? (
+          <button className="primary-button" disabled type="button">
+            {props.disabledLabel}
           </button>
         ) : canStart ? (
           <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ البدء..." : "Starting..."} />

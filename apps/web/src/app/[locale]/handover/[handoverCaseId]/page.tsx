@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
-import { getDemoHandoverCaseById, getLocalizedText, type SupportedLocale } from "@real-estate-ai/domain";
+import { canOperatorRolePerform, type SupportedLocale } from "@real-estate-ai/contracts";
+import { getDemoHandoverCaseById, getLocalizedText } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
@@ -25,6 +27,11 @@ import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
 import { TimelinePanel } from "@/components/timeline-panel";
 import {
+  getOperatorPermissionGuardNote,
+  getOperatorRoleFromCookie,
+  operatorRoleCookieName
+} from "@/lib/operator-role";
+import {
   buildCaseReferenceCode,
   getPersistedHandoverAppointmentDisplay,
   getPersistedHandoverArchiveReviewDisplay,
@@ -48,6 +55,8 @@ export default async function HandoverPage(props: PageProps) {
   const { locale, handoverCaseId } = await props.params;
   const messages = getMessages(locale);
   const persistedHandoverCase = await tryGetPersistedHandoverCaseDetail(handoverCaseId);
+  const cookieStore = await cookies();
+  const currentOperatorRole = getOperatorRoleFromCookie(cookieStore.get(operatorRoleCookieName)?.value);
 
   if (persistedHandoverCase) {
     const appointmentItem = getPersistedHandoverAppointmentDisplay(locale, persistedHandoverCase);
@@ -74,6 +83,10 @@ export default async function HandoverPage(props: PageProps) {
           : archiveStatusItem?.status === "archived"
             ? (["archived"] as const)
             : (["ready"] as const);
+    const canManageExecution = canOperatorRolePerform("manage_handover_execution", currentOperatorRole);
+    const canManageBlockers = canOperatorRolePerform("manage_handover_blockers", currentOperatorRole);
+    const executionGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_execution");
+    const blockerGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_blockers");
 
     return (
       <div className="page-stack">
@@ -158,6 +171,7 @@ export default async function HandoverPage(props: PageProps) {
                   ? "ابدأ حالة التنفيذ الحي بعد اكتمال الجدولة الداخلية وتصفية العوائق المفتوحة، من دون تشغيل أي تكامل خارجي."
                   : "Start the live execution state after internal scheduling is complete and open blockers are cleared, without triggering any external integration."}
               </p>
+              <p className="field-note">{executionGuardNote}</p>
               <div className="detail-grid">
                 <div>
                   <p className="detail-label">{locale === "ar" ? "بدأ التنفيذ" : "Execution started"}</p>
@@ -175,6 +189,8 @@ export default async function HandoverPage(props: PageProps) {
                 </div>
               </div>
               <HandoverExecutionStartForm
+                canManage={canManageExecution}
+                disabledLabel={locale === "ar" ? "يتطلب مدير التسليم" : "Handover manager required"}
                 handoverCaseId={persistedHandoverCase.handoverCaseId}
                 locale={locale}
                 returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
@@ -190,6 +206,7 @@ export default async function HandoverPage(props: PageProps) {
                   ? "أغلق يوم التسليم بملخص إتمام واضح بعد انتهاء التنفيذ ومعالجة العوائق المفتوحة."
                   : "Close the handover day with a clear completion summary after execution finishes and open blockers are resolved."}
               </p>
+              <p className="field-note">{executionGuardNote}</p>
               <div className="detail-grid">
                 <div>
                   <p className="detail-label">{locale === "ar" ? "اكتمل في" : "Completed at"}</p>
@@ -210,7 +227,9 @@ export default async function HandoverPage(props: PageProps) {
                 </div>
               </div>
               <HandoverCompletionForm
+                canManage={canManageExecution}
                 completionSummary={persistedHandoverCase.completionSummary ?? ""}
+                disabledLabel={locale === "ar" ? "يتطلب مدير التسليم" : "Handover manager required"}
                 handoverCaseId={persistedHandoverCase.handoverCaseId}
                 locale={locale}
                 returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
@@ -567,6 +586,7 @@ export default async function HandoverPage(props: PageProps) {
                   ? "بعد وصول السجل إلى حالة مجدولة، استخدم هذا القسم لإبقاء الـ snag والعوائق الميدانية مرئية قبل التنفيذ الفعلي."
                   : "Once the record reaches the scheduled boundary, use this section to keep snags and field blockers visible before live execution."}
               </p>
+              <p className="field-note">{blockerGuardNote}</p>
               <StatefulStack
                 emptySummary={
                   locale === "ar"
@@ -593,6 +613,8 @@ export default async function HandoverPage(props: PageProps) {
                     <div className="document-row-actions">
                       <HandoverBlockerStatusForm
                         blockerId={blocker.blockerId}
+                        canManage={canManageBlockers}
+                        disabledLabel={locale === "ar" ? "يتطلب دور تنفيذ التسليم" : "Execution role required"}
                         dueAt={blocker.dueAtInput}
                         handoverCaseId={persistedHandoverCase.handoverCaseId}
                         locale={locale}
@@ -608,6 +630,8 @@ export default async function HandoverPage(props: PageProps) {
               />
               {persistedHandoverCase.status === "scheduled" ? (
                 <HandoverBlockerForm
+                  canManage={canManageBlockers}
+                  disabledLabel={locale === "ar" ? "يتطلب دور تنفيذ التسليم" : "Execution role required"}
                   dueAt={appointmentItem?.scheduledAtInput ?? ""}
                   handoverCaseId={persistedHandoverCase.handoverCaseId}
                   locale={locale}

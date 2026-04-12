@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
-import { getDemoCaseById, getLocalizedText, type SupportedLocale } from "@real-estate-ai/domain";
+import { canOperatorRolePerform, type SupportedLocale } from "@real-estate-ai/contracts";
+import { getDemoCaseById, getLocalizedText } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
@@ -13,6 +15,11 @@ import { QualificationForm } from "@/components/qualification-form";
 import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
 import { TimelinePanel } from "@/components/timeline-panel";
+import {
+  getOperatorPermissionGuardNote,
+  getOperatorRoleFromCookie,
+  operatorRoleCookieName
+} from "@/lib/operator-role";
 import {
   buildCaseReferenceCode,
   buildPersistedTimeline,
@@ -39,12 +46,18 @@ export default async function LeadProfilePage(props: PageProps) {
   const { locale, caseId } = await props.params;
   const persistedCase = await tryGetPersistedCaseDetail(caseId);
   const messages = getMessages(locale);
+  const cookieStore = await cookies();
+  const currentOperatorRole = getOperatorRoleFromCookie(cookieStore.get(operatorRoleCookieName)?.value);
 
   if (persistedCase) {
     const qualificationSummary = getPersistedQualificationSummary(locale, persistedCase);
     const interventionItems = getPersistedInterventionDisplay(locale, persistedCase);
     const automationCopy = getAutomationStatusCopy(locale);
     const followUpManagerCopy = getFollowUpManagerCopy(locale);
+    const canManageFollowUp = canOperatorRolePerform("manage_case_follow_up", currentOperatorRole);
+    const canManageAutomation = canOperatorRolePerform("manage_case_automation", currentOperatorRole);
+    const followUpGuardNote = getOperatorPermissionGuardNote(locale, "manage_case_follow_up");
+    const automationGuardNote = getOperatorPermissionGuardNote(locale, "manage_case_automation");
 
     return (
       <div className="page-stack">
@@ -119,8 +132,11 @@ export default async function LeadProfilePage(props: PageProps) {
         <div className="two-column-grid">
           <Panel title={followUpManagerCopy.title}>
             <p className="panel-summary">{followUpManagerCopy.summary}</p>
+            <p className="field-note">{followUpGuardNote}</p>
             <ManagerFollowUpForm
+              canManage={canManageFollowUp}
               caseId={persistedCase.caseId}
+              disabledLabel={locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
               locale={locale}
               nextAction={persistedCase.nextAction}
               nextActionDueAt={persistedCase.nextActionDueAt}
@@ -131,8 +147,11 @@ export default async function LeadProfilePage(props: PageProps) {
 
           <Panel title={automationCopy.title}>
             <p className="panel-summary">{automationCopy.summary}</p>
+            <p className="field-note">{automationGuardNote}</p>
             <AutomationStatusForm
+              canManage={canManageAutomation}
               caseId={persistedCase.caseId}
+              disabledLabel={locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
               locale={locale}
               returnPath={`/${locale}/leads/${persistedCase.caseId}`}
               status={persistedCase.automationStatus}

@@ -10,7 +10,9 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getHandoverCompletionCopy } from "@/lib/live-copy";
 
 export function HandoverCompletionForm(props: {
+  canManage: boolean;
   completionSummary: string;
+  disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   returnPath: string;
@@ -33,7 +35,7 @@ export function HandoverCompletionForm(props: {
         <textarea
           className="textarea-shell"
           defaultValue={props.completionSummary}
-          disabled={isCompleted}
+          disabled={isCompleted || !props.canManage}
           name="completionSummary"
           required
           rows={4}
@@ -44,6 +46,10 @@ export function HandoverCompletionForm(props: {
         {isCompleted ? (
           <button className="primary-button" disabled type="button">
             {props.locale === "ar" ? "مكتملة" : "Completed"}
+          </button>
+        ) : !props.canManage ? (
+          <button className="primary-button" disabled type="button">
+            {props.disabledLabel}
           </button>
         ) : canComplete ? (
           <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الإتمام..." : "Completing..."} />

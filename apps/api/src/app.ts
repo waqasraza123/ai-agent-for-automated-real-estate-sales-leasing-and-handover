@@ -2,6 +2,7 @@ import Fastify from "fastify";
 
 import {
   approveHandoverCustomerUpdateInputSchema,
+  canOperatorRolePerform,
   completeHandoverInputSchema,
   confirmHandoverAppointmentInputSchema,
   createHandoverBlockerInputSchema,
@@ -19,6 +20,8 @@ import {
   scheduleVisitInputSchema,
   operatorRoleSchema,
   startHandoverExecutionInputSchema,
+  getRequiredOperatorRoles,
+  type OperatorPermission,
   type OperatorRole,
   updateHandoverArchiveStatusInputSchema,
   updateAutomationStatusInputSchema,
@@ -64,8 +67,6 @@ export function buildApiApp(dependencies: {
   const app = Fastify({
     logger: false
   });
-
-  const handoverGovernanceRoles: OperatorRole[] = ["handover_manager", "admin"];
 
   app.get("/health", async () => ({
     status: "ok"
@@ -177,6 +178,16 @@ export function buildApiApp(dependencies: {
       caseId: string;
     };
   }>("/v1/cases/:caseId/follow-up-plan", async (request, reply) => {
+    const permission = "manage_case_follow_up";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = manageCaseFollowUpInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -202,6 +213,16 @@ export function buildApiApp(dependencies: {
       caseId: string;
     };
   }>("/v1/cases/:caseId/automation", async (request, reply) => {
+    const permission = "manage_case_automation";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = updateAutomationStatusInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -451,6 +472,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/blockers", async (request, reply) => {
+    const permission = "manage_handover_blockers";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = createHandoverBlockerInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -487,6 +518,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/blockers/:blockerId", async (request, reply) => {
+    const permission = "manage_handover_blockers";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = updateHandoverBlockerInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -517,6 +558,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/execution", async (request, reply) => {
+    const permission = "manage_handover_execution";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = startHandoverExecutionInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -552,10 +603,13 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/review", async (request, reply) => {
-    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], handoverGovernanceRoles)) {
+    const permission = "manage_handover_governance";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
       return reply.status(403).send({
         error: "insufficient_role",
-        requiredRoles: handoverGovernanceRoles
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
       });
     }
 
@@ -594,10 +648,13 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/archive-review", async (request, reply) => {
-    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], handoverGovernanceRoles)) {
+    const permission = "manage_handover_governance";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
       return reply.status(403).send({
         error: "insufficient_role",
-        requiredRoles: handoverGovernanceRoles
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
       });
     }
 
@@ -636,10 +693,13 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/archive-status", async (request, reply) => {
-    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], handoverGovernanceRoles)) {
+    const permission = "manage_handover_governance";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
       return reply.status(403).send({
         error: "insufficient_role",
-        requiredRoles: handoverGovernanceRoles
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
       });
     }
 
@@ -678,10 +738,13 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/post-completion-follow-up", async (request, reply) => {
-    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], handoverGovernanceRoles)) {
+    const permission = "manage_handover_governance";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
       return reply.status(403).send({
         error: "insufficient_role",
-        requiredRoles: handoverGovernanceRoles
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
       });
     }
 
@@ -725,10 +788,13 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/post-completion-follow-up/:followUpId", async (request, reply) => {
-    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], handoverGovernanceRoles)) {
+    const permission = "manage_handover_governance";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
       return reply.status(403).send({
         error: "insufficient_role",
-        requiredRoles: handoverGovernanceRoles
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
       });
     }
 
@@ -772,6 +838,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/completion", async (request, reply) => {
+    const permission = "manage_handover_execution";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = completeHandoverInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -908,10 +984,10 @@ export function buildApiApp(dependencies: {
   return app;
 }
 
-function hasRequiredOperatorRole(headerValue: string | string[] | undefined, requiredRoles: OperatorRole[]) {
+function hasRequiredOperatorRole(headerValue: string | string[] | undefined, permission: OperatorPermission) {
   const resolvedRole = resolveOperatorRole(headerValue);
 
-  return requiredRoles.includes(resolvedRole);
+  return canOperatorRolePerform(permission, resolvedRole);
 }
 
 function resolveOperatorRole(headerValue: string | string[] | undefined): OperatorRole {

@@ -33,7 +33,13 @@ import {
 } from "@real-estate-ai/contracts";
 
 import { initialFormActionState, type FormActionState } from "@/lib/form-action-state";
-import { defaultOperatorRole, getOperatorRoleFromCookie, operatorRoleCookieName } from "@/lib/operator-role";
+import {
+  defaultOperatorRole,
+  getInsufficientRoleError,
+  getOperatorPermissionGuardNote,
+  getOperatorRoleFromCookie,
+  operatorRoleCookieName
+} from "@/lib/operator-role";
 import {
   WebApiError,
   approveHandoverCustomerUpdate,
@@ -148,7 +154,7 @@ export async function saveManagerFollowUpAction(_: FormActionState, formData: Fo
   }
 
   try {
-    const updatedCase = await manageCaseFollowUp(caseId, result.data);
+    const updatedCase = await manageCaseFollowUp(caseId, result.data, await getOperatorRole());
     revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
@@ -285,7 +291,7 @@ export async function updateAutomationStatusAction(_: FormActionState, formData:
   }
 
   try {
-    const updatedCase = await updateAutomationStatus(caseId, result.data);
+    const updatedCase = await updateAutomationStatus(caseId, result.data, await getOperatorRole());
     revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
@@ -399,7 +405,7 @@ export async function createHandoverBlockerAction(_: FormActionState, formData: 
   }
 
   try {
-    const updatedHandoverCase = await createHandoverBlocker(handoverCaseId, result.data);
+    const updatedHandoverCase = await createHandoverBlocker(handoverCaseId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -448,7 +454,7 @@ export async function updateHandoverBlockerAction(_: FormActionState, formData: 
   }
 
   try {
-    const updatedHandoverCase = await updateHandoverBlocker(handoverCaseId, blockerId, result.data);
+    const updatedHandoverCase = await updateHandoverBlocker(handoverCaseId, blockerId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -481,7 +487,7 @@ export async function startHandoverExecutionAction(_: FormActionState, formData:
   }
 
   try {
-    const updatedHandoverCase = await startHandoverExecution(handoverCaseId, result.data);
+    const updatedHandoverCase = await startHandoverExecution(handoverCaseId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -528,7 +534,7 @@ export async function completeHandoverAction(_: FormActionState, formData: FormD
   }
 
   try {
-    const updatedHandoverCase = await completeHandover(handoverCaseId, result.data);
+    const updatedHandoverCase = await completeHandover(handoverCaseId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -1078,11 +1084,15 @@ export async function markHandoverCustomerUpdateDispatchReadyAction(
 
 function getActionError(locale: "en" | "ar", error: unknown): FormActionState {
   if (error instanceof WebApiError && error.status === 403) {
+    const insufficientRoleError = getInsufficientRoleError(error.body);
+
     return {
       message:
-        locale === "ar"
-          ? "هذا الإجراء يتطلب دور مدير التسليم أو المشرف في وضع التحكم المحلي."
-          : "This action requires the handover manager or admin role in local control mode.",
+        insufficientRoleError
+          ? getOperatorPermissionGuardNote(locale, insufficientRoleError.permission)
+          : locale === "ar"
+            ? "هذا الإجراء يتطلب دوراً مناسباً في وضع التحكم المحلي."
+            : "This action requires an eligible role in local control mode.",
       status: "error"
     };
   }

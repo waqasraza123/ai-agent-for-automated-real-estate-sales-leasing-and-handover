@@ -10,7 +10,9 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getAutomationStatusCopy } from "@/lib/live-copy";
 
 export function AutomationStatusForm(props: {
+  canManage: boolean;
   caseId: string;
+  disabledLabel: string;
   locale: SupportedLocale;
   returnPath: string;
   status: AutomationStatus;
@@ -28,6 +30,8 @@ export function AutomationStatusForm(props: {
 
       <div className="form-actions-row">
         <FormSubmitButton
+          disabled={!props.canManage}
+          disabledLabel={props.disabledLabel}
           idleLabel={nextStatus === "paused" ? copy.paused : copy.active}
           pendingLabel={props.locale === "ar" ? "جارٍ التحديث..." : "Updating..."}
         />

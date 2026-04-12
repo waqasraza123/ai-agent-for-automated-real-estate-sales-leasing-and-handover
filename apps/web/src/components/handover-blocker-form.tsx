@@ -14,6 +14,8 @@ import {
 } from "@/lib/live-copy";
 
 export function HandoverBlockerForm(props: {
+  canManage: boolean;
+  disabledLabel: string;
   dueAt: string;
   handoverCaseId: string;
   locale: SupportedLocale;
@@ -35,7 +37,7 @@ export function HandoverBlockerForm(props: {
       <div className="field-grid">
         <label className="field-stack">
           <span>{copy.severity}</span>
-          <select className="select-shell" defaultValue="warning" name="severity">
+          <select className="select-shell" defaultValue="warning" disabled={!props.canManage} name="severity">
             {severityOptions.map((severityOption) => (
               <option key={severityOption} value={severityOption}>
                 {getHandoverBlockerSeverityLabel(props.locale, severityOption)}
@@ -45,11 +47,11 @@ export function HandoverBlockerForm(props: {
         </label>
         <label className="field-stack">
           <span>{copy.dueAt}</span>
-          <input className="input-shell" defaultValue={props.dueAt} name="dueAt" required type="datetime-local" />
+          <input className="input-shell" defaultValue={props.dueAt} disabled={!props.canManage} name="dueAt" required type="datetime-local" />
         </label>
         <label className="field-stack">
           <span>{props.locale === "ar" ? "نوع العائق" : "Blocker type"}</span>
-          <select className="select-shell" defaultValue="unit_snag" name="type">
+          <select className="select-shell" defaultValue="unit_snag" disabled={!props.canManage} name="type">
             {typeOptions.map((typeOption) => (
               <option key={typeOption} value={typeOption}>
                 {getHandoverBlockerTypeLabel(props.locale, typeOption)}
@@ -59,16 +61,21 @@ export function HandoverBlockerForm(props: {
         </label>
         <label className="field-stack">
           <span>{copy.ownerName}</span>
-          <input className="input-shell" defaultValue={props.ownerName} name="ownerName" type="text" />
+          <input className="input-shell" defaultValue={props.ownerName} disabled={!props.canManage} name="ownerName" type="text" />
         </label>
         <label className="field-stack field-span-full">
           <span>{copy.summary}</span>
-          <textarea className="textarea-shell" name="summary" required rows={4} />
+          <textarea className="textarea-shell" disabled={!props.canManage} name="summary" required rows={4} />
         </label>
       </div>
 
       <div className="form-actions-row">
-        <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ التسجيل..." : "Logging..."} />
+        <FormSubmitButton
+          disabled={!props.canManage}
+          disabledLabel={props.disabledLabel}
+          idleLabel={copy.action}
+          pendingLabel={props.locale === "ar" ? "جارٍ التسجيل..." : "Logging..."}
+        />
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}
         </p>
