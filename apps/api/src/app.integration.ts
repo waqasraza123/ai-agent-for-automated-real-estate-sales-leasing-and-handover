@@ -58,7 +58,7 @@ describe("lead capture api", () => {
     expect(detailResponse.json().handoverCase).toBeNull();
   });
 
-  it("promotes a document-complete case into persisted handover intake with milestone planning and customer update approval", async () => {
+  it("promotes a document-complete case into handover planning, appointment scheduling, and internal confirmation", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
@@ -133,6 +133,7 @@ describe("lead capture api", () => {
     });
 
     expect(handoverDetailResponse.statusCode).toBe(200);
+    expect(handoverDetailResponse.json().appointment).toBeNull();
     expect(handoverDetailResponse.json().tasks).toHaveLength(3);
     expect(handoverDetailResponse.json().milestones).toHaveLength(3);
     expect(handoverDetailResponse.json().customerUpdates).toHaveLength(3);
@@ -140,6 +141,18 @@ describe("lead capture api", () => {
     const firstTaskId = handoverDetailResponse.json().tasks[0]?.taskId;
     const readinessMilestoneId = handoverDetailResponse.json().milestones[0]?.milestoneId;
     const readinessCustomerUpdateId = handoverDetailResponse.json().customerUpdates[0]?.customerUpdateId;
+    const schedulingMilestoneId = handoverDetailResponse.json().milestones.find(
+      (milestone: { type: string }) => milestone.type === "customer_scheduling_window"
+    )?.milestoneId;
+    const schedulingInviteId = handoverDetailResponse.json().customerUpdates.find(
+      (customerUpdate: { type: string }) => customerUpdate.type === "scheduling_invite"
+    )?.customerUpdateId;
+    const appointmentHoldMilestoneId = handoverDetailResponse.json().milestones.find(
+      (milestone: { type: string }) => milestone.type === "handover_appointment_hold"
+    )?.milestoneId;
+    const appointmentConfirmationId = handoverDetailResponse.json().customerUpdates.find(
+      (customerUpdate: { type: string }) => customerUpdate.type === "appointment_confirmation"
+    )?.customerUpdateId;
 
     const taskUpdateResponse = await app.inject({
       method: "PATCH",
@@ -163,6 +176,19 @@ describe("lead capture api", () => {
 
     expect(earlyCustomerApprovalResponse.statusCode).toBe(409);
     expect(earlyCustomerApprovalResponse.json().error).toBe("handover_customer_update_not_ready");
+
+    const earlyAppointmentPlanResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        coordinatorName: "Handover Control",
+        location: "Palm Horizon Tower A",
+        scheduledAt: "2026-04-21T13:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/appointment`
+    });
+
+    expect(earlyAppointmentPlanResponse.statusCode).toBe(409);
+    expect(earlyAppointmentPlanResponse.json().error).toBe("handover_scheduling_boundary_not_approved");
 
     const milestoneUpdateResponse = await app.inject({
       method: "PATCH",
@@ -199,13 +225,133 @@ describe("lead capture api", () => {
       )?.status
     ).toBe("approved");
 
+    const firstTaskCompletionResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "complete"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/tasks/${firstTaskId}`
+    });
+
+    expect(firstTaskCompletionResponse.statusCode).toBe(200);
+
+    const remainingTaskIds = handoverDetailResponse
+      .json()
+      .tasks.filter((task: { taskId: string }) => task.taskId !== firstTaskId)
+      .map((task: { taskId: string }) => task.taskId);
+
+    for (const taskId of remainingTaskIds) {
+      const taskCompleteResponse = await app.inject({
+        method: "PATCH",
+        payload: {
+          status: "complete"
+        },
+        url: `/v1/handover-cases/${handoverCaseId}/tasks/${taskId}`
+      });
+
+      expect(taskCompleteResponse.statusCode).toBe(200);
+    }
+
+    const schedulingMilestoneResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        ownerName: "Scheduling Desk",
+        status: "ready",
+        targetAt: "2026-04-20T10:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/milestones/${schedulingMilestoneId}`
+    });
+
+    expect(schedulingMilestoneResponse.statusCode).toBe(200);
+    expect(
+      schedulingMilestoneResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) => customerUpdate.customerUpdateId === schedulingInviteId
+      )?.status
+    ).toBe("ready_for_approval");
+
+    const schedulingApprovalResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${schedulingInviteId}`
+    });
+
+    expect(schedulingApprovalResponse.statusCode).toBe(200);
+    expect(schedulingApprovalResponse.json().status).toBe("customer_scheduling_ready");
+
+    const appointmentPlanResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        coordinatorName: "Handover Control",
+        location: "Palm Horizon Tower A",
+        scheduledAt: "2026-04-21T13:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/appointment`
+    });
+
+    expect(appointmentPlanResponse.statusCode).toBe(200);
+    expect(appointmentPlanResponse.json().appointment.status).toBe("planned");
+    expect(appointmentPlanResponse.json().appointment.location).toBe("Palm Horizon Tower A");
+
+    const plannedAppointmentId = appointmentPlanResponse.json().appointment.appointmentId;
+
+    const earlyAppointmentConfirmationResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "internally_confirmed"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/appointment/${plannedAppointmentId}/confirmation`
+    });
+
+    expect(earlyAppointmentConfirmationResponse.statusCode).toBe(409);
+    expect(earlyAppointmentConfirmationResponse.json().error).toBe("handover_appointment_confirmation_not_approved");
+
+    const appointmentHoldMilestoneResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        ownerName: "Project Ops",
+        status: "ready",
+        targetAt: "2026-04-21T09:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/milestones/${appointmentHoldMilestoneId}`
+    });
+
+    expect(appointmentHoldMilestoneResponse.statusCode).toBe(200);
+    expect(
+      appointmentHoldMilestoneResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) => customerUpdate.customerUpdateId === appointmentConfirmationId
+      )?.status
+    ).toBe("ready_for_approval");
+
+    const appointmentBoundaryApprovalResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${appointmentConfirmationId}`
+    });
+
+    expect(appointmentBoundaryApprovalResponse.statusCode).toBe(200);
+
+    const appointmentConfirmationResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "internally_confirmed"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/appointment/${plannedAppointmentId}/confirmation`
+    });
+
+    expect(appointmentConfirmationResponse.statusCode).toBe(200);
+    expect(appointmentConfirmationResponse.json().appointment.status).toBe("internally_confirmed");
+
     const refreshedCaseResponse = await app.inject({
       method: "GET",
       url: `/v1/cases/${createdCase.caseId}`
     });
 
     expect(refreshedCaseResponse.statusCode).toBe(200);
-    expect(refreshedCaseResponse.json().handoverCase.status).toBe("internal_tasks_open");
+    expect(refreshedCaseResponse.json().handoverCase.status).toBe("customer_scheduling_ready");
   });
 
   it("rejects invalid payloads and invalid handover promotion attempts", async () => {

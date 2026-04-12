@@ -2,9 +2,11 @@ import Fastify from "fastify";
 
 import {
   approveHandoverCustomerUpdateInputSchema,
+  confirmHandoverAppointmentInputSchema,
   createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
   manageCaseFollowUpInputSchema,
+  planHandoverAppointmentInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
   updateAutomationStatusInputSchema,
@@ -15,11 +17,13 @@ import {
 import type { LeadCaptureStore } from "@real-estate-ai/database";
 import {
   approvePersistedHandoverCustomerUpdate,
+  confirmPersistedHandoverAppointment,
   WorkflowRuleError,
   getPersistedCaseDetail,
   getPersistedHandoverCaseDetail,
   listPersistedCases,
   managePersistedCaseFollowUp,
+  planPersistedHandoverAppointment,
   qualifyPersistedCase,
   schedulePersistedVisit,
   setPersistedAutomationStatus,
@@ -256,6 +260,82 @@ export function buildApiApp(dependencies: {
     }
 
     return reply.status(200).send(caseDetail);
+  });
+
+  app.patch<{
+    Params: {
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/appointment", async (request, reply) => {
+    const result = planHandoverAppointmentInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await planPersistedHandoverAppointment(dependencies.store, request.params.handoverCaseId, result.data);
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch<{
+    Params: {
+      appointmentId: string;
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/appointment/:appointmentId/confirmation", async (request, reply) => {
+    const result = confirmHandoverAppointmentInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await confirmPersistedHandoverAppointment(
+        dependencies.store,
+        request.params.handoverCaseId,
+        request.params.appointmentId,
+        result.data
+      );
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
   });
 
   app.patch<{

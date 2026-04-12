@@ -1,9 +1,11 @@
 import type {
   ApproveHandoverCustomerUpdateInput,
+  ConfirmHandoverAppointmentInput,
   CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   ManageCaseFollowUpInput,
+  PlanHandoverAppointmentInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedHandoverCaseDetail,
@@ -167,6 +169,24 @@ export async function approveHandoverCustomerUpdate(
       payload: input
     }
   );
+}
+
+export async function planHandoverAppointment(handoverCaseId: string, input: PlanHandoverAppointmentInput) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/appointment`, {
+    method: "PATCH",
+    payload: input
+  });
+}
+
+export async function confirmHandoverAppointment(
+  handoverCaseId: string,
+  appointmentId: string,
+  input: ConfirmHandoverAppointmentInput
+) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/appointment/${appointmentId}/confirmation`, {
+    method: "PATCH",
+    payload: input
+  });
 }
 
 export function getWebApiBaseUrl() {

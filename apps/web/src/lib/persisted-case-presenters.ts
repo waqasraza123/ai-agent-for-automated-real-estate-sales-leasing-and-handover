@@ -14,6 +14,7 @@ import {
   getDocumentRequestStatusLabel,
   getDocumentRequestTypeLabel,
   getFollowUpStatusLabel,
+  getHandoverAppointmentStatusLabel,
   getHandoverCaseStatusLabel,
   getHandoverCustomerUpdateStatusLabel,
   getHandoverCustomerUpdateTypeDetail,
@@ -165,6 +166,24 @@ export function getPersistedHandoverCustomerUpdateDisplay(locale: SupportedLocal
   }));
 }
 
+export function getPersistedHandoverAppointmentDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
+  if (!handoverCase.appointment) {
+    return null;
+  }
+
+  return {
+    appointmentId: handoverCase.appointment.appointmentId,
+    coordinatorName: handoverCase.appointment.coordinatorName,
+    location: handoverCase.appointment.location,
+    scheduledAt: new Date(handoverCase.appointment.scheduledAt).toLocaleString(locale),
+    scheduledAtInput: handoverCase.appointment.scheduledAt.slice(0, 16),
+    status: handoverCase.appointment.status,
+    statusLabel: getHandoverAppointmentStatusLabel(locale, handoverCase.appointment.status),
+    statusTone: getHandoverAppointmentTone(handoverCase.appointment.status),
+    updatedAt: new Date(handoverCase.appointment.updatedAt).toLocaleString(locale)
+  };
+}
+
 export function getPersistedHandoverStatusLabel(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail | PersistedCaseDetail["handoverCase"]) {
   if (!handoverCase) {
     return null;
@@ -278,6 +297,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "The case was approved into handover intake and the initial readiness checklist was opened.",
         title: "Handover intake started"
       },
+      handover_appointment_confirmed: {
+        detail: "The planned handover appointment was confirmed internally without triggering outbound delivery.",
+        title: "Appointment confirmed internally"
+      },
+      handover_appointment_planned: {
+        detail: "A real internal handover appointment was attached to the record behind the approved scheduling boundary.",
+        title: "Appointment planned"
+      },
       handover_customer_update_approved: {
         detail: "A customer-facing handover boundary was approved without sending any live outbound message.",
         title: "Customer boundary approved"
@@ -326,6 +353,14 @@ function describeHandoverAuditEvent(
       handover_intake_created: {
         detail: `تم إنشاء سجل تسليم حي للحالة وربطه بالمسؤول ${handoverCase.ownerName}.`,
         title: "إنشاء سجل التسليم"
+      },
+      handover_appointment_confirmed: {
+        detail: "تم تأكيد موعد التسليم داخلياً دون تشغيل أي إرسال خارجي.",
+        title: "تأكيد الموعد داخلياً"
+      },
+      handover_appointment_planned: {
+        detail: "تم إرفاق موعد تسليم داخلي حي بالسجل بعد اعتماد حد الجدولة.",
+        title: "تخطيط موعد التسليم"
       },
       handover_customer_update_approved: {
         detail: "تم اعتماد حد تواصل مخصص للعميل دون إرسال أي رسالة فعلية.",
@@ -421,6 +456,12 @@ function getHandoverCustomerUpdateTone(
   }
 
   return "warning";
+}
+
+function getHandoverAppointmentTone(
+  status: NonNullable<PersistedHandoverCaseDetail["appointment"]>["status"]
+): "success" | "warning" {
+  return status === "internally_confirmed" ? "success" : "warning";
 }
 
 function getInterventionTone(severity: PersistedCaseDetail["managerInterventions"][number]["severity"]): "critical" | "warning" {

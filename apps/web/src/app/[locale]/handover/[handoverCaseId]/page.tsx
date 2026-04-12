@@ -4,6 +4,8 @@ import { getDemoHandoverCaseById, getLocalizedText, type SupportedLocale } from 
 import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
+import { HandoverAppointmentConfirmationForm } from "@/components/handover-appointment-confirmation-form";
+import { HandoverAppointmentForm } from "@/components/handover-appointment-form";
 import { HandoverCustomerUpdateApprovalForm } from "@/components/handover-customer-update-approval-form";
 import { HandoverMilestoneForm } from "@/components/handover-milestone-form";
 import { HandoverTaskStatusForm } from "@/components/handover-task-status-form";
@@ -13,6 +15,7 @@ import { StatefulStack } from "@/components/stateful-stack";
 import { TimelinePanel } from "@/components/timeline-panel";
 import {
   buildCaseReferenceCode,
+  getPersistedHandoverAppointmentDisplay,
   getPersistedHandoverCustomerUpdateDisplay,
   getPersistedHandoverMilestoneDisplay,
   buildPersistedHandoverTimeline,
@@ -31,9 +34,11 @@ export default async function HandoverPage(props: PageProps) {
   const persistedHandoverCase = await tryGetPersistedHandoverCaseDetail(handoverCaseId);
 
   if (persistedHandoverCase) {
+    const appointmentItem = getPersistedHandoverAppointmentDisplay(locale, persistedHandoverCase);
     const taskItems = getPersistedHandoverDisplay(locale, persistedHandoverCase);
     const milestoneItems = getPersistedHandoverMilestoneDisplay(locale, persistedHandoverCase);
     const customerUpdateItems = getPersistedHandoverCustomerUpdateDisplay(locale, persistedHandoverCase);
+    const appointmentHoldMilestone = milestoneItems.find((milestone) => milestone.type === "handover_appointment_hold");
 
     return (
       <div className="page-stack">
@@ -99,6 +104,82 @@ export default async function HandoverPage(props: PageProps) {
             )}
           />
         </Panel>
+
+        <div className="two-column-grid">
+          <Panel title={locale === "ar" ? "الموعد الداخلي" : "Internal appointment"}>
+            {appointmentItem ? (
+              <div className="page-stack">
+                <div className="detail-grid">
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "الموقع" : "Location"}</p>
+                    <p>{appointmentItem.location}</p>
+                  </div>
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "الحالة" : "Status"}</p>
+                    <StatusBadge tone={appointmentItem.statusTone}>{appointmentItem.statusLabel}</StatusBadge>
+                  </div>
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "منسق التسليم" : "Coordinator"}</p>
+                    <p>{appointmentItem.coordinatorName}</p>
+                  </div>
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "الموعد" : "Scheduled time"}</p>
+                    <p>{appointmentItem.scheduledAt}</p>
+                  </div>
+                </div>
+                <HandoverAppointmentForm
+                  coordinatorName={appointmentItem.coordinatorName}
+                  handoverCaseId={persistedHandoverCase.handoverCaseId}
+                  locale={locale}
+                  location={appointmentItem.location}
+                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                  scheduledAt={appointmentItem.scheduledAtInput}
+                />
+              </div>
+            ) : (
+              <div className="page-stack">
+                <p className="panel-summary">
+                  {locale === "ar"
+                    ? "لن يتم حفظ الموعد الداخلي حتى تصبح حدود الجدولة معتمدة ويصبح السجل جاهزاً للجدولة."
+                    : "The internal appointment stays unavailable until the scheduling boundary is approved and the record is ready for scheduling."}
+                </p>
+                <HandoverAppointmentForm
+                  coordinatorName={persistedHandoverCase.ownerName}
+                  handoverCaseId={persistedHandoverCase.handoverCaseId}
+                  locale={locale}
+                  location=""
+                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                  scheduledAt={appointmentHoldMilestone?.targetAtInput ?? ""}
+                />
+              </div>
+            )}
+          </Panel>
+
+          <Panel title={locale === "ar" ? "تأكيد الموعد" : "Appointment confirmation"}>
+            {appointmentItem ? (
+              <div className="page-stack">
+                <p className="panel-summary">
+                  {locale === "ar"
+                    ? "يتطلب هذا التأكيد اعتماد حد تأكيد الموعد أولاً، لكنه لا يطلق أي رسالة حقيقية إلى العميل."
+                    : "This confirmation requires the appointment-confirmation boundary first, and still does not trigger any real outbound message."}
+                </p>
+                <HandoverAppointmentConfirmationForm
+                  appointmentId={appointmentItem.appointmentId}
+                  handoverCaseId={persistedHandoverCase.handoverCaseId}
+                  locale={locale}
+                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                  status={appointmentItem.status}
+                />
+              </div>
+            ) : (
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "سيظهر تأكيد الموعد بعد حفظ موعد داخلي فعلي."
+                  : "Appointment confirmation appears after a real internal appointment has been planned."}
+              </p>
+            )}
+          </Panel>
+        </div>
 
         <div className="two-column-grid">
           <Panel title={locale === "ar" ? "خطة المحطات" : "Milestone plan"}>

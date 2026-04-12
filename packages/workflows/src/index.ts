@@ -1,9 +1,11 @@
 import type {
   ApproveHandoverCustomerUpdateInput,
+  ConfirmHandoverAppointmentInput,
   CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   ManageCaseFollowUpInput,
+  PlanHandoverAppointmentInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedHandoverCaseDetail,
@@ -206,11 +208,65 @@ export async function updatePersistedHandoverTask(
       nextHandoverStatus,
       updatedTasks,
       handoverCase.milestones,
-      handoverCase.customerUpdates
+      handoverCase.customerUpdates,
+      handoverCase.appointment
     ),
-    nextActionDueAt: getHandoverCaseNextActionDueAt(nextHandoverStatus, updatedTasks, handoverCase.milestones, handoverCase.customerUpdates),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      nextHandoverStatus,
+      updatedTasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment
+    ),
     nextHandoverStatus,
     status: input.status
+  });
+}
+
+export async function planPersistedHandoverAppointment(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  input: PlanHandoverAppointmentInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  const schedulingInvite = handoverCase.customerUpdates.find((customerUpdate) => customerUpdate.type === "scheduling_invite");
+
+  if (handoverCase.status !== "customer_scheduling_ready" || schedulingInvite?.status !== "approved") {
+    throw new WorkflowRuleError("handover_scheduling_boundary_not_approved");
+  }
+
+  const nextAppointment = {
+    appointmentId: handoverCase.appointment?.appointmentId ?? "pending",
+    coordinatorName: input.coordinatorName ?? handoverCase.ownerName,
+    createdAt: handoverCase.appointment?.createdAt ?? new Date().toISOString(),
+    location: input.location,
+    scheduledAt: input.scheduledAt,
+    status: "planned" as const,
+    updatedAt: new Date().toISOString()
+  };
+
+  return store.planHandoverAppointment(handoverCaseId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      nextAppointment
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      nextAppointment
+    )
   });
 }
 
@@ -264,13 +320,15 @@ export async function updatePersistedHandoverMilestone(
       nextHandoverStatus,
       handoverCase.tasks,
       updatedMilestones,
-      updatedCustomerUpdates
+      updatedCustomerUpdates,
+      handoverCase.appointment
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
       nextHandoverStatus,
       handoverCase.tasks,
       updatedMilestones,
-      updatedCustomerUpdates
+      updatedCustomerUpdates,
+      handoverCase.appointment
     ),
     nextCustomerUpdateStatus,
     nextHandoverStatus
@@ -311,15 +369,64 @@ export async function approvePersistedHandoverCustomerUpdate(
       nextHandoverStatus,
       handoverCase.tasks,
       handoverCase.milestones,
-      updatedCustomerUpdates
+      updatedCustomerUpdates,
+      handoverCase.appointment
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
       nextHandoverStatus,
       handoverCase.tasks,
       handoverCase.milestones,
-      updatedCustomerUpdates
+      updatedCustomerUpdates,
+      handoverCase.appointment
     ),
     nextHandoverStatus
+  });
+}
+
+export async function confirmPersistedHandoverAppointment(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  appointmentId: string,
+  input: ConfirmHandoverAppointmentInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  if (!handoverCase.appointment || handoverCase.appointment.appointmentId !== appointmentId) {
+    throw new WorkflowRuleError("handover_appointment_not_planned");
+  }
+
+  const appointmentConfirmation = handoverCase.customerUpdates.find((customerUpdate) => customerUpdate.type === "appointment_confirmation");
+
+  if (appointmentConfirmation?.status !== "approved") {
+    throw new WorkflowRuleError("handover_appointment_confirmation_not_approved");
+  }
+
+  const confirmedAppointment = {
+    ...handoverCase.appointment,
+    status: input.status
+  };
+
+  return store.confirmHandoverAppointment(handoverCaseId, appointmentId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      confirmedAppointment
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      confirmedAppointment
+    )
   });
 }
 

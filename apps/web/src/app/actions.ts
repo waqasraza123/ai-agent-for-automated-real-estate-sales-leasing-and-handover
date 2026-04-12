@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 
 import {
   approveHandoverCustomerUpdateInputSchema,
+  confirmHandoverAppointmentInputSchema,
   createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
   manageCaseFollowUpInputSchema,
+  planHandoverAppointmentInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
   supportedLocaleSchema,
@@ -21,9 +23,11 @@ import { initialFormActionState, type FormActionState } from "@/lib/form-action-
 import {
   WebApiError,
   approveHandoverCustomerUpdate,
+  confirmHandoverAppointment,
   createHandoverIntake,
   createWebsiteLead,
   manageCaseFollowUp,
+  planHandoverAppointment,
   qualifyCase,
   scheduleVisit,
   updateAutomationStatus,
@@ -401,6 +405,97 @@ export async function approveHandoverCustomerUpdateAction(_: FormActionState, fo
           locale === "ar"
             ? "لا يمكن اعتماد هذا التحديث قبل أن تصبح المحطة المرتبطة به جاهزة."
             : "This customer update cannot be approved until its linked milestone is ready.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function planHandoverAppointmentAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+  const scheduledAt = formData.get("scheduledAt");
+
+  if (typeof handoverCaseId !== "string" || typeof returnPath !== "string" || typeof scheduledAt !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = planHandoverAppointmentInputSchema.safeParse({
+    coordinatorName: normalizeOptionalString(formData.get("coordinatorName")),
+    location: formData.get("location"),
+    scheduledAt: toIsoDateTimeOrEmpty(scheduledAt)
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await planHandoverAppointment(handoverCaseId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message: locale === "ar" ? "تم حفظ موعد التسليم الداخلي." : "The internal handover appointment was saved.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن تخطيط الموعد قبل اعتماد حد الجدولة ووصول الحالة إلى جاهزية الجدولة."
+            : "The appointment cannot be planned until the scheduling boundary is approved and the case is ready for scheduling.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function confirmHandoverAppointmentAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const appointmentId = formData.get("appointmentId");
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof appointmentId !== "string" || typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = confirmHandoverAppointmentInputSchema.safeParse({
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await confirmHandoverAppointment(handoverCaseId, appointmentId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar" ? "تم تأكيد موعد التسليم داخلياً دون تشغيل أي إرسال خارجي." : "The handover appointment was confirmed internally without any outbound delivery.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن تأكيد الموعد داخلياً قبل اعتماد حد تأكيد الموعد."
+            : "The appointment cannot be confirmed internally until the appointment-confirmation boundary is approved.",
         status: "error"
       };
     }

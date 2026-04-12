@@ -5,12 +5,14 @@ import type {
   ApproveHandoverCustomerUpdateInput,
   AutomationStatus,
   CaseStage,
+  ConfirmHandoverAppointmentInput,
   CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
+  HandoverAppointmentStatus,
   HandoverCaseStatus,
   HandoverCustomerUpdateStatus,
   HandoverCustomerUpdateType,
@@ -25,12 +27,14 @@ import type {
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedDocumentRequest,
+  PersistedHandoverAppointment,
   PersistedHandoverCaseDetail,
   PersistedHandoverCustomerUpdate,
   PersistedHandoverMilestone,
   PersistedHandoverTask,
   PersistedLinkedHandoverCase,
   PersistedManagerIntervention,
+  PlanHandoverAppointmentInput,
   QualifyCaseInput,
   QualificationReadiness,
   ScheduleVisitInput,
@@ -169,6 +173,20 @@ const handoverCustomerUpdates = pgTable("handover_customer_updates", {
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
+const handoverAppointments = pgTable("handover_appointments", {
+  coordinatorName: text("coordinator_name").notNull(),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  handoverCaseId: uuid("handover_case_id")
+    .notNull()
+    .unique()
+    .references(() => handoverCases.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey(),
+  location: text("location").notNull(),
+  scheduledAt: timestamp("scheduled_at", { mode: "string", withTimezone: true }).notNull(),
+  status: text("status").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
 const managerInterventions = pgTable("manager_interventions", {
   caseId: uuid("case_id")
     .notNull()
@@ -264,6 +282,21 @@ export interface LeadCaptureStore {
       status: DocumentRequestStatus;
     }
   ): Promise<PersistedCaseDetail | null>;
+  planHandoverAppointment(
+    handoverCaseId: string,
+    input: PlanHandoverAppointmentInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
+  confirmHandoverAppointment(
+    handoverCaseId: string,
+    appointmentId: string,
+    input: ConfirmHandoverAppointmentInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
   updateHandoverCustomerUpdateStatus(
     handoverCaseId: string,
     customerUpdateId: string,
@@ -305,6 +338,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       automationJobs,
       cases,
       documentRequests,
+      handoverAppointments,
       handoverCases,
       handoverCustomerUpdates,
       handoverMilestones,
@@ -413,6 +447,17 @@ export async function createAlphaLeadCaptureStore(options?: {
       updated_at timestamptz not null default now()
     );
 
+    create table if not exists handover_appointments (
+      id uuid primary key,
+      handover_case_id uuid not null unique references handover_cases(id) on delete cascade,
+      location text not null,
+      coordinator_name text not null,
+      scheduled_at timestamptz not null,
+      status text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
     create table if not exists manager_interventions (
       id uuid primary key,
       case_id uuid not null references cases(id) on delete cascade,
@@ -450,6 +495,7 @@ export async function createAlphaLeadCaptureStore(options?: {
     create index if not exists handover_tasks_case_id_idx on handover_tasks (handover_case_id, due_at asc);
     create index if not exists handover_milestones_case_id_idx on handover_milestones (handover_case_id, target_at asc);
     create index if not exists handover_customer_updates_case_id_idx on handover_customer_updates (handover_case_id, created_at asc);
+    create index if not exists handover_appointments_case_id_idx on handover_appointments (handover_case_id, scheduled_at asc);
     create index if not exists audit_events_case_id_idx on audit_events (case_id, created_at asc);
     create index if not exists manager_interventions_case_id_idx on manager_interventions (case_id, created_at desc);
     create index if not exists manager_interventions_open_case_idx on manager_interventions (case_id, status);
@@ -484,7 +530,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       return null;
     }
 
-    const [taskRecords, milestoneRecords, customerUpdateRecords, eventRecords] = await Promise.all([
+    const [taskRecords, milestoneRecords, customerUpdateRecords, appointmentRecords, eventRecords] = await Promise.all([
       db
         .select({
           createdAt: handoverTasks.createdAt,
@@ -524,6 +570,19 @@ export async function createAlphaLeadCaptureStore(options?: {
         .orderBy(asc(handoverCustomerUpdates.createdAt)),
       db
         .select({
+          appointmentId: handoverAppointments.id,
+          coordinatorName: handoverAppointments.coordinatorName,
+          createdAt: handoverAppointments.createdAt,
+          location: handoverAppointments.location,
+          scheduledAt: handoverAppointments.scheduledAt,
+          status: handoverAppointments.status,
+          updatedAt: handoverAppointments.updatedAt
+        })
+        .from(handoverAppointments)
+        .where(eq(handoverAppointments.handoverCaseId, handoverCaseId))
+        .limit(1),
+      db
+        .select({
           createdAt: auditEvents.createdAt,
           eventType: auditEvents.eventType,
           payload: auditEvents.payload
@@ -539,6 +598,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         eventType: event.eventType,
         payload: event.payload
       })),
+      appointment: appointmentRecords[0] ? hydrateHandoverAppointment(appointmentRecords[0]) : null,
       caseId: baseRecord.caseId,
       createdAt: baseRecord.createdAt,
       customerUpdates: customerUpdateRecords.map((customerUpdate) => hydrateHandoverCustomerUpdate(customerUpdate)),
@@ -1444,6 +1504,140 @@ export async function createAlphaLeadCaptureStore(options?: {
 
       return getPersistedCaseDetail(caseId);
     },
+    async planHandoverAppointment(handoverCaseId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const existingAppointment = handoverRecord.appointment;
+      const updatedAt = new Date().toISOString();
+      const appointmentId = existingAppointment?.appointmentId ?? randomUUID();
+      const coordinatorName = input.coordinatorName ?? handoverRecord.ownerName;
+
+      await db.transaction(async (transaction) => {
+        if (existingAppointment) {
+          await transaction
+            .update(handoverAppointments)
+            .set({
+              coordinatorName,
+              location: input.location,
+              scheduledAt: input.scheduledAt,
+              status: "planned",
+              updatedAt
+            })
+            .where(eq(handoverAppointments.handoverCaseId, handoverCaseId));
+        } else {
+          await transaction.insert(handoverAppointments).values({
+            coordinatorName,
+            createdAt: updatedAt,
+            handoverCaseId,
+            id: appointmentId,
+            location: input.location,
+            scheduledAt: input.scheduledAt,
+            status: "planned",
+            updatedAt
+          });
+        }
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_appointment_planned",
+          id: randomUUID(),
+          payload: {
+            appointmentId,
+            coordinatorName,
+            handoverCaseId,
+            location: input.location,
+            scheduledAt: input.scheduledAt,
+            status: "planned"
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
+    },
+    async confirmHandoverAppointment(handoverCaseId, appointmentId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord || !handoverRecord.appointment || handoverRecord.appointment.appointmentId !== appointmentId) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(handoverAppointments)
+          .set({
+            status: input.status,
+            updatedAt
+          })
+          .where(eq(handoverAppointments.handoverCaseId, handoverCaseId));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_appointment_confirmed",
+          id: randomUUID(),
+          payload: {
+            appointmentId,
+            handoverCaseId,
+            status: input.status
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
+    },
     async updateHandoverCustomerUpdateStatus(handoverCaseId, customerUpdateId, input) {
       const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
 
@@ -1721,10 +1915,32 @@ function getHandoverCaseNextAction(
   status: HandoverCaseStatus,
   tasks: PersistedHandoverTask[],
   milestones: PersistedHandoverMilestone[],
-  customerUpdates: PersistedHandoverCustomerUpdate[]
+  customerUpdates: PersistedHandoverCustomerUpdate[],
+  appointment: PersistedHandoverAppointment | null
 ) {
+  const schedulingInviteStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "scheduling_invite")?.status;
+  const appointmentConfirmationStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "appointment_confirmation")?.status;
+
+  if (appointment?.status === "internally_confirmed") {
+    return locale === "ar"
+      ? "الاحتفاظ بموعد التسليم المؤكد داخلياً حتى يتوفر مسار الإرسال الخارجي"
+      : "Hold the internally confirmed handover appointment until outbound delivery is enabled";
+  }
+
+  if (appointment && appointmentConfirmationStatus === "approved") {
+    return locale === "ar" ? "اعتماد الموعد المخطط داخلياً دون إرسال خارجي" : "Confirm the planned handover appointment internally without outbound delivery";
+  }
+
+  if (appointment) {
+    return locale === "ar" ? "اعتماد حد تأكيد موعد التسليم قبل تثبيت الموعد داخلياً" : "Approve the appointment-confirmation boundary before internally confirming the handover";
+  }
+
   if (customerUpdates.some((customerUpdate) => customerUpdate.status === "ready_for_approval")) {
     return locale === "ar" ? "اعتماد التحديث التالي المخصص للعميل قبل الإرسال" : "Approve the next customer-facing update before it can be sent";
+  }
+
+  if (status === "customer_scheduling_ready" && schedulingInviteStatus === "approved") {
+    return locale === "ar" ? "تخطيط موعد التسليم داخلياً فوق حد الجدولة المعتمد" : "Plan the internal handover appointment on top of the approved scheduling boundary";
   }
 
   if (status === "customer_scheduling_ready") {
@@ -1752,13 +1968,28 @@ function getHandoverCaseNextActionDueAt(
   status: HandoverCaseStatus,
   tasks: PersistedHandoverTask[],
   milestones: PersistedHandoverMilestone[],
-  customerUpdates: PersistedHandoverCustomerUpdate[]
+  customerUpdates: PersistedHandoverCustomerUpdate[],
+  appointment: PersistedHandoverAppointment | null
 ) {
   const blockedTask = tasks.find((task) => task.status === "blocked");
   const blockedMilestone = milestones.find((milestone) => milestone.status === "blocked");
+  const schedulingInviteStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "scheduling_invite")?.status;
+  const appointmentConfirmationStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "appointment_confirmation")?.status;
+
+  if (appointment?.status === "internally_confirmed" || (appointment && appointmentConfirmationStatus === "approved")) {
+    return appointment.scheduledAt;
+  }
+
+  if (appointment) {
+    return createFutureTimestamp(new Date().toISOString(), 6);
+  }
 
   if (customerUpdates.some((customerUpdate) => customerUpdate.status === "ready_for_approval")) {
     return createFutureTimestamp(new Date().toISOString(), 6);
+  }
+
+  if (status === "customer_scheduling_ready" && schedulingInviteStatus === "approved") {
+    return createFutureTimestamp(new Date().toISOString(), 12);
   }
 
   if (status === "customer_scheduling_ready") {
@@ -1816,6 +2047,26 @@ function hydrateHandoverMilestone(value: {
     status: toHandoverMilestoneStatus(value.status),
     targetAt: value.targetAt,
     type: toHandoverMilestoneType(value.type),
+    updatedAt: value.updatedAt
+  };
+}
+
+function hydrateHandoverAppointment(value: {
+  appointmentId: string;
+  coordinatorName: string;
+  createdAt: string;
+  location: string;
+  scheduledAt: string;
+  status: string;
+  updatedAt: string;
+}): PersistedHandoverAppointment {
+  return {
+    appointmentId: value.appointmentId,
+    coordinatorName: value.coordinatorName,
+    createdAt: value.createdAt,
+    location: value.location,
+    scheduledAt: value.scheduledAt,
+    status: toHandoverAppointmentStatus(value.status),
     updatedAt: value.updatedAt
   };
 }
@@ -1916,6 +2167,14 @@ function toHandoverCaseStatus(value: string): HandoverCaseStatus {
   }
 
   throw new Error(`unsupported_handover_case_status:${value}`);
+}
+
+function toHandoverAppointmentStatus(value: string): HandoverAppointmentStatus {
+  if (value === "planned" || value === "internally_confirmed") {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_appointment_status:${value}`);
 }
 
 function toHandoverCustomerUpdateStatus(value: string): HandoverCustomerUpdateStatus {

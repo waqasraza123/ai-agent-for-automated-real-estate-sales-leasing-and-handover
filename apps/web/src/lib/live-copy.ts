@@ -4,6 +4,7 @@ import type {
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
+  HandoverAppointmentStatus,
   HandoverCaseStatus,
   HandoverCustomerUpdateStatus,
   HandoverCustomerUpdateType,
@@ -273,6 +274,59 @@ export function getHandoverMilestoneTypeLabel(locale: SupportedLocale, type: Han
   } as const;
 
   return labels[locale][type];
+}
+
+export function getHandoverAppointmentPlanCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "حفظ موعد التسليم",
+      coordinatorName: "منسق التسليم",
+      helper: "يحفظ هذا الإجراء موعداً داخلياً فقط بعد اعتماد حد الجدولة، من دون أي إرسال خارجي للعميل.",
+      location: "الموقع",
+      scheduledAt: "موعد التسليم الداخلي",
+      title: "تخطيط الموعد الداخلي"
+    };
+  }
+
+  return {
+    action: "Save handover appointment",
+    coordinatorName: "Handover coordinator",
+    helper: "This only saves the internal appointment after the scheduling boundary is approved. It does not send anything to the customer.",
+    location: "Location",
+    scheduledAt: "Internal handover time",
+    title: "Internal appointment planning"
+  };
+}
+
+export function getHandoverAppointmentStatusLabel(locale: SupportedLocale, status: HandoverAppointmentStatus) {
+  const labels = {
+    ar: {
+      internally_confirmed: "مؤكد داخلياً",
+      planned: "مخطط"
+    },
+    en: {
+      internally_confirmed: "Internally confirmed",
+      planned: "Planned"
+    }
+  } as const;
+
+  return labels[locale][status];
+}
+
+export function getHandoverAppointmentConfirmationCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "تأكيد الموعد داخلياً",
+      helper: "هذا التأكيد يثبت الموعد داخل حدود التشغيل الحالية ولا يرسل أي رسالة حقيقية للعميل.",
+      title: "التأكيد الداخلي"
+    };
+  }
+
+  return {
+    action: "Confirm internally",
+    helper: "This confirms the appointment inside the current operational boundary and does not send any real outbound message.",
+    title: "Internal confirmation"
+  };
 }
 
 export function getHandoverTaskStatusLabel(locale: SupportedLocale, status: HandoverTaskStatus) {
