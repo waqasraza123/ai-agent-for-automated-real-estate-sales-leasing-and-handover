@@ -10,6 +10,8 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getHandoverMilestoneCopy, getHandoverMilestoneStatusLabel } from "@/lib/live-copy";
 
 export function HandoverMilestoneForm(props: {
+  canManage: boolean;
+  disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   milestoneId: string;
@@ -32,7 +34,7 @@ export function HandoverMilestoneForm(props: {
       <div className="field-grid">
         <label className="field-stack">
           <span>{copy.status}</span>
-          <select className="select-shell" defaultValue={props.status} name="status">
+          <select className="select-shell" defaultValue={props.status} disabled={!props.canManage} name="status">
             {statusOptions.map((statusOption) => (
               <option key={statusOption} value={statusOption}>
                 {getHandoverMilestoneStatusLabel(props.locale, statusOption)}
@@ -42,16 +44,28 @@ export function HandoverMilestoneForm(props: {
         </label>
         <label className="field-stack">
           <span>{copy.targetAt}</span>
-          <input className="input-shell" defaultValue={props.targetAt} name="targetAt" required type="datetime-local" />
+          <input
+            className="input-shell"
+            defaultValue={props.targetAt}
+            disabled={!props.canManage}
+            name="targetAt"
+            required
+            type="datetime-local"
+          />
         </label>
         <label className="field-stack field-span-full">
           <span>{copy.ownerName}</span>
-          <input className="input-shell" defaultValue={props.ownerName} name="ownerName" type="text" />
+          <input className="input-shell" defaultValue={props.ownerName} disabled={!props.canManage} name="ownerName" type="text" />
         </label>
       </div>
 
       <div className="form-actions-row">
-        <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."} />
+        <FormSubmitButton
+          disabled={!props.canManage}
+          disabledLabel={props.disabledLabel}
+          idleLabel={copy.action}
+          pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."}
+        />
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}
         </p>

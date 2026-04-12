@@ -168,6 +168,9 @@ describe("lead capture api", () => {
     expect(taskUpdateResponse.json().tasks[0]?.status).toBe("blocked");
 
     const earlyCustomerApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "approved"
@@ -179,6 +182,9 @@ describe("lead capture api", () => {
     expect(earlyCustomerApprovalResponse.json().error).toBe("handover_customer_update_not_ready");
 
     const earlyAppointmentPlanResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         coordinatorName: "Handover Control",
@@ -192,6 +198,9 @@ describe("lead capture api", () => {
     expect(earlyAppointmentPlanResponse.json().error).toBe("handover_scheduling_boundary_not_approved");
 
     const milestoneUpdateResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         ownerName: "Customer Care Desk",
@@ -212,6 +221,9 @@ describe("lead capture api", () => {
     ).toBe("ready_for_approval");
 
     const customerApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "approved"
@@ -254,6 +266,9 @@ describe("lead capture api", () => {
     }
 
     const schedulingMilestoneResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         ownerName: "Scheduling Desk",
@@ -271,6 +286,9 @@ describe("lead capture api", () => {
     ).toBe("ready_for_approval");
 
     const schedulingApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "approved"
@@ -282,6 +300,9 @@ describe("lead capture api", () => {
     expect(schedulingApprovalResponse.json().status).toBe("customer_scheduling_ready");
 
     const appointmentPlanResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         coordinatorName: "Handover Control",
@@ -298,6 +319,9 @@ describe("lead capture api", () => {
     const plannedAppointmentId = appointmentPlanResponse.json().appointment.appointmentId;
 
     const earlyAppointmentConfirmationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         status: "internally_confirmed"
@@ -309,6 +333,9 @@ describe("lead capture api", () => {
     expect(earlyAppointmentConfirmationResponse.json().error).toBe("handover_appointment_confirmation_not_approved");
 
     const appointmentHoldMilestoneResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         ownerName: "Project Ops",
@@ -326,6 +353,9 @@ describe("lead capture api", () => {
     ).toBe("ready_for_approval");
 
     const appointmentBoundaryApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "approved"
@@ -336,6 +366,9 @@ describe("lead capture api", () => {
     expect(appointmentBoundaryApprovalResponse.statusCode).toBe(200);
 
     const appointmentConfirmationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         status: "internally_confirmed"
@@ -347,6 +380,9 @@ describe("lead capture api", () => {
     expect(appointmentConfirmationResponse.json().appointment.status).toBe("internally_confirmed");
 
     const earlyDispatchReadyResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "ready_to_dispatch"
@@ -358,6 +394,9 @@ describe("lead capture api", () => {
     expect(earlyDispatchReadyResponse.json().error).toBe("handover_delivery_preparation_required");
 
     const deliveryPreparationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         deliverySummary: "Arabic WhatsApp confirmation copy is prepared for manual dispatch after final ops review.",
@@ -374,6 +413,9 @@ describe("lead capture api", () => {
     ).toBe("prepared_for_delivery");
 
     const earlyExecutionBlockerResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "POST",
       payload: {
         dueAt: "2026-04-22T09:00:00.000Z",
@@ -390,6 +432,9 @@ describe("lead capture api", () => {
     expect(earlyExecutionBlockerResponse.json().error).toBe("handover_execution_not_ready");
 
     const dispatchReadyResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "ready_to_dispatch"
@@ -406,6 +451,9 @@ describe("lead capture api", () => {
     ).toBe("ready_to_dispatch");
 
     const blockerCreateResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "POST",
       payload: {
         dueAt: "2026-04-22T09:00:00.000Z",
@@ -425,6 +473,9 @@ describe("lead capture api", () => {
     const blockerId = blockerCreateResponse.json().blockers[0]?.blockerId;
 
     const earlyExecutionStartResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "in_progress"
@@ -436,6 +487,9 @@ describe("lead capture api", () => {
     expect(earlyExecutionStartResponse.json().error).toBe("handover_execution_blockers_open");
 
     const blockerProgressResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         dueAt: "2026-04-22T12:00:00.000Z",
@@ -451,6 +505,9 @@ describe("lead capture api", () => {
     expect(blockerProgressResponse.json().blockers[0]?.status).toBe("in_progress");
 
     const blockerResolvedResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
       method: "PATCH",
       payload: {
         dueAt: "2026-04-22T15:00:00.000Z",
@@ -466,6 +523,9 @@ describe("lead capture api", () => {
     expect(blockerResolvedResponse.json().blockers[0]?.status).toBe("resolved");
 
     const earlyCompletionResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         completionSummary: "Attempt to complete the handover before execution has started on the live record.",
@@ -478,6 +538,9 @@ describe("lead capture api", () => {
     expect(earlyCompletionResponse.json().error).toBe("handover_completion_not_ready");
 
     const earlyReviewResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         outcome: "accepted",
@@ -490,6 +553,9 @@ describe("lead capture api", () => {
     expect(earlyReviewResponse.json().error).toBe("handover_review_not_ready");
 
     const executionStartResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "in_progress"
@@ -502,6 +568,9 @@ describe("lead capture api", () => {
     expect(executionStartResponse.json().executionStartedAt).not.toBeNull();
 
     const completionResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         completionSummary: "Keys were released, the final walkthrough was acknowledged, and the live handover record is now complete.",
@@ -516,6 +585,9 @@ describe("lead capture api", () => {
     expect(completionResponse.json().completionSummary).toContain("final walkthrough");
 
     const earlyPostCompletionFollowUpResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         dueAt: "2026-04-23T10:00:00.000Z",
@@ -530,6 +602,9 @@ describe("lead capture api", () => {
     expect(earlyPostCompletionFollowUpResponse.json().error).toBe("handover_follow_up_not_required");
 
     const reviewResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         outcome: "follow_up_required",
@@ -542,6 +617,9 @@ describe("lead capture api", () => {
     expect(reviewResponse.json().review.outcome).toBe("follow_up_required");
 
     const followUpResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         dueAt: "2026-04-23T10:00:00.000Z",
@@ -558,6 +636,9 @@ describe("lead capture api", () => {
     const followUpId = followUpResponse.json().postCompletionFollowUp.followUpId;
 
     const resolveFollowUpResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         resolutionSummary: "Access cards were configured correctly and the customer confirmed that the aftercare issue is closed.",
@@ -571,6 +652,9 @@ describe("lead capture api", () => {
     expect(resolveFollowUpResponse.json().postCompletionFollowUp.resolutionSummary).toContain("Access cards");
 
     const archiveReviewResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         outcome: "hold_for_review",
@@ -583,6 +667,9 @@ describe("lead capture api", () => {
     expect(archiveReviewResponse.json().archiveReview.outcome).toBe("hold_for_review");
 
     const invalidArchiveReadyResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "ready",
@@ -595,6 +682,9 @@ describe("lead capture api", () => {
     expect(invalidArchiveReadyResponse.json().error).toBe("handover_archive_status_outcome_mismatch");
 
     const archiveHeldResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "held",
@@ -607,6 +697,9 @@ describe("lead capture api", () => {
     expect(archiveHeldResponse.json().archiveStatus.status).toBe("held");
 
     const archiveReviewReadyResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         outcome: "ready_to_archive",
@@ -619,6 +712,9 @@ describe("lead capture api", () => {
     expect(archiveReviewReadyResponse.json().archiveReview.outcome).toBe("ready_to_archive");
 
     const archiveReadyResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "ready",
@@ -631,6 +727,9 @@ describe("lead capture api", () => {
     expect(archiveReadyResponse.json().archiveStatus.status).toBe("ready");
 
     const archivedResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
       method: "PATCH",
       payload: {
         status: "archived",
@@ -1060,7 +1159,371 @@ describe("lead capture api", () => {
     expect(allowedCompletionResponse.statusCode).toBe(200);
     expect(allowedCompletionResponse.json().status).toBe("completed");
   }, 50000);
+
+  it("enforces role-aware milestone, appointment, and customer-update planning controls", async () => {
+    const planningRecord = await createPlanningBoundaryHandoverRecord(app);
+
+    const forbiddenMilestoneResponse = await app.inject({
+      headers: {
+        "x-operator-role": "sales_manager"
+      },
+      method: "PATCH",
+      payload: {
+        ownerName: "Scheduling Desk",
+        status: "ready",
+        targetAt: "2026-04-20T10:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/milestones/${planningRecord.schedulingMilestoneId}`
+    });
+
+    expect(forbiddenMilestoneResponse.statusCode).toBe(403);
+    expect(forbiddenMilestoneResponse.json().permission).toBe("manage_handover_milestones");
+
+    const allowedMilestoneResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        ownerName: "Scheduling Desk",
+        status: "ready",
+        targetAt: "2026-04-20T10:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/milestones/${planningRecord.schedulingMilestoneId}`
+    });
+
+    expect(allowedMilestoneResponse.statusCode).toBe(200);
+    expect(
+      allowedMilestoneResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) => customerUpdate.customerUpdateId === planningRecord.schedulingInviteId
+      )?.status
+    ).toBe("ready_for_approval");
+
+    const forbiddenSchedulingApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.schedulingInviteId}`
+    });
+
+    expect(forbiddenSchedulingApprovalResponse.statusCode).toBe(403);
+    expect(forbiddenSchedulingApprovalResponse.json().permission).toBe("manage_handover_customer_updates");
+
+    const allowedSchedulingApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.schedulingInviteId}`
+    });
+
+    expect(allowedSchedulingApprovalResponse.statusCode).toBe(200);
+    expect(allowedSchedulingApprovalResponse.json().status).toBe("customer_scheduling_ready");
+
+    const forbiddenAppointmentPlanResponse = await app.inject({
+      headers: {
+        "x-operator-role": "sales_manager"
+      },
+      method: "PATCH",
+      payload: {
+        coordinatorName: "Handover Control",
+        location: "Palm Horizon Tower A",
+        scheduledAt: "2026-04-21T13:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment`
+    });
+
+    expect(forbiddenAppointmentPlanResponse.statusCode).toBe(403);
+    expect(forbiddenAppointmentPlanResponse.json().permission).toBe("manage_handover_appointments");
+
+    const allowedAppointmentPlanResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        coordinatorName: "Handover Control",
+        location: "Palm Horizon Tower A",
+        scheduledAt: "2026-04-21T13:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment`
+    });
+
+    expect(allowedAppointmentPlanResponse.statusCode).toBe(200);
+    expect(allowedAppointmentPlanResponse.json().appointment.status).toBe("planned");
+
+    const appointmentId = allowedAppointmentPlanResponse.json().appointment.appointmentId;
+
+    const appointmentMilestoneResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        ownerName: "Project Ops",
+        status: "ready",
+        targetAt: "2026-04-21T09:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/milestones/${planningRecord.appointmentHoldMilestoneId}`
+    });
+
+    expect(appointmentMilestoneResponse.statusCode).toBe(200);
+    expect(
+      appointmentMilestoneResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) =>
+          customerUpdate.customerUpdateId === planningRecord.appointmentConfirmationCustomerUpdateId
+      )?.status
+    ).toBe("ready_for_approval");
+
+    const forbiddenAppointmentBoundaryApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}`
+    });
+
+    expect(forbiddenAppointmentBoundaryApprovalResponse.statusCode).toBe(403);
+    expect(forbiddenAppointmentBoundaryApprovalResponse.json().permission).toBe("manage_handover_customer_updates");
+
+    const allowedAppointmentBoundaryApprovalResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}`
+    });
+
+    expect(allowedAppointmentBoundaryApprovalResponse.statusCode).toBe(200);
+
+    const forbiddenAppointmentConfirmationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "sales_manager"
+      },
+      method: "PATCH",
+      payload: {
+        status: "internally_confirmed"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment/${appointmentId}/confirmation`
+    });
+
+    expect(forbiddenAppointmentConfirmationResponse.statusCode).toBe(403);
+    expect(forbiddenAppointmentConfirmationResponse.json().permission).toBe("manage_handover_appointments");
+
+    const allowedAppointmentConfirmationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        status: "internally_confirmed"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment/${appointmentId}/confirmation`
+    });
+
+    expect(allowedAppointmentConfirmationResponse.statusCode).toBe(200);
+    expect(allowedAppointmentConfirmationResponse.json().appointment.status).toBe("internally_confirmed");
+
+    const forbiddenDeliveryPreparationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        deliverySummary: "A coordinator attempted to prepare outbound customer copy without the required customer-update role.",
+        status: "prepared_for_delivery"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/delivery`
+    });
+
+    expect(forbiddenDeliveryPreparationResponse.statusCode).toBe(403);
+    expect(forbiddenDeliveryPreparationResponse.json().permission).toBe("manage_handover_customer_updates");
+
+    const allowedDeliveryPreparationResponse = await app.inject({
+      headers: {
+        "x-operator-role": "admin"
+      },
+      method: "PATCH",
+      payload: {
+        deliverySummary: "The appointment confirmation copy is prepared for later manual outbound handling after final ops review.",
+        status: "prepared_for_delivery"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/delivery`
+    });
+
+    expect(allowedDeliveryPreparationResponse.statusCode).toBe(200);
+    expect(
+      allowedDeliveryPreparationResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) =>
+          customerUpdate.customerUpdateId === planningRecord.appointmentConfirmationCustomerUpdateId
+      )?.status
+    ).toBe("prepared_for_delivery");
+
+    const forbiddenDispatchReadyResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_coordinator"
+      },
+      method: "PATCH",
+      payload: {
+        status: "ready_to_dispatch"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/dispatch-ready`
+    });
+
+    expect(forbiddenDispatchReadyResponse.statusCode).toBe(403);
+    expect(forbiddenDispatchReadyResponse.json().permission).toBe("manage_handover_customer_updates");
+
+    const allowedDispatchReadyResponse = await app.inject({
+      headers: {
+        "x-operator-role": "handover_manager"
+      },
+      method: "PATCH",
+      payload: {
+        status: "ready_to_dispatch"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/dispatch-ready`
+    });
+
+    expect(allowedDispatchReadyResponse.statusCode).toBe(200);
+    expect(allowedDispatchReadyResponse.json().status).toBe("scheduled");
+  }, 50000);
 });
+
+async function createPlanningBoundaryHandoverRecord(app: ReturnType<typeof buildApiApp>) {
+  const createResponse = await app.inject({
+    method: "POST",
+    payload: {
+      customerName: "Maha Faisal",
+      email: "maha@example.com",
+      message: "Need a clear bilingual handover planning path with explicit scheduling boundaries.",
+      preferredLocale: "ar",
+      projectInterest: "Palm Horizon"
+    },
+    url: "/v1/website-leads"
+  });
+
+  const createdCase = createResponse.json();
+
+  await app.inject({
+    method: "POST",
+    payload: {
+      budgetBand: "SAR 1.8M to 2.0M",
+      intentSummary: "Qualified buyer with final readiness confirmed and a handover date expected within the month.",
+      moveInTimeline: "Within 30 days",
+      readiness: "high"
+    },
+    url: `/v1/cases/${createdCase.caseId}/qualification`
+  });
+
+  const visitResponse = await app.inject({
+    method: "POST",
+    payload: {
+      location: "Palm Horizon Discovery Center",
+      scheduledAt: "2026-04-15T12:30:00.000Z"
+    },
+    url: `/v1/cases/${createdCase.caseId}/visits`
+  });
+
+  for (const documentRequest of visitResponse.json().documentRequests) {
+    await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "accepted"
+      },
+      url: `/v1/cases/${createdCase.caseId}/documents/${documentRequest.documentRequestId}`
+    });
+  }
+
+  const handoverIntakeResponse = await app.inject({
+    method: "POST",
+    payload: {
+      ownerName: "Handover Desk Riyadh",
+      readinessSummary: "Documents are accepted and the case is ready to enter the controlled handover flow."
+    },
+    url: `/v1/cases/${createdCase.caseId}/handover-intake`
+  });
+
+  const handoverCaseId = handoverIntakeResponse.json().handoverCase.handoverCaseId;
+  const handoverDetailResponse = await app.inject({
+    method: "GET",
+    url: `/v1/handover-cases/${handoverCaseId}`
+  });
+  const handoverDetail = handoverDetailResponse.json();
+  const readinessMilestoneId = handoverDetail.milestones.find(
+    (milestone: { type: string }) => milestone.type === "readiness_gate"
+  )?.milestoneId;
+  const schedulingMilestoneId = handoverDetail.milestones.find(
+    (milestone: { type: string }) => milestone.type === "customer_scheduling_window"
+  )?.milestoneId;
+  const appointmentHoldMilestoneId = handoverDetail.milestones.find(
+    (milestone: { type: string }) => milestone.type === "handover_appointment_hold"
+  )?.milestoneId;
+  const readinessCustomerUpdateId = handoverDetail.customerUpdates.find(
+    (customerUpdate: { type: string }) => customerUpdate.type === "readiness_update"
+  )?.customerUpdateId;
+  const schedulingInviteId = handoverDetail.customerUpdates.find(
+    (customerUpdate: { type: string }) => customerUpdate.type === "scheduling_invite"
+  )?.customerUpdateId;
+  const appointmentConfirmationCustomerUpdateId = handoverDetail.customerUpdates.find(
+    (customerUpdate: { type: string }) => customerUpdate.type === "appointment_confirmation"
+  )?.customerUpdateId;
+
+  for (const task of handoverDetail.tasks) {
+    await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "complete"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/tasks/${task.taskId}`
+    });
+  }
+
+  await app.inject({
+    headers: {
+      "x-operator-role": "handover_coordinator"
+    },
+    method: "PATCH",
+    payload: {
+      ownerName: "Customer Care Desk",
+      status: "ready",
+      targetAt: "2026-04-18T09:00:00.000Z"
+    },
+    url: `/v1/handover-cases/${handoverCaseId}/milestones/${readinessMilestoneId}`
+  });
+
+  await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
+    method: "PATCH",
+    payload: {
+      status: "approved"
+    },
+    url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${readinessCustomerUpdateId}`
+  });
+
+  return {
+    appointmentConfirmationCustomerUpdateId,
+    appointmentHoldMilestoneId,
+    caseId: createdCase.caseId,
+    handoverCaseId,
+    schedulingInviteId,
+    schedulingMilestoneId
+  };
+}
 
 async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>) {
   const createResponse = await app.inject({
@@ -1152,6 +1615,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   }
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_coordinator"
+    },
     method: "PATCH",
     payload: {
       ownerName: "Customer Care Desk",
@@ -1162,6 +1628,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
     method: "PATCH",
     payload: {
       status: "approved"
@@ -1170,6 +1639,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_coordinator"
+    },
     method: "PATCH",
     payload: {
       ownerName: "Scheduling Desk",
@@ -1180,6 +1652,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
     method: "PATCH",
     payload: {
       status: "approved"
@@ -1188,6 +1663,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   const appointmentResponse = await app.inject({
+    headers: {
+      "x-operator-role": "handover_coordinator"
+    },
     method: "PATCH",
     payload: {
       coordinatorName: "Handover Control",
@@ -1200,6 +1678,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   const appointmentId = appointmentResponse.json().appointment.appointmentId;
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_coordinator"
+    },
     method: "PATCH",
     payload: {
       ownerName: "Project Ops",
@@ -1210,6 +1691,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
     method: "PATCH",
     payload: {
       status: "approved"
@@ -1218,6 +1702,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_coordinator"
+    },
     method: "PATCH",
     payload: {
       status: "internally_confirmed"
@@ -1226,6 +1713,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
     method: "PATCH",
     payload: {
       deliverySummary: "Arabic confirmation copy is prepared for manual outbound dispatch after final ops review.",
@@ -1235,6 +1725,9 @@ async function createScheduledHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   const scheduledResponse = await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
     method: "PATCH",
     payload: {
       status: "ready_to_dispatch"
@@ -1253,6 +1746,9 @@ async function createCompletedHandoverRecord(app: ReturnType<typeof buildApiApp>
   const scheduledHandoverRecord = await createScheduledHandoverRecord(app);
 
   await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
     method: "PATCH",
     payload: {
       status: "in_progress"
@@ -1261,6 +1757,9 @@ async function createCompletedHandoverRecord(app: ReturnType<typeof buildApiApp>
   });
 
   const completionResponse = await app.inject({
+    headers: {
+      "x-operator-role": "handover_manager"
+    },
     method: "PATCH",
     payload: {
       completionSummary: "Keys were released, the walkthrough was acknowledged, and the live handover record is complete.",

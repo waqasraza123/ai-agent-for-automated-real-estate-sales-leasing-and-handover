@@ -314,6 +314,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/appointment", async (request, reply) => {
+    const permission = "manage_handover_appointments";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = planHandoverAppointmentInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -350,6 +360,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/appointment/:appointmentId/confirmation", async (request, reply) => {
+    const permission = "manage_handover_appointments";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = confirmHandoverAppointmentInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -391,6 +411,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/customer-updates/:customerUpdateId/delivery", async (request, reply) => {
+    const permission = "manage_handover_customer_updates";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = prepareHandoverCustomerUpdateDeliveryInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -432,6 +462,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/customer-updates/:customerUpdateId/dispatch-ready", async (request, reply) => {
+    const permission = "manage_handover_customer_updates";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = markHandoverCustomerUpdateDispatchReadyInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -884,6 +924,16 @@ export function buildApiApp(dependencies: {
       milestoneId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/milestones/:milestoneId", async (request, reply) => {
+    const permission = "manage_handover_milestones";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = updateHandoverMilestoneInputSchema.safeParse(request.body);
 
     if (!result.success) {
@@ -915,6 +965,16 @@ export function buildApiApp(dependencies: {
       handoverCaseId: string;
     };
   }>("/v1/handover-cases/:handoverCaseId/customer-updates/:customerUpdateId", async (request, reply) => {
+    const permission = "manage_handover_customer_updates";
+
+    if (!hasRequiredOperatorRole(request.headers["x-operator-role"], permission)) {
+      return reply.status(403).send({
+        error: "insufficient_role",
+        permission,
+        requiredRoles: getRequiredOperatorRoles(permission)
+      });
+    }
+
     const result = approveHandoverCustomerUpdateInputSchema.safeParse(request.body);
 
     if (!result.success) {

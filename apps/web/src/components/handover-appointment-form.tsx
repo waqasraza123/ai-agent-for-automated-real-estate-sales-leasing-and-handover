@@ -10,7 +10,9 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getHandoverAppointmentPlanCopy } from "@/lib/live-copy";
 
 export function HandoverAppointmentForm(props: {
+  canManage: boolean;
   coordinatorName: string;
+  disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   location: string;
@@ -29,20 +31,32 @@ export function HandoverAppointmentForm(props: {
       <div className="field-grid">
         <label className="field-stack">
           <span>{copy.location}</span>
-          <input className="input-shell" defaultValue={props.location} name="location" required type="text" />
+          <input className="input-shell" defaultValue={props.location} disabled={!props.canManage} name="location" required type="text" />
         </label>
         <label className="field-stack">
           <span>{copy.scheduledAt}</span>
-          <input className="input-shell" defaultValue={props.scheduledAt} name="scheduledAt" required type="datetime-local" />
+          <input
+            className="input-shell"
+            defaultValue={props.scheduledAt}
+            disabled={!props.canManage}
+            name="scheduledAt"
+            required
+            type="datetime-local"
+          />
         </label>
         <label className="field-stack field-span-full">
           <span>{copy.coordinatorName}</span>
-          <input className="input-shell" defaultValue={props.coordinatorName} name="coordinatorName" type="text" />
+          <input className="input-shell" defaultValue={props.coordinatorName} disabled={!props.canManage} name="coordinatorName" type="text" />
         </label>
       </div>
 
       <div className="form-actions-row">
-        <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."} />
+        <FormSubmitButton
+          disabled={!props.canManage}
+          disabledLabel={props.disabledLabel}
+          idleLabel={copy.action}
+          pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."}
+        />
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}
         </p>

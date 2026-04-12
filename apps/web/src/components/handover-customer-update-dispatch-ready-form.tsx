@@ -10,7 +10,9 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getHandoverDispatchReadyCopy } from "@/lib/live-copy";
 
 export function HandoverCustomerUpdateDispatchReadyForm(props: {
+  canManage: boolean;
   customerUpdateId: string;
+  disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   returnPath: string;
@@ -35,7 +37,12 @@ export function HandoverCustomerUpdateDispatchReadyForm(props: {
             {props.locale === "ar" ? "جاهز للإرسال" : "Ready to dispatch"}
           </button>
         ) : isPrepared ? (
-          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ التحويل..." : "Marking..."} />
+          <FormSubmitButton
+            disabled={!props.canManage}
+            disabledLabel={props.disabledLabel}
+            idleLabel={copy.action}
+            pendingLabel={props.locale === "ar" ? "جارٍ التحويل..." : "Marking..."}
+          />
         ) : (
           <button className="primary-button" disabled type="button">
             {props.locale === "ar" ? "بانتظار التجهيز" : "Waiting for preparation"}

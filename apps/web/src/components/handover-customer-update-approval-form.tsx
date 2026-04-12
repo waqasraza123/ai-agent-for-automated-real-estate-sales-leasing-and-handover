@@ -10,7 +10,9 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getHandoverCustomerUpdateApprovalCopy } from "@/lib/live-copy";
 
 export function HandoverCustomerUpdateApprovalForm(props: {
+  canManage: boolean;
   customerUpdateId: string;
+  disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   returnPath: string;
@@ -31,7 +33,12 @@ export function HandoverCustomerUpdateApprovalForm(props: {
 
       <div className="form-actions-row">
         {isReady ? (
-          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الاعتماد..." : "Approving..."} />
+          <FormSubmitButton
+            disabled={!props.canManage}
+            disabledLabel={props.disabledLabel}
+            idleLabel={copy.action}
+            pendingLabel={props.locale === "ar" ? "جارٍ الاعتماد..." : "Approving..."}
+          />
         ) : (
           <button className="primary-button" disabled type="button">
             {isApproved ? (props.locale === "ar" ? "تم الاعتماد" : "Already approved") : (props.locale === "ar" ? "بانتظار الجاهزية" : "Waiting for readiness")}

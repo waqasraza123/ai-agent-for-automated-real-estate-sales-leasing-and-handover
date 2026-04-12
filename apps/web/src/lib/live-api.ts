@@ -262,9 +262,11 @@ export async function updateHandoverArchiveStatus(
 export async function updateHandoverMilestone(
   handoverCaseId: string,
   milestoneId: string,
-  input: UpdateHandoverMilestoneInput
+  input: UpdateHandoverMilestoneInput,
+  operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/milestones/${milestoneId}`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "PATCH",
     payload: input
   });
@@ -273,19 +275,26 @@ export async function updateHandoverMilestone(
 export async function approveHandoverCustomerUpdate(
   handoverCaseId: string,
   customerUpdateId: string,
-  input: ApproveHandoverCustomerUpdateInput
+  input: ApproveHandoverCustomerUpdateInput,
+  operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedHandoverCaseDetail>(
     `/v1/handover-cases/${handoverCaseId}/customer-updates/${customerUpdateId}`,
     {
+      headers: getOperatorRoleHeaders(operatorRole),
       method: "PATCH",
       payload: input
     }
   );
 }
 
-export async function planHandoverAppointment(handoverCaseId: string, input: PlanHandoverAppointmentInput) {
+export async function planHandoverAppointment(
+  handoverCaseId: string,
+  input: PlanHandoverAppointmentInput,
+  operatorRole?: OperatorRole
+) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/appointment`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "PATCH",
     payload: input
   });
@@ -294,9 +303,11 @@ export async function planHandoverAppointment(handoverCaseId: string, input: Pla
 export async function confirmHandoverAppointment(
   handoverCaseId: string,
   appointmentId: string,
-  input: ConfirmHandoverAppointmentInput
+  input: ConfirmHandoverAppointmentInput,
+  operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/appointment/${appointmentId}/confirmation`, {
+    headers: getOperatorRoleHeaders(operatorRole),
     method: "PATCH",
     payload: input
   });
@@ -305,11 +316,13 @@ export async function confirmHandoverAppointment(
 export async function prepareHandoverCustomerUpdateDelivery(
   handoverCaseId: string,
   customerUpdateId: string,
-  input: PrepareHandoverCustomerUpdateDeliveryInput
+  input: PrepareHandoverCustomerUpdateDeliveryInput,
+  operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedHandoverCaseDetail>(
     `/v1/handover-cases/${handoverCaseId}/customer-updates/${customerUpdateId}/delivery`,
     {
+      headers: getOperatorRoleHeaders(operatorRole),
       method: "PATCH",
       payload: input
     }
@@ -319,11 +332,13 @@ export async function prepareHandoverCustomerUpdateDelivery(
 export async function markHandoverCustomerUpdateDispatchReady(
   handoverCaseId: string,
   customerUpdateId: string,
-  input: MarkHandoverCustomerUpdateDispatchReadyInput
+  input: MarkHandoverCustomerUpdateDispatchReadyInput,
+  operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedHandoverCaseDetail>(
     `/v1/handover-cases/${handoverCaseId}/customer-updates/${customerUpdateId}/dispatch-ready`,
     {
+      headers: getOperatorRoleHeaders(operatorRole),
       method: "PATCH",
       payload: input
     }

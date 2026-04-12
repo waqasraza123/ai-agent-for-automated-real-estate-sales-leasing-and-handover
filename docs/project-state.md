@@ -47,6 +47,7 @@
 - Phase 5: hardening and enterprise controls
 - The first persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect post-completion review, aftercare follow-up, and archive mutations behind local handover-manager or admin control
 - The next persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect manager follow-up, automation, execution blockers, and execution-day transitions with visible UI guardrails and API-enforced permissions
+- The next persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect milestone planning, appointment planning or confirmation, and customer-update approval or delivery boundaries with shared permissions and visible UI guardrails
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -73,6 +74,7 @@
 - Added the next persisted manager-visibility slice with derived handover-closure signals in case summaries, manager workspace metrics, closure queues, lead-list badges, and integration-tested list visibility for archived records
 - Added the first persisted Phase 5 control slice with local operator-role switching in the web shell, API-enforced governance permissions on post-completion and archive mutations, localized role visibility, and integration coverage for restricted vs allowed roles
 - Added the next persisted Phase 5 control slice with shared permission definitions, API-enforced restrictions on follow-up, automation, blocker, and execution actions, disabled UI controls with role guard notes, and production-server smoke stability for Playwright
+- Added the next persisted Phase 5 control slice with shared planning permissions, API-enforced restrictions on milestones, appointments, and customer-update delivery boundaries, disabled UI controls with role guard notes, and integration coverage for restricted vs allowed planning actions
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -104,6 +106,7 @@
 - The first local authorization boundary uses a cookie-backed operator role in the web shell and an `x-operator-role` API header; this is a deliberate local-control bridge until real authentication and authorization are implemented
 - Post-completion review, aftercare follow-up, archive review, and archive status changes are now explicitly limited to `handover_manager` and `admin` roles
 - Follow-up-plan and automation controls are now limited to managerial roles in the local control model, while blocker updates are limited to handover-execution roles and execution-day transitions are limited to `handover_manager` and `admin`
+- Milestone planning and appointment controls are now limited to handover coordination roles, while customer-update approval, delivery preparation, and dispatch-ready promotion are limited to `handover_manager` and `admin`
 - Shared operator-permission definitions now live in `packages/contracts` so the web shell and API enforce the same local role model
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - Playwright smoke verification now runs against a production Next server because the dev-server path was intermittently unstable on the handover route in this environment

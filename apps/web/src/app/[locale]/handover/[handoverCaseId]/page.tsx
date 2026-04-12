@@ -85,8 +85,14 @@ export default async function HandoverPage(props: PageProps) {
             : (["ready"] as const);
     const canManageExecution = canOperatorRolePerform("manage_handover_execution", currentOperatorRole);
     const canManageBlockers = canOperatorRolePerform("manage_handover_blockers", currentOperatorRole);
+    const canManageMilestones = canOperatorRolePerform("manage_handover_milestones", currentOperatorRole);
+    const canManageAppointments = canOperatorRolePerform("manage_handover_appointments", currentOperatorRole);
+    const canManageCustomerUpdates = canOperatorRolePerform("manage_handover_customer_updates", currentOperatorRole);
     const executionGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_execution");
     const blockerGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_blockers");
+    const milestoneGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_milestones");
+    const appointmentGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_appointments");
+    const customerUpdateGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_customer_updates");
 
     return (
       <div className="page-stack">
@@ -427,52 +433,59 @@ export default async function HandoverPage(props: PageProps) {
 
         <div className="two-column-grid">
           <Panel title={locale === "ar" ? "الموعد الداخلي" : "Internal appointment"}>
-            {appointmentItem ? (
-              <div className="page-stack">
-                <div className="detail-grid">
-                  <div>
-                    <p className="detail-label">{locale === "ar" ? "الموقع" : "Location"}</p>
-                    <p>{appointmentItem.location}</p>
+            <div className="page-stack">
+              <p className="field-note">{appointmentGuardNote}</p>
+              {appointmentItem ? (
+                <div className="page-stack">
+                  <div className="detail-grid">
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "الموقع" : "Location"}</p>
+                      <p>{appointmentItem.location}</p>
+                    </div>
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "الحالة" : "Status"}</p>
+                      <StatusBadge tone={appointmentItem.statusTone}>{appointmentItem.statusLabel}</StatusBadge>
+                    </div>
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "منسق التسليم" : "Coordinator"}</p>
+                      <p>{appointmentItem.coordinatorName}</p>
+                    </div>
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "الموعد" : "Scheduled time"}</p>
+                      <p>{appointmentItem.scheduledAt}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="detail-label">{locale === "ar" ? "الحالة" : "Status"}</p>
-                    <StatusBadge tone={appointmentItem.statusTone}>{appointmentItem.statusLabel}</StatusBadge>
-                  </div>
-                  <div>
-                    <p className="detail-label">{locale === "ar" ? "منسق التسليم" : "Coordinator"}</p>
-                    <p>{appointmentItem.coordinatorName}</p>
-                  </div>
-                  <div>
-                    <p className="detail-label">{locale === "ar" ? "الموعد" : "Scheduled time"}</p>
-                    <p>{appointmentItem.scheduledAt}</p>
-                  </div>
+                  <HandoverAppointmentForm
+                    canManage={canManageAppointments}
+                    coordinatorName={appointmentItem.coordinatorName}
+                    disabledLabel={locale === "ar" ? "يتطلب دور جدولة التسليم" : "Handover scheduling role required"}
+                    handoverCaseId={persistedHandoverCase.handoverCaseId}
+                    locale={locale}
+                    location={appointmentItem.location}
+                    returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                    scheduledAt={appointmentItem.scheduledAtInput}
+                  />
                 </div>
-                <HandoverAppointmentForm
-                  coordinatorName={appointmentItem.coordinatorName}
-                  handoverCaseId={persistedHandoverCase.handoverCaseId}
-                  locale={locale}
-                  location={appointmentItem.location}
-                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
-                  scheduledAt={appointmentItem.scheduledAtInput}
-                />
-              </div>
-            ) : (
-              <div className="page-stack">
-                <p className="panel-summary">
-                  {locale === "ar"
-                    ? "لن يتم حفظ الموعد الداخلي حتى تصبح حدود الجدولة معتمدة ويصبح السجل جاهزاً للجدولة."
-                    : "The internal appointment stays unavailable until the scheduling boundary is approved and the record is ready for scheduling."}
-                </p>
-                <HandoverAppointmentForm
-                  coordinatorName={persistedHandoverCase.ownerName}
-                  handoverCaseId={persistedHandoverCase.handoverCaseId}
-                  locale={locale}
-                  location=""
-                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
-                  scheduledAt={appointmentHoldMilestone?.targetAtInput ?? ""}
-                />
-              </div>
-            )}
+              ) : (
+                <div className="page-stack">
+                  <p className="panel-summary">
+                    {locale === "ar"
+                      ? "لن يتم حفظ الموعد الداخلي حتى تصبح حدود الجدولة معتمدة ويصبح السجل جاهزاً للجدولة."
+                      : "The internal appointment stays unavailable until the scheduling boundary is approved and the record is ready for scheduling."}
+                  </p>
+                  <HandoverAppointmentForm
+                    canManage={canManageAppointments}
+                    coordinatorName={persistedHandoverCase.ownerName}
+                    disabledLabel={locale === "ar" ? "يتطلب دور جدولة التسليم" : "Handover scheduling role required"}
+                    handoverCaseId={persistedHandoverCase.handoverCaseId}
+                    locale={locale}
+                    location=""
+                    returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                    scheduledAt={appointmentHoldMilestone?.targetAtInput ?? ""}
+                  />
+                </div>
+              )}
+            </div>
           </Panel>
 
           <Panel title={locale === "ar" ? "تأكيد الموعد" : "Appointment confirmation"}>
@@ -483,8 +496,11 @@ export default async function HandoverPage(props: PageProps) {
                     ? "يتطلب هذا التأكيد اعتماد حد تأكيد الموعد أولاً، لكنه لا يطلق أي رسالة حقيقية إلى العميل."
                     : "This confirmation requires the appointment-confirmation boundary first, and still does not trigger any real outbound message."}
                 </p>
+                <p className="field-note">{appointmentGuardNote}</p>
                 <HandoverAppointmentConfirmationForm
                   appointmentId={appointmentItem.appointmentId}
+                  canManage={canManageAppointments}
+                  disabledLabel={locale === "ar" ? "يتطلب دور جدولة التسليم" : "Handover scheduling role required"}
                   handoverCaseId={persistedHandoverCase.handoverCaseId}
                   locale={locale}
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
@@ -510,6 +526,7 @@ export default async function HandoverPage(props: PageProps) {
                     ? "هذه الخطوة تحفظ صياغة التأكيد المعتمدة كرسالة جاهزة للإرسال لاحقاً من دون تشغيل أي قناة فعلية."
                     : "This stores the approved confirmation as outbound-ready content for later dispatch without triggering any live channel."}
                 </p>
+                <p className="field-note">{customerUpdateGuardNote}</p>
                 {appointmentConfirmationUpdate.deliverySummary ? (
                   <div className="detail-grid">
                     <div>
@@ -523,7 +540,9 @@ export default async function HandoverPage(props: PageProps) {
                   </div>
                 ) : null}
                 <HandoverCustomerUpdateDeliveryForm
+                  canManage={canManageCustomerUpdates}
                   customerUpdateId={appointmentConfirmationUpdate.customerUpdateId}
+                  disabledLabel={locale === "ar" ? "يتطلب مدير التسليم" : "Handover manager required"}
                   deliverySummary={appointmentConfirmationUpdate.deliverySummary ?? ""}
                   handoverCaseId={persistedHandoverCase.handoverCaseId}
                   locale={locale}
@@ -548,6 +567,7 @@ export default async function HandoverPage(props: PageProps) {
                     ? "هذه الخطوة لا ترسل أي رسالة، لكنها ترفع سجل التسليم إلى حالة مجدولة داخلياً بمجرد اكتمال التجهيز."
                     : "This still does not send anything, but it promotes the handover record into an internally scheduled state once preparation is complete."}
                 </p>
+                <p className="field-note">{customerUpdateGuardNote}</p>
                 {appointmentConfirmationUpdate.dispatchReadyAt ? (
                   <div className="detail-grid">
                     <div>
@@ -561,7 +581,9 @@ export default async function HandoverPage(props: PageProps) {
                   </div>
                 ) : null}
                 <HandoverCustomerUpdateDispatchReadyForm
+                  canManage={canManageCustomerUpdates}
                   customerUpdateId={appointmentConfirmationUpdate.customerUpdateId}
+                  disabledLabel={locale === "ar" ? "يتطلب مدير التسليم" : "Handover manager required"}
                   handoverCaseId={persistedHandoverCase.handoverCaseId}
                   locale={locale}
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
@@ -649,68 +671,78 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
 
           <Panel title={locale === "ar" ? "خطة المحطات" : "Milestone plan"}>
-            <StatefulStack
-              emptySummary={locale === "ar" ? "لم يتم إنشاء أي محطات بعد." : "No handover milestones have been planned yet."}
-              emptyTitle={locale === "ar" ? "لا توجد محطات" : "No milestones"}
-              items={milestoneItems}
-              renderItem={(milestone) => (
-                <article key={milestone.milestoneId} className="document-row document-row-live">
-                  <div>
-                    <div className="row-between">
-                      <h3>{milestone.title}</h3>
-                      <StatusBadge tone={milestone.statusTone}>{milestone.statusLabel}</StatusBadge>
+            <div className="page-stack">
+              <p className="field-note">{milestoneGuardNote}</p>
+              <StatefulStack
+                emptySummary={locale === "ar" ? "لم يتم إنشاء أي محطات بعد." : "No handover milestones have been planned yet."}
+                emptyTitle={locale === "ar" ? "لا توجد محطات" : "No milestones"}
+                items={milestoneItems}
+                renderItem={(milestone) => (
+                  <article key={milestone.milestoneId} className="document-row document-row-live">
+                    <div>
+                      <div className="row-between">
+                        <h3>{milestone.title}</h3>
+                        <StatusBadge tone={milestone.statusTone}>{milestone.statusLabel}</StatusBadge>
+                      </div>
+                      <p>{milestone.summary}</p>
+                      <p className="case-link-meta">{milestone.ownerName}</p>
+                      <p className="case-link-meta">{milestone.targetAt}</p>
                     </div>
-                    <p>{milestone.summary}</p>
-                    <p className="case-link-meta">{milestone.ownerName}</p>
-                    <p className="case-link-meta">{milestone.targetAt}</p>
-                  </div>
-                  <div className="document-row-actions">
-                    <HandoverMilestoneForm
-                      handoverCaseId={persistedHandoverCase.handoverCaseId}
-                      locale={locale}
-                      milestoneId={milestone.milestoneId}
-                      ownerName={milestone.ownerName}
-                      returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
-                      status={milestone.status}
-                      targetAt={milestone.targetAtInput}
-                    />
-                  </div>
-                </article>
-              )}
-            />
+                    <div className="document-row-actions">
+                      <HandoverMilestoneForm
+                        canManage={canManageMilestones}
+                        disabledLabel={locale === "ar" ? "يتطلب دور تنسيق التسليم" : "Handover coordination role required"}
+                        handoverCaseId={persistedHandoverCase.handoverCaseId}
+                        locale={locale}
+                        milestoneId={milestone.milestoneId}
+                        ownerName={milestone.ownerName}
+                        returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                        status={milestone.status}
+                        targetAt={milestone.targetAtInput}
+                      />
+                    </div>
+                  </article>
+                )}
+              />
+            </div>
           </Panel>
 
           <Panel title={locale === "ar" ? "حدود تواصل العميل" : "Customer-update boundaries"}>
-            <StatefulStack
-              emptySummary={
-                locale === "ar"
-                  ? "لن تظهر حدود التحديث إلا بعد إنشاء سجل التسليم الحي."
-                  : "Update boundaries only appear after the live handover record exists."
-              }
-              emptyTitle={locale === "ar" ? "لا توجد حدود" : "No update boundaries"}
-              items={customerUpdateItems}
-              renderItem={(customerUpdate) => (
-                <article key={customerUpdate.customerUpdateId} className="document-row document-row-live">
-                  <div>
-                    <div className="row-between">
-                      <h3>{customerUpdate.title}</h3>
-                      <StatusBadge tone={customerUpdate.statusTone}>{customerUpdate.statusLabel}</StatusBadge>
+            <div className="page-stack">
+              <p className="field-note">{customerUpdateGuardNote}</p>
+              <StatefulStack
+                emptySummary={
+                  locale === "ar"
+                    ? "لن تظهر حدود التحديث إلا بعد إنشاء سجل التسليم الحي."
+                    : "Update boundaries only appear after the live handover record exists."
+                }
+                emptyTitle={locale === "ar" ? "لا توجد حدود" : "No update boundaries"}
+                items={customerUpdateItems}
+                renderItem={(customerUpdate) => (
+                  <article key={customerUpdate.customerUpdateId} className="document-row document-row-live">
+                    <div>
+                      <div className="row-between">
+                        <h3>{customerUpdate.title}</h3>
+                        <StatusBadge tone={customerUpdate.statusTone}>{customerUpdate.statusLabel}</StatusBadge>
+                      </div>
+                      <p>{customerUpdate.summary}</p>
+                      <p className="case-link-meta">{customerUpdate.updatedAt}</p>
                     </div>
-                    <p>{customerUpdate.summary}</p>
-                    <p className="case-link-meta">{customerUpdate.updatedAt}</p>
-                  </div>
-                  <div className="document-row-actions">
-                    <HandoverCustomerUpdateApprovalForm
-                      customerUpdateId={customerUpdate.customerUpdateId}
-                      handoverCaseId={persistedHandoverCase.handoverCaseId}
-                      locale={locale}
-                      returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
-                      status={customerUpdate.status}
-                    />
-                  </div>
-                </article>
-              )}
-            />
+                    <div className="document-row-actions">
+                      <HandoverCustomerUpdateApprovalForm
+                        canManage={canManageCustomerUpdates}
+                        customerUpdateId={customerUpdate.customerUpdateId}
+                        disabledLabel={locale === "ar" ? "يتطلب مدير التسليم" : "Handover manager required"}
+                        handoverCaseId={persistedHandoverCase.handoverCaseId}
+                        locale={locale}
+                        returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                        status={customerUpdate.status}
+                      />
+                    </div>
+                  </article>
+                )}
+              />
+            </div>
           </Panel>
         </div>
 

@@ -5,6 +5,9 @@ export const operatorRoleSchema = z.enum(["sales_manager", "handover_coordinator
 export const operatorPermissionSchema = z.enum([
   "manage_case_follow_up",
   "manage_case_automation",
+  "manage_handover_milestones",
+  "manage_handover_appointments",
+  "manage_handover_customer_updates",
   "manage_handover_blockers",
   "manage_handover_execution",
   "manage_handover_governance"
@@ -456,8 +459,11 @@ export type InsufficientRoleError = z.infer<typeof insufficientRoleErrorSchema>;
 const operatorPermissionRequirements = {
   manage_case_automation: ["sales_manager", "handover_manager", "admin"],
   manage_case_follow_up: ["sales_manager", "handover_manager", "admin"],
+  manage_handover_appointments: ["handover_coordinator", "handover_manager", "admin"],
   manage_handover_blockers: ["handover_coordinator", "handover_manager", "admin"],
+  manage_handover_customer_updates: ["handover_manager", "admin"],
   manage_handover_execution: ["handover_manager", "admin"],
+  manage_handover_milestones: ["handover_coordinator", "handover_manager", "admin"],
   manage_handover_governance: ["handover_manager", "admin"]
 } as const satisfies Record<OperatorPermission, readonly OperatorRole[]>;
 

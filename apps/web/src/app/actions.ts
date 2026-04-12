@@ -834,7 +834,7 @@ export async function updateHandoverMilestoneAction(_: FormActionState, formData
   }
 
   try {
-    const updatedHandoverCase = await updateHandoverMilestone(handoverCaseId, milestoneId, result.data);
+    const updatedHandoverCase = await updateHandoverMilestone(handoverCaseId, milestoneId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -868,7 +868,7 @@ export async function approveHandoverCustomerUpdateAction(_: FormActionState, fo
   }
 
   try {
-    const updatedHandoverCase = await approveHandoverCustomerUpdate(handoverCaseId, customerUpdateId, result.data);
+    const updatedHandoverCase = await approveHandoverCustomerUpdate(handoverCaseId, customerUpdateId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -914,7 +914,7 @@ export async function planHandoverAppointmentAction(_: FormActionState, formData
   }
 
   try {
-    const updatedHandoverCase = await planHandoverAppointment(handoverCaseId, result.data);
+    const updatedHandoverCase = await planHandoverAppointment(handoverCaseId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -958,7 +958,7 @@ export async function confirmHandoverAppointmentAction(_: FormActionState, formD
   }
 
   try {
-    const updatedHandoverCase = await confirmHandoverAppointment(handoverCaseId, appointmentId, result.data);
+    const updatedHandoverCase = await confirmHandoverAppointment(handoverCaseId, appointmentId, result.data, await getOperatorRole());
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -1007,7 +1007,12 @@ export async function prepareHandoverCustomerUpdateDeliveryAction(
   }
 
   try {
-    const updatedHandoverCase = await prepareHandoverCustomerUpdateDelivery(handoverCaseId, customerUpdateId, result.data);
+    const updatedHandoverCase = await prepareHandoverCustomerUpdateDelivery(
+      handoverCaseId,
+      customerUpdateId,
+      result.data,
+      await getOperatorRole()
+    );
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
@@ -1057,7 +1062,12 @@ export async function markHandoverCustomerUpdateDispatchReadyAction(
   }
 
   try {
-    const updatedHandoverCase = await markHandoverCustomerUpdateDispatchReady(handoverCaseId, customerUpdateId, result.data);
+    const updatedHandoverCase = await markHandoverCustomerUpdateDispatchReady(
+      handoverCaseId,
+      customerUpdateId,
+      result.data,
+      await getOperatorRole()
+    );
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {

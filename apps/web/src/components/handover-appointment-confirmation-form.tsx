@@ -11,6 +11,8 @@ import { getHandoverAppointmentConfirmationCopy } from "@/lib/live-copy";
 
 export function HandoverAppointmentConfirmationForm(props: {
   appointmentId: string;
+  canManage: boolean;
+  disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   returnPath: string;
@@ -34,7 +36,12 @@ export function HandoverAppointmentConfirmationForm(props: {
             {props.locale === "ar" ? "تم التأكيد" : "Already confirmed"}
           </button>
         ) : (
-          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ التأكيد..." : "Confirming..."} />
+          <FormSubmitButton
+            disabled={!props.canManage}
+            disabledLabel={props.disabledLabel}
+            idleLabel={copy.action}
+            pendingLabel={props.locale === "ar" ? "جارٍ التأكيد..." : "Confirming..."}
+          />
         )}
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}

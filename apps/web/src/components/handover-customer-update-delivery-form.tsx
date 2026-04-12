@@ -10,7 +10,9 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import { getHandoverDeliveryPreparationCopy } from "@/lib/live-copy";
 
 export function HandoverCustomerUpdateDeliveryForm(props: {
+  canManage: boolean;
   customerUpdateId: string;
+  disabledLabel: string;
   deliverySummary: string;
   handoverCaseId: string;
   locale: SupportedLocale;
@@ -31,7 +33,14 @@ export function HandoverCustomerUpdateDeliveryForm(props: {
 
       <label className="field-stack field-span-full">
         <span>{copy.deliverySummary}</span>
-        <textarea className="textarea-shell" defaultValue={props.deliverySummary} name="deliverySummary" required rows={4} />
+        <textarea
+          className="textarea-shell"
+          defaultValue={props.deliverySummary}
+          disabled={!props.canManage}
+          name="deliverySummary"
+          required
+          rows={4}
+        />
       </label>
 
       <div className="form-actions-row">
@@ -40,7 +49,12 @@ export function HandoverCustomerUpdateDeliveryForm(props: {
             {props.locale === "ar" ? "تم التجهيز" : "Already prepared"}
           </button>
         ) : (
-          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ التجهيز..." : "Preparing..."} />
+          <FormSubmitButton
+            disabled={!props.canManage}
+            disabledLabel={props.disabledLabel}
+            idleLabel={copy.action}
+            pendingLabel={props.locale === "ar" ? "جارٍ التجهيز..." : "Preparing..."}
+          />
         )}
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}
