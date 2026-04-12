@@ -4,25 +4,77 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
   manageCaseFollowUpInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
   supportedLocaleSchema,
   updateAutomationStatusInputSchema,
-  updateDocumentRequestInputSchema
+  updateDocumentRequestInputSchema,
+  updateHandoverTaskStatusInputSchema
 } from "@real-estate-ai/contracts";
 
 import { initialFormActionState, type FormActionState } from "@/lib/form-action-state";
 import {
   WebApiError,
+  createHandoverIntake,
   createWebsiteLead,
   manageCaseFollowUp,
   qualifyCase,
   scheduleVisit,
   updateAutomationStatus,
-  updateDocumentRequest
+  updateDocumentRequest,
+  updateHandoverTask
 } from "@/lib/live-api";
+
+export async function createHandoverIntakeAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const caseId = formData.get("caseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof caseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = createHandoverIntakeInputSchema.safeParse({
+    ownerName: normalizeOptionalString(formData.get("ownerName")),
+    readinessSummary: formData.get("readinessSummary")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedCase = await createHandoverIntake(caseId, result.data);
+    const handoverCaseId = updatedCase.handoverCase?.handoverCaseId;
+    revalidatePaths(locale, returnPath, caseId, handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم إنشاء مسار التسليم الأولي وربطه بالحالة."
+          : "The first handover intake record was created and linked to the case.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن بدء التسليم قبل اكتمال المستندات المقبولة أو إذا كانت حالة التسليم موجودة مسبقاً."
+            : "Handover cannot start until the documents are fully accepted and no handover case already exists.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
 
 export async function saveManagerFollowUpAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
@@ -48,8 +100,8 @@ export async function saveManagerFollowUpAction(_: FormActionState, formData: Fo
   }
 
   try {
-    await manageCaseFollowUp(caseId, result.data);
-    revalidatePaths(locale, returnPath, caseId);
+    const updatedCase = await manageCaseFollowUp(caseId, result.data);
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
       message:
@@ -87,8 +139,8 @@ export async function saveQualificationAction(_: FormActionState, formData: Form
   }
 
   try {
-    await qualifyCase(caseId, result.data);
-    revalidatePaths(locale, returnPath, caseId);
+    const updatedCase = await qualifyCase(caseId, result.data);
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
       message: locale === "ar" ? "تم حفظ التأهيل وتحديث الحالة." : "Qualification saved and the case has been updated.",
@@ -122,8 +174,8 @@ export async function scheduleVisitAction(_: FormActionState, formData: FormData
   }
 
   try {
-    await scheduleVisit(caseId, result.data);
-    revalidatePaths(locale, returnPath, caseId);
+    const updatedCase = await scheduleVisit(caseId, result.data);
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
       message: locale === "ar" ? "تم حفظ موعد الزيارة." : "The visit was scheduled successfully.",
@@ -185,8 +237,8 @@ export async function updateAutomationStatusAction(_: FormActionState, formData:
   }
 
   try {
-    await updateAutomationStatus(caseId, result.data);
-    revalidatePaths(locale, returnPath, caseId);
+    const updatedCase = await updateAutomationStatus(caseId, result.data);
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
       message:
@@ -226,11 +278,45 @@ export async function updateDocumentStatusAction(_: FormActionState, formData: F
   }
 
   try {
-    await updateDocumentRequest(caseId, documentRequestId, result.data);
-    revalidatePaths(locale, returnPath, caseId);
+    const updatedCase = await updateDocumentRequest(caseId, documentRequestId, result.data);
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
       message: locale === "ar" ? "تم تحديث حالة المستند." : "The document state was updated.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function updateHandoverTaskStatusAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const handoverCaseId = formData.get("handoverCaseId");
+  const handoverTaskId = formData.get("handoverTaskId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof handoverCaseId !== "string" || typeof handoverTaskId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = updateHandoverTaskStatusInputSchema.safeParse({
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await updateHandoverTask(handoverCaseId, handoverTaskId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message: locale === "ar" ? "تم تحديث عنصر جاهزية التسليم." : "The handover readiness item was updated.",
       status: "success"
     };
   } catch (error) {
@@ -278,10 +364,23 @@ function normalizeOptionalString(value: FormDataEntryValue | null) {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
-function revalidatePaths(locale: "en" | "ar", returnPath: string, caseId: string) {
+function revalidatePaths(locale: "en" | "ar", returnPath: string, caseId: string, handoverCaseId?: string) {
   revalidatePath(returnPath);
   revalidatePath(`/${locale}/leads`);
   revalidatePath(`/${locale}/leads/${caseId}`);
+  revalidatePath(`/${locale}/leads/${caseId}/documents`);
+  revalidatePath(`/${locale}/manager`);
+
+  if (handoverCaseId) {
+    revalidatePath(`/${locale}/handover/${handoverCaseId}`);
+  }
+}
+
+function revalidateHandoverPaths(locale: "en" | "ar", returnPath: string, caseId: string, handoverCaseId: string) {
+  revalidatePath(returnPath);
+  revalidatePath(`/${locale}/handover/${handoverCaseId}`);
+  revalidatePath(`/${locale}/leads/${caseId}`);
+  revalidatePath(`/${locale}/leads/${caseId}/documents`);
   revalidatePath(`/${locale}/manager`);
 }
 

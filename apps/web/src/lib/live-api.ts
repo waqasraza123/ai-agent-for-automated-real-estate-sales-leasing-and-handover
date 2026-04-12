@@ -1,13 +1,16 @@
 import type {
+  CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   ManageCaseFollowUpInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
+  PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ScheduleVisitInput,
   UpdateAutomationStatusInput,
-  UpdateDocumentRequestInput
+  UpdateDocumentRequestInput,
+  UpdateHandoverTaskStatusInput
 } from "@real-estate-ai/contracts";
 
 const defaultApiBaseUrl = "http://127.0.0.1:4000";
@@ -29,6 +32,13 @@ export class WebApiError extends Error {
   }
 }
 
+export async function createHandoverIntake(caseId: string, input: CreateHandoverIntakeInput) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/handover-intake`, {
+    method: "POST",
+    payload: input
+  });
+}
+
 export async function createWebsiteLead(input: CreateWebsiteLeadInput) {
   return requestJson<CreateWebsiteLeadResult>("/v1/website-leads", {
     method: "POST",
@@ -38,6 +48,12 @@ export async function createWebsiteLead(input: CreateWebsiteLeadInput) {
 
 export async function getPersistedCaseDetailFromApi(caseId: string) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}`, {
+    cache: "no-store"
+  });
+}
+
+export async function getPersistedHandoverCaseDetailFromApi(handoverCaseId: string) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}`, {
     cache: "no-store"
   });
 }
@@ -85,6 +101,18 @@ export async function tryGetPersistedCaseDetail(caseId: string) {
   }
 }
 
+export async function tryGetPersistedHandoverCaseDetail(handoverCaseId: string) {
+  try {
+    return await getPersistedHandoverCaseDetailFromApi(handoverCaseId);
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 404) {
+      return null;
+    }
+
+    return null;
+  }
+}
+
 export async function tryListPersistedCases() {
   try {
     return await listPersistedCasesFromApi();
@@ -102,6 +130,13 @@ export async function updateAutomationStatus(caseId: string, input: UpdateAutoma
 
 export async function updateDocumentRequest(caseId: string, documentRequestId: string, input: UpdateDocumentRequestInput) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/documents/${documentRequestId}`, {
+    method: "PATCH",
+    payload: input
+  });
+}
+
+export async function updateHandoverTask(handoverCaseId: string, handoverTaskId: string, input: UpdateHandoverTaskStatusInput) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/tasks/${handoverTaskId}`, {
     method: "PATCH",
     payload: input
   });

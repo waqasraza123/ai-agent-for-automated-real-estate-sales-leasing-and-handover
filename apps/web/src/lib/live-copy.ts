@@ -4,6 +4,9 @@ import type {
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
+  HandoverCaseStatus,
+  HandoverTaskStatus,
+  HandoverTaskType,
   ManagerInterventionSeverity,
   ManagerInterventionType,
   QualificationReadiness,
@@ -49,12 +52,14 @@ export function getCaseStageLabel(locale: SupportedLocale, stage: CaseStage) {
   const labels = {
     ar: {
       documents_in_progress: "المستندات قيد المتابعة",
+      handover_initiated: "التسليم قيد التجهيز",
       new: "حالة جديدة",
       qualified: "مؤهلة",
       visit_scheduled: "زيارة مجدولة"
     },
     en: {
       documents_in_progress: "Documents in progress",
+      handover_initiated: "Handover initiated",
       new: "New case",
       qualified: "Qualified",
       visit_scheduled: "Visit scheduled"
@@ -152,6 +157,96 @@ export function getFollowUpStatusLabel(locale: SupportedLocale, status: FollowUp
   } as const;
 
   return labels[locale][status];
+}
+
+export function getHandoverCaseStatusLabel(locale: SupportedLocale, status: HandoverCaseStatus) {
+  const labels = {
+    ar: {
+      customer_scheduling_ready: "جاهزة لجدولة التسليم",
+      internal_tasks_open: "المهام الداخلية قيد التنفيذ",
+      pending_readiness: "بانتظار بدء الجاهزية"
+    },
+    en: {
+      customer_scheduling_ready: "Ready for customer scheduling",
+      internal_tasks_open: "Internal tasks in progress",
+      pending_readiness: "Pending readiness"
+    }
+  } as const;
+
+  return labels[locale][status];
+}
+
+export function getHandoverIntakeCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "بدء مسار التسليم",
+      helperLocked: "لن يظهر اعتماد التسليم حتى تصبح جميع المستندات المطلوبة في حالة مقبولة.",
+      helperReady: "يبدأ هذا الاعتماد أول سجل تسليم حي ويربطه بالحالة الحالية دون ادعاء اكتمال الرحلة النهائية.",
+      ownerName: "مالك حالة التسليم",
+      readinessSummary: "ملخص جاهزية البداية",
+      title: "اعتماد انتقال الحالة إلى التسليم"
+    };
+  }
+
+  return {
+    action: "Start handover intake",
+    helperLocked: "Handover approval stays locked until every required document is in an accepted state.",
+    helperReady: "This approval starts the first live handover record and links it to the current case without pretending the downstream journey is complete.",
+    ownerName: "Handover owner",
+    readinessSummary: "Initial readiness summary",
+    title: "Approve the move into handover"
+  };
+}
+
+export function getHandoverTaskStatusLabel(locale: SupportedLocale, status: HandoverTaskStatus) {
+  const labels = {
+    ar: {
+      blocked: "معطل",
+      complete: "مكتمل",
+      open: "مفتوح"
+    },
+    en: {
+      blocked: "Blocked",
+      complete: "Complete",
+      open: "Open"
+    }
+  } as const;
+
+  return labels[locale][status];
+}
+
+export function getHandoverTaskTypeDetail(locale: SupportedLocale, type: HandoverTaskType) {
+  const details = {
+    ar: {
+      access_preparation: "مراجعة بطاقات الوصول والمفاتيح والنقاط اللوجستية قبل التواصل النهائي مع العميل.",
+      customer_document_pack: "تأكيد أن حزمة العميل النهائية جاهزة ومرتبطة بالسجل الصحيح.",
+      unit_readiness_review: "فحص الجاهزية الداخلية للوحدة والتأكد من عدم وجود عوائق فورية."
+    },
+    en: {
+      access_preparation: "Confirm access cards, keys, and the final logistics package before customer scheduling.",
+      customer_document_pack: "Ensure the final customer document pack is complete and tied to the correct record.",
+      unit_readiness_review: "Review the internal unit-readiness state and confirm there are no immediate blockers."
+    }
+  } as const;
+
+  return details[locale][type];
+}
+
+export function getHandoverTaskTypeLabel(locale: SupportedLocale, type: HandoverTaskType) {
+  const labels = {
+    ar: {
+      access_preparation: "تجهيز الوصول والتسليم",
+      customer_document_pack: "حزمة العميل النهائية",
+      unit_readiness_review: "مراجعة جاهزية الوحدة"
+    },
+    en: {
+      access_preparation: "Access and handover pack",
+      customer_document_pack: "Customer document pack",
+      unit_readiness_review: "Unit readiness review"
+    }
+  } as const;
+
+  return labels[locale][type];
 }
 
 export function getInterventionCountLabel(locale: SupportedLocale, count: number) {

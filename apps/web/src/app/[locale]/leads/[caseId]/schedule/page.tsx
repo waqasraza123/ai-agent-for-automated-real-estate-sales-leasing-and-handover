@@ -26,7 +26,7 @@ export default async function SchedulePage(props: PageProps) {
     return (
       <div className="page-stack">
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.schedule.summary} title={messages.schedule.title} />
-        <CaseRouteTabs caseId={persistedCase.caseId} locale={locale} />
+        <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
 
         <div className="two-column-grid">
           <Panel title={messages.common.visitReadiness}>
@@ -68,7 +68,7 @@ export default async function SchedulePage(props: PageProps) {
   return (
     <div className="page-stack">
       <ScreenIntro badge={caseItem.referenceCode} summary={messages.schedule.summary} title={messages.schedule.title} />
-      <CaseRouteTabs caseId={caseItem.id} locale={locale} />
+      <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
 
       <div className="two-column-grid">
         <Panel title={messages.common.visitReadiness}>

@@ -2,6 +2,7 @@ import type {
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedDocumentRequest,
+  PersistedHandoverCaseDetail,
   SupportedLocale
 } from "@real-estate-ai/contracts";
 import type { ConversationMessage, JourneyEvent } from "@real-estate-ai/domain";
@@ -13,6 +14,10 @@ import {
   getDocumentRequestStatusLabel,
   getDocumentRequestTypeLabel,
   getFollowUpStatusLabel,
+  getHandoverCaseStatusLabel,
+  getHandoverTaskStatusLabel,
+  getHandoverTaskTypeDetail,
+  getHandoverTaskTypeLabel,
   getInterventionSeverityLabel,
   getInterventionSummary,
   getQualificationReadinessLabel,
@@ -48,6 +53,23 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
       timestamp: formatTimestamp(caseDetail.updatedAt)
     }
   ];
+}
+
+export function buildPersistedHandoverTimeline(handoverCase: PersistedHandoverCaseDetail): JourneyEvent[] {
+  return handoverCase.auditEvents
+    .filter((event) => event.eventType.startsWith("handover_") || event.eventType === "document_request_updated")
+    .map((event, index) => ({
+      detail: {
+        ar: describeHandoverAuditEvent(handoverCase, event.eventType, "ar", "detail"),
+        en: describeHandoverAuditEvent(handoverCase, event.eventType, "en", "detail")
+      },
+      id: `${handoverCase.handoverCaseId}-${index}`,
+      timestamp: formatTimestamp(event.createdAt),
+      title: {
+        ar: describeHandoverAuditEvent(handoverCase, event.eventType, "ar", "title"),
+        en: describeHandoverAuditEvent(handoverCase, event.eventType, "en", "title")
+      }
+    }));
 }
 
 export function buildPersistedTimeline(caseDetail: PersistedCaseDetail): JourneyEvent[] {
@@ -91,6 +113,29 @@ export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail:
     updatedAt: new Date(documentRequest.updatedAt).toLocaleString(locale),
     value: documentRequest.status
   }));
+}
+
+export function getPersistedHandoverDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
+  return handoverCase.tasks.map((task) => ({
+    dueAt: new Date(task.dueAt).toLocaleString(locale),
+    ownerName: task.ownerName,
+    status: task.status,
+    statusLabel: getHandoverTaskStatusLabel(locale, task.status),
+    statusTone: getHandoverTaskTone(task.status),
+    taskId: task.taskId,
+    title: getHandoverTaskTypeLabel(locale, task.type),
+    type: task.type,
+    updatedAt: new Date(task.updatedAt).toLocaleString(locale),
+    summary: getHandoverTaskTypeDetail(locale, task.type)
+  }));
+}
+
+export function getPersistedHandoverStatusLabel(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail | PersistedCaseDetail["handoverCase"]) {
+  if (!handoverCase) {
+    return null;
+  }
+
+  return getHandoverCaseStatusLabel(locale, handoverCase.status);
 }
 
 export function getPersistedInterventionDisplay(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
@@ -152,6 +197,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "تجاوزت المتابعة موعدها وجرى فتح تدخل إداري واضح لهذه الحالة.",
         title: "تدخل إداري جديد"
       },
+      handover_intake_created: {
+        detail: "تم اعتماد انتقال الحالة إلى مسار التسليم وفتح قائمة الجاهزية الأولية.",
+        title: "بدء مسار التسليم"
+      },
+      handover_task_updated: {
+        detail: "تم تحديث أحد عناصر جاهزية التسليم وربط الأثر بالحالة الأساسية.",
+        title: "تحديث عنصر جاهزية"
+      },
       manager_follow_up_updated: {
         detail: "تم تحديث الخطة التالية للحالة وإزالة التدخل المفتوح.",
         title: "خطة متابعة جديدة"
@@ -186,6 +239,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "The next action became overdue and a visible manager intervention was opened.",
         title: "Manager intervention opened"
       },
+      handover_intake_created: {
+        detail: "The case was approved into handover intake and the initial readiness checklist was opened.",
+        title: "Handover intake started"
+      },
+      handover_task_updated: {
+        detail: "One of the handover readiness items changed state and updated the linked case timeline.",
+        title: "Handover task updated"
+      },
       manager_follow_up_updated: {
         detail: "The follow-up plan was updated and the open intervention was cleared.",
         title: "Follow-up plan updated"
@@ -207,6 +268,49 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
   return eventCopy[variant];
 }
 
+function describeHandoverAuditEvent(
+  handoverCase: PersistedHandoverCaseDetail,
+  eventType: string,
+  locale: SupportedLocale,
+  variant: "detail" | "title"
+) {
+  const descriptions = {
+    ar: {
+      document_request_updated: {
+        detail: "تم تحديث المستندات المرتبطة بهذه الحالة قبل أو أثناء اعتماد التسليم.",
+        title: "تحديث حالة المستندات"
+      },
+      handover_intake_created: {
+        detail: `تم إنشاء سجل تسليم حي للحالة وربطه بالمسؤول ${handoverCase.ownerName}.`,
+        title: "إنشاء سجل التسليم"
+      },
+      handover_task_updated: {
+        detail: "تم تغيير حالة أحد عناصر الجاهزية الداخلية.",
+        title: "تحديث عنصر الجاهزية"
+      }
+    },
+    en: {
+      document_request_updated: {
+        detail: "Documents tied to this case changed state before or during handover approval.",
+        title: "Document state updated"
+      },
+      handover_intake_created: {
+        detail: `A live handover record was created for this case and assigned to ${handoverCase.ownerName}.`,
+        title: "Handover record created"
+      },
+      handover_task_updated: {
+        detail: "One of the internal readiness items changed status.",
+        title: "Readiness item updated"
+      }
+    }
+  } as const;
+
+  const copy = locale === "ar" ? descriptions.ar : descriptions.en;
+  const eventCopy = copy[eventType as keyof typeof copy] ?? copy.handover_intake_created;
+
+  return eventCopy[variant];
+}
+
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("en-US", {
     day: "2-digit",
@@ -222,6 +326,18 @@ function getDocumentTone(status: PersistedDocumentRequest["status"]): "success" 
   }
 
   if (status === "rejected") {
+    return "critical";
+  }
+
+  return "warning";
+}
+
+function getHandoverTaskTone(status: PersistedHandoverCaseDetail["tasks"][number]["status"]): "success" | "critical" | "warning" {
+  if (status === "complete") {
+    return "success";
+  }
+
+  if (status === "blocked") {
     return "critical";
   }
 

@@ -55,9 +55,10 @@ describe("lead capture api", () => {
     expect(detailResponse.statusCode).toBe(200);
     expect(detailResponse.json().documentRequests).toHaveLength(3);
     expect(detailResponse.json().managerInterventions).toHaveLength(0);
+    expect(detailResponse.json().handoverCase).toBeNull();
   });
 
-  it("qualifies a case, schedules a visit, updates documents, and accepts manager follow-up controls", async () => {
+  it("promotes a document-complete case into persisted handover intake and updates readiness tasks", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
@@ -85,7 +86,6 @@ describe("lead capture api", () => {
 
     expect(qualificationResponse.statusCode).toBe(200);
     expect(qualificationResponse.json().stage).toBe("qualified");
-    expect(qualificationResponse.json().qualificationSnapshot.readiness).toBe("high");
 
     const visitResponse = await app.inject({
       method: "POST",
@@ -97,60 +97,68 @@ describe("lead capture api", () => {
     });
 
     expect(visitResponse.statusCode).toBe(200);
-    expect(visitResponse.json().stage).toBe("visit_scheduled");
-    expect(visitResponse.json().currentVisit.location).toBe("Palm Horizon Discovery Center");
 
-    const documentRequestId = visitResponse.json().documentRequests[0]?.documentRequestId;
+    const documentRequests = visitResponse.json().documentRequests;
 
-    const documentResponse = await app.inject({
+    for (const documentRequest of documentRequests) {
+      const documentResponse = await app.inject({
+        method: "PATCH",
+        payload: {
+          status: "accepted"
+        },
+        url: `/v1/cases/${createdCase.caseId}/documents/${documentRequest.documentRequestId}`
+      });
+
+      expect(documentResponse.statusCode).toBe(200);
+    }
+
+    const handoverIntakeResponse = await app.inject({
+      method: "POST",
+      payload: {
+        ownerName: "Handover Desk Riyadh",
+        readinessSummary: "Documents are accepted and the case is ready to start internal handover readiness."
+      },
+      url: `/v1/cases/${createdCase.caseId}/handover-intake`
+    });
+
+    expect(handoverIntakeResponse.statusCode).toBe(200);
+    expect(handoverIntakeResponse.json().stage).toBe("handover_initiated");
+    expect(handoverIntakeResponse.json().handoverCase.status).toBe("pending_readiness");
+
+    const handoverCaseId = handoverIntakeResponse.json().handoverCase.handoverCaseId;
+
+    const handoverDetailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/handover-cases/${handoverCaseId}`
+    });
+
+    expect(handoverDetailResponse.statusCode).toBe(200);
+    expect(handoverDetailResponse.json().tasks).toHaveLength(3);
+
+    const firstTaskId = handoverDetailResponse.json().tasks[0]?.taskId;
+
+    const taskUpdateResponse = await app.inject({
       method: "PATCH",
       payload: {
-        status: "under_review"
+        status: "blocked"
       },
-      url: `/v1/cases/${createdCase.caseId}/documents/${documentRequestId}`
+      url: `/v1/handover-cases/${handoverCaseId}/tasks/${firstTaskId}`
     });
 
-    expect(documentResponse.statusCode).toBe(200);
-    expect(documentResponse.json().stage).toBe("documents_in_progress");
-    expect(documentResponse.json().documentRequests[0]?.status).toBe("under_review");
+    expect(taskUpdateResponse.statusCode).toBe(200);
+    expect(taskUpdateResponse.json().status).toBe("internal_tasks_open");
+    expect(taskUpdateResponse.json().tasks[0]?.status).toBe("blocked");
 
-    const followUpResponse = await app.inject({
-      method: "POST",
-      payload: {
-        nextAction: "Manager follow-up confirmed for tomorrow morning.",
-        nextActionDueAt: "2026-04-16T08:30:00.000Z",
-        ownerName: "Leasing Desk Alpha"
-      },
-      url: `/v1/cases/${createdCase.caseId}/follow-up-plan`
-    });
-
-    expect(followUpResponse.statusCode).toBe(200);
-    expect(followUpResponse.json().ownerName).toBe("Leasing Desk Alpha");
-    expect(followUpResponse.json().nextAction).toBe("Manager follow-up confirmed for tomorrow morning.");
-
-    const pauseResponse = await app.inject({
-      method: "POST",
-      payload: {
-        status: "paused"
-      },
-      url: `/v1/cases/${createdCase.caseId}/automation`
-    });
-
-    expect(pauseResponse.statusCode).toBe(200);
-    expect(pauseResponse.json().automationStatus).toBe("paused");
-
-    const listResponse = await app.inject({
+    const refreshedCaseResponse = await app.inject({
       method: "GET",
-      url: "/v1/cases"
+      url: `/v1/cases/${createdCase.caseId}`
     });
 
-    expect(listResponse.statusCode).toBe(200);
-    expect(listResponse.json().cases).toHaveLength(1);
-    expect(listResponse.json().cases[0]?.stage).toBe("documents_in_progress");
-    expect(listResponse.json().cases[0]?.automationStatus).toBe("paused");
+    expect(refreshedCaseResponse.statusCode).toBe(200);
+    expect(refreshedCaseResponse.json().handoverCase.status).toBe("internal_tasks_open");
   });
 
-  it("rejects invalid payloads for mutation endpoints", async () => {
+  it("rejects invalid payloads and invalid handover promotion attempts", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
@@ -162,27 +170,39 @@ describe("lead capture api", () => {
 
     expect(createResponse.statusCode).toBe(400);
 
-    const missingCaseResponse = await app.inject({
+    const liveCaseResponse = await app.inject({
       method: "POST",
       payload: {
-        budgetBand: "USD 1M",
-        intentSummary: "Valid qualification summary for a missing case lookup.",
-        moveInTimeline: "Soon",
-        readiness: "high"
+        customerName: "Layal Abbas",
+        email: "layal@example.com",
+        message: "Need a bilingual callback later today.",
+        preferredLocale: "ar",
+        projectInterest: "Palm Horizon"
       },
-      url: "/v1/cases/00000000-0000-0000-0000-000000000000/qualification"
+      url: "/v1/website-leads"
     });
 
-    expect(missingCaseResponse.statusCode).toBe(404);
+    const createdCase = liveCaseResponse.json();
 
     const invalidAutomationResponse = await app.inject({
       method: "POST",
       payload: {
         status: "stopped"
       },
-      url: "/v1/cases/00000000-0000-0000-0000-000000000000/automation"
+      url: `/v1/cases/${createdCase.caseId}/automation`
     });
 
     expect(invalidAutomationResponse.statusCode).toBe(400);
+
+    const earlyHandoverResponse = await app.inject({
+      method: "POST",
+      payload: {
+        readinessSummary: "Attempt to skip document completion."
+      },
+      url: `/v1/cases/${createdCase.caseId}/handover-intake`
+    });
+
+    expect(earlyHandoverResponse.statusCode).toBe(409);
+    expect(earlyHandoverResponse.json().error).toBe("documents_incomplete_for_handover");
   });
 });

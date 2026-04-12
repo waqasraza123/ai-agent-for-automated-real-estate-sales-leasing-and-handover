@@ -1,18 +1,44 @@
 import type {
+  CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   ManageCaseFollowUpInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
+  PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ScheduleVisitInput,
   UpdateAutomationStatusInput,
-  UpdateDocumentRequestInput
+  UpdateDocumentRequestInput,
+  UpdateHandoverTaskStatusInput
 } from "@real-estate-ai/contracts";
-import { deriveDocumentWorkflowNextAction, type FollowUpCycleResult, type LeadCaptureStore } from "@real-estate-ai/database";
+import {
+  deriveDocumentWorkflowNextAction,
+  deriveHandoverCaseStatus,
+  getHandoverCaseNextAction,
+  getHandoverCaseNextActionDueAt,
+  type FollowUpCycleResult,
+  type LeadCaptureStore
+} from "@real-estate-ai/database";
+
+export class WorkflowRuleError extends Error {
+  code: string;
+
+  constructor(code: string) {
+    super(code);
+    this.code = code;
+  }
+}
 
 export async function getPersistedCaseDetail(store: LeadCaptureStore, caseId: string): Promise<PersistedCaseDetail | null> {
   return store.getCaseDetail(caseId);
+}
+
+export async function getPersistedHandoverCaseDetail(
+  store: LeadCaptureStore,
+  handoverCaseId: string
+): Promise<PersistedHandoverCaseDetail | null> {
+  return store.getHandoverCaseDetail(handoverCaseId);
 }
 
 export async function listPersistedCases(store: LeadCaptureStore): Promise<PersistedCaseSummary[]> {
@@ -90,6 +116,35 @@ export async function setPersistedAutomationStatus(
   });
 }
 
+export async function startPersistedHandoverIntake(
+  store: LeadCaptureStore,
+  caseId: string,
+  input: CreateHandoverIntakeInput
+): Promise<PersistedCaseDetail | null> {
+  const caseDetail = await store.getCaseDetail(caseId);
+
+  if (!caseDetail) {
+    return null;
+  }
+
+  if (caseDetail.handoverCase) {
+    throw new WorkflowRuleError("handover_case_exists");
+  }
+
+  if (!caseDetail.documentRequests.every((documentRequest) => documentRequest.status === "accepted")) {
+    throw new WorkflowRuleError("documents_incomplete_for_handover");
+  }
+
+  return store.startHandoverIntake(caseId, {
+    ...input,
+    nextAction:
+      caseDetail.preferredLocale === "ar"
+        ? "بدء قائمة جاهزية التسليم مع الفريق الداخلي"
+        : "Start the handover readiness checklist with the internal team",
+    nextActionDueAt: createFutureTimestamp(24)
+  });
+}
+
 export async function submitWebsiteLead(
   store: LeadCaptureStore,
   input: CreateWebsiteLeadInput
@@ -123,6 +178,29 @@ export async function updatePersistedDocumentRequest(
   return store.updateDocumentRequestStatus(caseId, documentRequestId, {
     nextAction: deriveDocumentWorkflowNextAction(updatedDocumentRequests, caseDetail.preferredLocale),
     nextActionDueAt: createFutureTimestamp(input.status === "accepted" ? 4 : 24),
+    status: input.status
+  });
+}
+
+export async function updatePersistedHandoverTask(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  handoverTaskId: string,
+  input: UpdateHandoverTaskStatusInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  const updatedTasks = handoverCase.tasks.map((task) => (task.taskId === handoverTaskId ? { ...task, status: input.status } : task));
+  const nextHandoverStatus = deriveHandoverCaseStatus(updatedTasks);
+
+  return store.updateHandoverTaskStatus(handoverCaseId, handoverTaskId, {
+    nextAction: getHandoverCaseNextAction(handoverCase.preferredLocale, nextHandoverStatus, updatedTasks),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(nextHandoverStatus, updatedTasks),
+    nextHandoverStatus,
     status: input.status
   });
 }

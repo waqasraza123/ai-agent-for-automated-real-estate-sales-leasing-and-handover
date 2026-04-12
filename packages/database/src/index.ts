@@ -4,11 +4,15 @@ import { PGlite } from "@electric-sql/pglite";
 import type {
   AutomationStatus,
   CaseStage,
+  CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
+  HandoverCaseStatus,
+  HandoverTaskStatus,
+  HandoverTaskType,
   ManageCaseFollowUpInput,
   ManagerInterventionSeverity,
   ManagerInterventionStatus,
@@ -16,11 +20,15 @@ import type {
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedDocumentRequest,
+  PersistedHandoverCaseDetail,
+  PersistedHandoverTask,
+  PersistedLinkedHandoverCase,
   PersistedManagerIntervention,
   QualifyCaseInput,
   QualificationReadiness,
   ScheduleVisitInput,
-  SupportedLocale
+  SupportedLocale,
+  UpdateHandoverTaskStatusInput
 } from "@real-estate-ai/contracts";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -28,14 +36,12 @@ import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const defaultOwnerName = "Revenue Ops Queue";
 const defaultDocumentTypes: DocumentRequestType[] = ["government_id", "proof_of_funds", "employment_letter"];
+const defaultHandoverTaskTypes: HandoverTaskType[] = ["unit_readiness_review", "customer_document_pack", "access_preparation"];
 const followUpWatchJobType = "follow_up_watch";
 
 const leads = pgTable("leads", {
   budget: text("budget"),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   customerName: text("customer_name").notNull(),
   email: text("email").notNull(),
   id: uuid("id").primaryKey(),
@@ -48,27 +54,16 @@ const leads = pgTable("leads", {
 
 const cases = pgTable("cases", {
   automationStatus: text("automation_status").notNull(),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   currentNextAction: text("current_next_action").notNull(),
   id: uuid("id").primaryKey(),
   leadId: uuid("lead_id")
     .notNull()
-    .references(() => leads.id, {
-      onDelete: "cascade"
-    }),
-  nextActionDueAt: timestamp("next_action_due_at", {
-    mode: "string",
-    withTimezone: true
-  }).notNull(),
+    .references(() => leads.id, { onDelete: "cascade" }),
+  nextActionDueAt: timestamp("next_action_due_at", { mode: "string", withTimezone: true }).notNull(),
   ownerName: text("owner_name").notNull(),
   stage: text("stage").notNull(),
-  updatedAt: timestamp("updated_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull()
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const qualificationSnapshots = pgTable("qualification_snapshots", {
@@ -76,119 +71,94 @@ const qualificationSnapshots = pgTable("qualification_snapshots", {
   caseId: uuid("case_id")
     .notNull()
     .unique()
-    .references(() => cases.id, {
-      onDelete: "cascade"
-    }),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+    .references(() => cases.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   id: uuid("id").primaryKey(),
   intentSummary: text("intent_summary").notNull(),
   moveInTimeline: text("move_in_timeline").notNull(),
   readiness: text("readiness").notNull(),
-  updatedAt: timestamp("updated_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull()
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const visits = pgTable("visits", {
   caseId: uuid("case_id")
     .notNull()
-    .references(() => cases.id, {
-      onDelete: "cascade"
-    }),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+    .references(() => cases.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   id: uuid("id").primaryKey(),
   location: text("location").notNull(),
-  scheduledAt: timestamp("scheduled_at", {
-    mode: "string",
-    withTimezone: true
-  }).notNull()
+  scheduledAt: timestamp("scheduled_at", { mode: "string", withTimezone: true }).notNull()
 });
 
 const documentRequests = pgTable("document_requests", {
   caseId: uuid("case_id")
     .notNull()
-    .references(() => cases.id, {
-      onDelete: "cascade"
-    }),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+    .references(() => cases.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   id: uuid("id").primaryKey(),
   status: text("status").notNull(),
   type: text("type").notNull(),
-  updatedAt: timestamp("updated_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull()
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const handoverCases = pgTable("handover_cases", {
+  caseId: uuid("case_id")
+    .notNull()
+    .unique()
+    .references(() => cases.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  id: uuid("id").primaryKey(),
+  ownerName: text("owner_name").notNull(),
+  readinessSummary: text("readiness_summary").notNull(),
+  status: text("status").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const handoverTasks = pgTable("handover_tasks", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  dueAt: timestamp("due_at", { mode: "string", withTimezone: true }).notNull(),
+  handoverCaseId: uuid("handover_case_id")
+    .notNull()
+    .references(() => handoverCases.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey(),
+  ownerName: text("owner_name").notNull(),
+  status: text("status").notNull(),
+  type: text("type").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const managerInterventions = pgTable("manager_interventions", {
   caseId: uuid("case_id")
     .notNull()
-    .references(() => cases.id, {
-      onDelete: "cascade"
-    }),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+    .references(() => cases.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   id: uuid("id").primaryKey(),
   resolutionNote: text("resolution_note"),
-  resolvedAt: timestamp("resolved_at", {
-    mode: "string",
-    withTimezone: true
-  }),
+  resolvedAt: timestamp("resolved_at", { mode: "string", withTimezone: true }),
   severity: text("severity").notNull(),
   status: text("status").notNull(),
   summary: text("summary").notNull(),
   type: text("type").notNull(),
-  updatedAt: timestamp("updated_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull()
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const automationJobs = pgTable("automation_jobs", {
   caseId: uuid("case_id")
     .notNull()
-    .references(() => cases.id, {
-      onDelete: "cascade"
-    }),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+    .references(() => cases.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   id: uuid("id").primaryKey(),
   jobType: text("job_type").notNull(),
-  runAfter: timestamp("run_after", {
-    mode: "string",
-    withTimezone: true
-  }).notNull(),
+  runAfter: timestamp("run_after", { mode: "string", withTimezone: true }).notNull(),
   status: text("status").notNull(),
-  updatedAt: timestamp("updated_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull()
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const auditEvents = pgTable("audit_events", {
   caseId: uuid("case_id")
     .notNull()
-    .references(() => cases.id, {
-      onDelete: "cascade"
-    }),
-  createdAt: timestamp("created_at", {
-    mode: "string",
-    withTimezone: true
-  }).defaultNow().notNull(),
+    .references(() => cases.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   eventType: text("event_type").notNull(),
   id: uuid("id").primaryKey(),
   payload: jsonb("payload").$type<Record<string, unknown>>().notNull()
@@ -209,11 +179,14 @@ export interface LeadCaptureStore {
     }
   ): Promise<PersistedCaseDetail | null>;
   close(): Promise<void>;
-  createWebsiteLeadCase(input: CreateWebsiteLeadInput & {
-    nextAction: string;
-    nextActionDueAt: string;
-  }): Promise<CreateWebsiteLeadResult>;
+  createWebsiteLeadCase(
+    input: CreateWebsiteLeadInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+    }
+  ): Promise<CreateWebsiteLeadResult>;
   getCaseDetail(caseId: string): Promise<PersistedCaseDetail | null>;
+  getHandoverCaseDetail(handoverCaseId: string): Promise<PersistedHandoverCaseDetail | null>;
   listCases(): Promise<PersistedCaseSummary[]>;
   manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail | null>;
   runDueFollowUpCycle(input: {
@@ -233,6 +206,13 @@ export interface LeadCaptureStore {
       status: AutomationStatus;
     }
   ): Promise<PersistedCaseDetail | null>;
+  startHandoverIntake(
+    caseId: string,
+    input: CreateHandoverIntakeInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
   updateDocumentRequestStatus(
     caseId: string,
     documentRequestId: string,
@@ -242,6 +222,15 @@ export interface LeadCaptureStore {
       status: DocumentRequestStatus;
     }
   ): Promise<PersistedCaseDetail | null>;
+  updateHandoverTaskStatus(
+    handoverCaseId: string,
+    handoverTaskId: string,
+    input: UpdateHandoverTaskStatusInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+      nextHandoverStatus: HandoverCaseStatus;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
 }
 
 export async function createAlphaLeadCaptureStore(options?: {
@@ -255,6 +244,8 @@ export async function createAlphaLeadCaptureStore(options?: {
       automationJobs,
       cases,
       documentRequests,
+      handoverCases,
+      handoverTasks,
       leads,
       managerInterventions,
       qualificationSnapshots,
@@ -318,6 +309,27 @@ export async function createAlphaLeadCaptureStore(options?: {
       updated_at timestamptz not null default now()
     );
 
+    create table if not exists handover_cases (
+      id uuid primary key,
+      case_id uuid not null unique references cases(id) on delete cascade,
+      owner_name text not null,
+      readiness_summary text not null,
+      status text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists handover_tasks (
+      id uuid primary key,
+      handover_case_id uuid not null references handover_cases(id) on delete cascade,
+      type text not null,
+      status text not null,
+      owner_name text not null,
+      due_at timestamptz not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
     create table if not exists manager_interventions (
       id uuid primary key,
       case_id uuid not null references cases(id) on delete cascade,
@@ -352,11 +364,85 @@ export async function createAlphaLeadCaptureStore(options?: {
     create index if not exists cases_created_at_idx on cases (created_at desc);
     create index if not exists visits_case_id_idx on visits (case_id, scheduled_at desc);
     create index if not exists document_requests_case_id_idx on document_requests (case_id, created_at asc);
+    create index if not exists handover_tasks_case_id_idx on handover_tasks (handover_case_id, due_at asc);
     create index if not exists audit_events_case_id_idx on audit_events (case_id, created_at asc);
     create index if not exists manager_interventions_case_id_idx on manager_interventions (case_id, created_at desc);
     create index if not exists manager_interventions_open_case_idx on manager_interventions (case_id, status);
     create index if not exists automation_jobs_due_idx on automation_jobs (status, run_after asc);
   `);
+
+  type AlphaTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+  const getHandoverCaseDetail = async (handoverCaseId: string): Promise<PersistedHandoverCaseDetail | null> => {
+    const handoverRecord = await db
+      .select({
+        caseId: handoverCases.caseId,
+        createdAt: handoverCases.createdAt,
+        customerName: leads.customerName,
+        handoverCaseId: handoverCases.id,
+        ownerName: handoverCases.ownerName,
+        preferredLocale: leads.preferredLocale,
+        projectInterest: leads.projectInterest,
+        readinessSummary: handoverCases.readinessSummary,
+        status: handoverCases.status,
+        updatedAt: handoverCases.updatedAt
+      })
+      .from(handoverCases)
+      .innerJoin(cases, eq(handoverCases.caseId, cases.id))
+      .innerJoin(leads, eq(cases.leadId, leads.id))
+      .where(eq(handoverCases.id, handoverCaseId))
+      .limit(1);
+
+    const baseRecord = handoverRecord[0];
+
+    if (!baseRecord) {
+      return null;
+    }
+
+    const [taskRecords, eventRecords] = await Promise.all([
+      db
+        .select({
+          createdAt: handoverTasks.createdAt,
+          dueAt: handoverTasks.dueAt,
+          ownerName: handoverTasks.ownerName,
+          status: handoverTasks.status,
+          taskId: handoverTasks.id,
+          type: handoverTasks.type,
+          updatedAt: handoverTasks.updatedAt
+        })
+        .from(handoverTasks)
+        .where(eq(handoverTasks.handoverCaseId, handoverCaseId))
+        .orderBy(asc(handoverTasks.dueAt)),
+      db
+        .select({
+          createdAt: auditEvents.createdAt,
+          eventType: auditEvents.eventType,
+          payload: auditEvents.payload
+        })
+        .from(auditEvents)
+        .where(eq(auditEvents.caseId, baseRecord.caseId))
+        .orderBy(asc(auditEvents.createdAt))
+    ]);
+
+    return {
+      auditEvents: eventRecords.map((event) => ({
+        createdAt: event.createdAt,
+        eventType: event.eventType,
+        payload: event.payload
+      })),
+      caseId: baseRecord.caseId,
+      createdAt: baseRecord.createdAt,
+      customerName: baseRecord.customerName,
+      handoverCaseId: baseRecord.handoverCaseId,
+      ownerName: baseRecord.ownerName,
+      preferredLocale: toSupportedLocale(baseRecord.preferredLocale),
+      projectInterest: baseRecord.projectInterest,
+      readinessSummary: baseRecord.readinessSummary,
+      status: toHandoverCaseStatus(baseRecord.status),
+      tasks: taskRecords.map((task) => hydrateHandoverTask(task)),
+      updatedAt: baseRecord.updatedAt
+    };
+  };
 
   const getPersistedCaseDetail = async (caseId: string): Promise<PersistedCaseDetail | null> => {
     const persistedCase = await db
@@ -389,67 +475,78 @@ export async function createAlphaLeadCaptureStore(options?: {
       return null;
     }
 
-    const [caseAuditEvents, qualificationRecord, currentVisit, persistedDocumentRequests, persistedInterventions] = await Promise.all([
-      db
-        .select({
-          createdAt: auditEvents.createdAt,
-          eventType: auditEvents.eventType,
-          payload: auditEvents.payload
-        })
-        .from(auditEvents)
-        .where(eq(auditEvents.caseId, caseId))
-        .orderBy(asc(auditEvents.createdAt)),
-      db
-        .select({
-          budgetBand: qualificationSnapshots.budgetBand,
-          intentSummary: qualificationSnapshots.intentSummary,
-          moveInTimeline: qualificationSnapshots.moveInTimeline,
-          readiness: qualificationSnapshots.readiness,
-          updatedAt: qualificationSnapshots.updatedAt
-        })
-        .from(qualificationSnapshots)
-        .where(eq(qualificationSnapshots.caseId, caseId))
-        .limit(1),
-      db
-        .select({
-          createdAt: visits.createdAt,
-          location: visits.location,
-          scheduledAt: visits.scheduledAt,
-          visitId: visits.id
-        })
-        .from(visits)
-        .where(eq(visits.caseId, caseId))
-        .orderBy(desc(visits.scheduledAt))
-        .limit(1),
-      db
-        .select({
-          createdAt: documentRequests.createdAt,
-          documentRequestId: documentRequests.id,
-          status: documentRequests.status,
-          type: documentRequests.type,
-          updatedAt: documentRequests.updatedAt
-        })
-        .from(documentRequests)
-        .where(eq(documentRequests.caseId, caseId))
-        .orderBy(asc(documentRequests.createdAt)),
-      db
-        .select({
-          createdAt: managerInterventions.createdAt,
-          interventionId: managerInterventions.id,
-          resolutionNote: managerInterventions.resolutionNote,
-          resolvedAt: managerInterventions.resolvedAt,
-          severity: managerInterventions.severity,
-          status: managerInterventions.status,
-          summary: managerInterventions.summary,
-          type: managerInterventions.type
-        })
-        .from(managerInterventions)
-        .where(eq(managerInterventions.caseId, caseId))
-        .orderBy(desc(managerInterventions.createdAt))
-    ]);
+    const [caseAuditEvents, qualificationRecord, currentVisit, persistedDocumentRequests, persistedInterventions, linkedHandoverCase] =
+      await Promise.all([
+        db
+          .select({
+            createdAt: auditEvents.createdAt,
+            eventType: auditEvents.eventType,
+            payload: auditEvents.payload
+          })
+          .from(auditEvents)
+          .where(eq(auditEvents.caseId, caseId))
+          .orderBy(asc(auditEvents.createdAt)),
+        db
+          .select({
+            budgetBand: qualificationSnapshots.budgetBand,
+            intentSummary: qualificationSnapshots.intentSummary,
+            moveInTimeline: qualificationSnapshots.moveInTimeline,
+            readiness: qualificationSnapshots.readiness,
+            updatedAt: qualificationSnapshots.updatedAt
+          })
+          .from(qualificationSnapshots)
+          .where(eq(qualificationSnapshots.caseId, caseId))
+          .limit(1),
+        db
+          .select({
+            createdAt: visits.createdAt,
+            location: visits.location,
+            scheduledAt: visits.scheduledAt,
+            visitId: visits.id
+          })
+          .from(visits)
+          .where(eq(visits.caseId, caseId))
+          .orderBy(desc(visits.scheduledAt))
+          .limit(1),
+        db
+          .select({
+            createdAt: documentRequests.createdAt,
+            documentRequestId: documentRequests.id,
+            status: documentRequests.status,
+            type: documentRequests.type,
+            updatedAt: documentRequests.updatedAt
+          })
+          .from(documentRequests)
+          .where(eq(documentRequests.caseId, caseId))
+          .orderBy(asc(documentRequests.createdAt)),
+        db
+          .select({
+            createdAt: managerInterventions.createdAt,
+            interventionId: managerInterventions.id,
+            resolutionNote: managerInterventions.resolutionNote,
+            resolvedAt: managerInterventions.resolvedAt,
+            severity: managerInterventions.severity,
+            status: managerInterventions.status,
+            summary: managerInterventions.summary,
+            type: managerInterventions.type
+          })
+          .from(managerInterventions)
+          .where(eq(managerInterventions.caseId, caseId))
+          .orderBy(desc(managerInterventions.createdAt)),
+        db
+          .select({
+            createdAt: handoverCases.createdAt,
+            handoverCaseId: handoverCases.id,
+            ownerName: handoverCases.ownerName,
+            status: handoverCases.status,
+            updatedAt: handoverCases.updatedAt
+          })
+          .from(handoverCases)
+          .where(eq(handoverCases.caseId, caseId))
+          .limit(1)
+      ]);
 
     const hydratedInterventions = persistedInterventions.map((intervention) => hydrateManagerIntervention(intervention));
-    const openInterventionsCount = hydratedInterventions.filter((intervention) => intervention.status === "open").length;
 
     return {
       auditEvents: caseAuditEvents.map((event) => ({
@@ -479,11 +576,12 @@ export async function createAlphaLeadCaptureStore(options?: {
       })),
       email: caseRecord.email,
       followUpStatus: toFollowUpStatus(caseRecord.nextActionDueAt),
+      handoverCase: linkedHandoverCase[0] ? hydrateLinkedHandoverCase(linkedHandoverCase[0]) : null,
       managerInterventions: hydratedInterventions,
       message: caseRecord.message,
       nextAction: caseRecord.nextAction,
       nextActionDueAt: caseRecord.nextActionDueAt,
-      openInterventionsCount,
+      openInterventionsCount: hydratedInterventions.filter((intervention) => intervention.status === "open").length,
       ownerName: caseRecord.ownerName,
       phone: caseRecord.phone,
       preferredLocale: toSupportedLocale(caseRecord.preferredLocale),
@@ -522,7 +620,7 @@ export async function createAlphaLeadCaptureStore(options?: {
   };
 
   const resolveOpenInterventions = async (
-    transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    transaction: AlphaTransaction,
     input: {
       caseId: string;
       resolutionNote: string;
@@ -547,7 +645,7 @@ export async function createAlphaLeadCaptureStore(options?: {
   };
 
   const syncFollowUpJob = async (
-    transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    transaction: AlphaTransaction,
     input: {
       automationStatus: AutomationStatus;
       caseId: string;
@@ -588,8 +686,6 @@ export async function createAlphaLeadCaptureStore(options?: {
         return null;
       }
 
-      const qualificationSnapshotId = randomUUID();
-      const auditEventId = randomUUID();
       const updatedAt = new Date().toISOString();
 
       await db.transaction(async (transaction) => {
@@ -599,7 +695,7 @@ export async function createAlphaLeadCaptureStore(options?: {
             budgetBand: input.budgetBand,
             caseId,
             createdAt: updatedAt,
-            id: qualificationSnapshotId,
+            id: randomUUID(),
             intentSummary: input.intentSummary,
             moveInTimeline: input.moveInTimeline,
             readiness: input.readiness,
@@ -630,7 +726,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           caseId,
           createdAt: updatedAt,
           eventType: "case_qualified",
-          id: auditEventId,
+          id: randomUUID(),
           payload: {
             budgetBand: input.budgetBand,
             intentSummary: input.intentSummary,
@@ -655,7 +751,6 @@ export async function createAlphaLeadCaptureStore(options?: {
     async createWebsiteLeadCase(input) {
       const createdLeadId = randomUUID();
       const createdCaseId = randomUUID();
-      const createdAuditEventId = randomUUID();
       const createdAt = new Date().toISOString();
 
       await db.transaction(async (transaction) => {
@@ -688,7 +783,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           caseId: createdCaseId,
           createdAt,
           eventType: "website_lead_received",
-          id: createdAuditEventId,
+          id: randomUUID(),
           payload: {
             customerName: input.customerName,
             preferredLocale: input.preferredLocale,
@@ -763,6 +858,9 @@ export async function createAlphaLeadCaptureStore(options?: {
     },
     async getCaseDetail(caseId) {
       return getPersistedCaseDetail(caseId);
+    },
+    async getHandoverCaseDetail(handoverCaseId) {
+      return getHandoverCaseDetail(handoverCaseId);
     },
     async listCases() {
       const persistedCases = await db
@@ -905,9 +1003,7 @@ export async function createAlphaLeadCaptureStore(options?: {
             };
           }
 
-          const automationStatus = toAutomationStatus(caseRecord.automationStatus);
-
-          if (automationStatus === "paused") {
+          if (toAutomationStatus(caseRecord.automationStatus) === "paused") {
             return {
               caseId: caseRecord.caseId,
               openedIntervention: false
@@ -944,11 +1040,10 @@ export async function createAlphaLeadCaptureStore(options?: {
 
           const overdueHours = Math.max(0, (dueTimestamp - new Date(caseRecord.nextActionDueAt).getTime()) / (60 * 60 * 1000));
           const severity = overdueHours >= 12 ? "critical" : "warning";
-          const createdAt = input.runAt;
 
           await transaction.insert(managerInterventions).values({
             caseId: caseRecord.caseId,
-            createdAt,
+            createdAt: input.runAt,
             id: randomUUID(),
             resolutionNote: null,
             resolvedAt: null,
@@ -956,12 +1051,12 @@ export async function createAlphaLeadCaptureStore(options?: {
             status: "open",
             summary: buildFollowUpInterventionSummary(),
             type: "follow_up_overdue",
-            updatedAt: createdAt
+            updatedAt: input.runAt
           });
 
           await transaction.insert(auditEvents).values({
             caseId: caseRecord.caseId,
-            createdAt,
+            createdAt: input.runAt,
             eventType: "follow_up_intervention_opened",
             id: randomUUID(),
             payload: {
@@ -999,15 +1094,13 @@ export async function createAlphaLeadCaptureStore(options?: {
         return null;
       }
 
-      const visitId = randomUUID();
-      const auditEventId = randomUUID();
-      const createdAt = new Date().toISOString();
+      const updatedAt = new Date().toISOString();
 
       await db.transaction(async (transaction) => {
         await transaction.insert(visits).values({
           caseId,
-          createdAt,
-          id: visitId,
+          createdAt: updatedAt,
+          id: randomUUID(),
           location: input.location,
           scheduledAt: input.scheduledAt
         });
@@ -1018,15 +1111,15 @@ export async function createAlphaLeadCaptureStore(options?: {
             currentNextAction: input.nextAction,
             nextActionDueAt: input.nextActionDueAt,
             stage: "visit_scheduled",
-            updatedAt: createdAt
+            updatedAt
           })
           .where(eq(cases.id, caseId));
 
         await transaction.insert(auditEvents).values({
           caseId,
-          createdAt,
+          createdAt: updatedAt,
           eventType: "visit_scheduled",
-          id: auditEventId,
+          id: randomUUID(),
           payload: {
             location: input.location,
             scheduledAt: input.scheduledAt
@@ -1037,7 +1130,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           automationStatus: caseRecord.automationStatus,
           caseId,
           runAfter: input.nextActionDueAt,
-          updatedAt: createdAt
+          updatedAt
         });
       });
 
@@ -1051,13 +1144,12 @@ export async function createAlphaLeadCaptureStore(options?: {
       }
 
       const updatedAt = new Date().toISOString();
-      const nextStatus = input.status;
 
       await db.transaction(async (transaction) => {
         await transaction
           .update(cases)
           .set({
-            automationStatus: nextStatus,
+            automationStatus: input.status,
             updatedAt
           })
           .where(eq(cases.id, caseId));
@@ -1065,17 +1157,91 @@ export async function createAlphaLeadCaptureStore(options?: {
         await transaction.insert(auditEvents).values({
           caseId,
           createdAt: updatedAt,
-          eventType: nextStatus === "paused" ? "automation_paused" : "automation_resumed",
+          eventType: input.status === "paused" ? "automation_paused" : "automation_resumed",
           id: randomUUID(),
           payload: {
-            status: nextStatus
+            status: input.status
           }
         });
 
         await syncFollowUpJob(transaction, {
-          automationStatus: nextStatus,
+          automationStatus: input.status,
           caseId,
           runAfter: caseRecord.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async startHandoverIntake(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const nextOwnerName = input.ownerName ?? caseRecord.ownerName;
+      const updatedAt = new Date().toISOString();
+      const createdHandoverCaseId = randomUUID();
+
+      await db.transaction(async (transaction) => {
+        await transaction.insert(handoverCases).values({
+          caseId,
+          createdAt: updatedAt,
+          id: createdHandoverCaseId,
+          ownerName: nextOwnerName,
+          readinessSummary: input.readinessSummary,
+          status: "pending_readiness",
+          updatedAt
+        });
+
+        await transaction.insert(handoverTasks).values(
+          defaultHandoverTaskTypes.map((taskType, index) => ({
+            createdAt: updatedAt,
+            dueAt: createFutureTimestamp(updatedAt, (index + 1) * 24),
+            handoverCaseId: createdHandoverCaseId,
+            id: randomUUID(),
+            ownerName: nextOwnerName,
+            status: "open",
+            type: taskType,
+            updatedAt
+          }))
+        );
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            ownerName: nextOwnerName,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await resolveOpenInterventions(transaction, {
+          caseId,
+          resolutionNote: "handover_intake_started",
+          resolvedAt: updatedAt
+        });
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: updatedAt,
+          eventType: "handover_intake_created",
+          id: randomUUID(),
+          payload: {
+            handoverCaseId: createdHandoverCaseId,
+            ownerName: nextOwnerName,
+            readinessSummary: input.readinessSummary
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          runAfter: input.nextActionDueAt,
           updatedAt
         });
       });
@@ -1102,7 +1268,6 @@ export async function createAlphaLeadCaptureStore(options?: {
       }
 
       const updatedAt = new Date().toISOString();
-      const auditEventId = randomUUID();
 
       await db.transaction(async (transaction) => {
         await transaction
@@ -1127,7 +1292,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           caseId,
           createdAt: updatedAt,
           eventType: "document_request_updated",
-          id: auditEventId,
+          id: randomUUID(),
           payload: {
             documentRequestId,
             status: input.status
@@ -1143,12 +1308,177 @@ export async function createAlphaLeadCaptureStore(options?: {
       });
 
       return getPersistedCaseDetail(caseId);
+    },
+    async updateHandoverTaskStatus(handoverCaseId, handoverTaskId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord) {
+        return null;
+      }
+
+      const taskRecord = handoverRecord.tasks.find((task) => task.taskId === handoverTaskId);
+
+      if (!taskRecord) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(handoverTasks)
+          .set({
+            status: input.status,
+            updatedAt
+          })
+          .where(and(eq(handoverTasks.handoverCaseId, handoverCaseId), eq(handoverTasks.id, handoverTaskId)));
+
+        await transaction
+          .update(handoverCases)
+          .set({
+            status: input.nextHandoverStatus,
+            updatedAt
+          })
+          .where(eq(handoverCases.id, handoverCaseId));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_task_updated",
+          id: randomUUID(),
+          payload: {
+            handoverCaseId,
+            handoverTaskId,
+            status: input.status,
+            handoverStatus: input.nextHandoverStatus
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
     }
   };
 }
 
 function buildFollowUpInterventionSummary() {
   return "Manager follow-up is required because the next action is overdue.";
+}
+
+function createFutureTimestamp(anchor: string, hoursFromNow: number) {
+  return new Date(new Date(anchor).getTime() + hoursFromNow * 60 * 60 * 1000).toISOString();
+}
+
+function deriveDocumentWorkflowNextAction(documentRequests: PersistedDocumentRequest[], locale: SupportedLocale) {
+  if (documentRequests.some((documentRequest) => documentRequest.status === "rejected")) {
+    return locale === "ar" ? "معالجة المستندات المرفوضة وطلب نسخة بديلة" : "Resolve rejected documents and request replacements";
+  }
+
+  if (documentRequests.every((documentRequest) => documentRequest.status === "accepted")) {
+    return locale === "ar" ? "رفع الحالة إلى اعتماد التسليم بعد اكتمال المستندات" : "Escalate the case for handover approval after documents are complete";
+  }
+
+  return locale === "ar" ? "متابعة المستندات المطلوبة مع العميل" : "Track the outstanding document requests with the prospect";
+}
+
+function deriveHandoverCaseStatus(tasks: PersistedHandoverTask[]): HandoverCaseStatus {
+  if (tasks.every((task) => task.status === "complete")) {
+    return "customer_scheduling_ready";
+  }
+
+  if (tasks.some((task) => task.status !== "open")) {
+    return "internal_tasks_open";
+  }
+
+  return "pending_readiness";
+}
+
+function getHandoverCaseNextAction(locale: SupportedLocale, status: HandoverCaseStatus, tasks: PersistedHandoverTask[]) {
+  if (status === "customer_scheduling_ready") {
+    return locale === "ar" ? "جدولة موعد التسليم مع العميل" : "Schedule the customer handover appointment";
+  }
+
+  if (tasks.some((task) => task.status === "blocked")) {
+    return locale === "ar" ? "معالجة عناصر الجاهزية المعطلة قبل تحديد الموعد" : "Resolve blocked readiness items before scheduling";
+  }
+
+  if (status === "internal_tasks_open") {
+    return locale === "ar" ? "إكمال عناصر جاهزية التسليم المتبقية" : "Complete the remaining handover readiness items";
+  }
+
+  return locale === "ar" ? "بدء قائمة جاهزية التسليم مع الفريق الداخلي" : "Start the handover readiness checklist with the internal team";
+}
+
+function getHandoverCaseNextActionDueAt(status: HandoverCaseStatus, tasks: PersistedHandoverTask[]) {
+  const blockedTask = tasks.find((task) => task.status === "blocked");
+
+  if (status === "customer_scheduling_ready") {
+    return createFutureTimestamp(new Date().toISOString(), 48);
+  }
+
+  if (blockedTask) {
+    return createFutureTimestamp(new Date().toISOString(), 8);
+  }
+
+  return createFutureTimestamp(new Date().toISOString(), 24);
+}
+
+function hydrateHandoverTask(value: {
+  createdAt: string;
+  dueAt: string;
+  ownerName: string;
+  status: string;
+  taskId: string;
+  type: string;
+  updatedAt: string;
+}): PersistedHandoverTask {
+  return {
+    createdAt: value.createdAt,
+    dueAt: value.dueAt,
+    ownerName: value.ownerName,
+    status: toHandoverTaskStatus(value.status),
+    taskId: value.taskId,
+    type: toHandoverTaskType(value.type),
+    updatedAt: value.updatedAt
+  };
+}
+
+function hydrateLinkedHandoverCase(value: {
+  createdAt: string;
+  handoverCaseId: string;
+  ownerName: string;
+  status: string;
+  updatedAt: string;
+}): PersistedLinkedHandoverCase {
+  return {
+    createdAt: value.createdAt,
+    handoverCaseId: value.handoverCaseId,
+    ownerName: value.ownerName,
+    status: toHandoverCaseStatus(value.status),
+    updatedAt: value.updatedAt
+  };
 }
 
 function hydrateManagerIntervention(value: {
@@ -1182,7 +1512,7 @@ function toAutomationStatus(value: string): AutomationStatus {
 }
 
 function toCaseStage(value: string): CaseStage {
-  if (value === "new" || value === "qualified" || value === "visit_scheduled" || value === "documents_in_progress") {
+  if (value === "new" || value === "qualified" || value === "visit_scheduled" || value === "documents_in_progress" || value === "handover_initiated") {
     return value;
   }
 
@@ -1207,6 +1537,30 @@ function toDocumentRequestType(value: string): DocumentRequestType {
 
 function toFollowUpStatus(nextActionDueAt: string): FollowUpStatus {
   return new Date(nextActionDueAt).getTime() <= Date.now() ? "attention" : "on_track";
+}
+
+function toHandoverCaseStatus(value: string): HandoverCaseStatus {
+  if (value === "pending_readiness" || value === "internal_tasks_open" || value === "customer_scheduling_ready") {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_case_status:${value}`);
+}
+
+function toHandoverTaskStatus(value: string): HandoverTaskStatus {
+  if (value === "open" || value === "blocked" || value === "complete") {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_task_status:${value}`);
+}
+
+function toHandoverTaskType(value: string): HandoverTaskType {
+  if (value === "unit_readiness_review" || value === "customer_document_pack" || value === "access_preparation") {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_task_type:${value}`);
 }
 
 function toLeadSource(value: string): "website" {
@@ -1257,14 +1611,4 @@ function toSupportedLocale(value: string): SupportedLocale {
   throw new Error(`unsupported_locale:${value}`);
 }
 
-export function deriveDocumentWorkflowNextAction(documentRequests: PersistedDocumentRequest[], locale: SupportedLocale) {
-  if (documentRequests.some((documentRequest) => documentRequest.status === "rejected")) {
-    return locale === "ar" ? "معالجة المستندات المرفوضة وطلب نسخة بديلة" : "Resolve rejected documents and request replacements";
-  }
-
-  if (documentRequests.every((documentRequest) => documentRequest.status === "accepted")) {
-    return locale === "ar" ? "رفع الحالة إلى مراجعة الإدارة بعد اكتمال المستندات" : "Escalate the case for manager review after documents are complete";
-  }
-
-  return locale === "ar" ? "متابعة المستندات المطلوبة مع العميل" : "Track the outstanding document requests with the prospect";
-}
+export { deriveDocumentWorkflowNextAction, deriveHandoverCaseStatus, getHandoverCaseNextAction, getHandoverCaseNextActionDueAt };

@@ -26,7 +26,7 @@ export default async function ConversationPage(props: PageProps) {
     return (
       <div className="page-stack">
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.conversation.summary} title={messages.conversation.title} />
-        <CaseRouteTabs caseId={persistedCase.caseId} locale={locale} />
+        <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
 
         <Panel title={persistedCase.customerName}>
           <MessageThread locale={locale} messages={buildPersistedConversation(persistedCase)} />
@@ -44,7 +44,7 @@ export default async function ConversationPage(props: PageProps) {
   return (
     <div className="page-stack">
       <ScreenIntro badge={caseItem.referenceCode} summary={messages.conversation.summary} title={messages.conversation.title} />
-      <CaseRouteTabs caseId={caseItem.id} locale={locale} />
+      <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
 
       <Panel title={caseItem.customerName}>
         <MessageThread locale={locale} messages={caseItem.conversation} />

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getDemoCaseById, getLocalizedText, type SupportedLocale } from "@real-estate-ai/domain";
@@ -20,6 +21,7 @@ import {
   getPersistedAutomationLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
+  getPersistedHandoverStatusLabel,
   getPersistedInterventionDisplay,
   getPersistedQualificationSummary,
   getPersistedSourceLabel
@@ -47,7 +49,7 @@ export default async function LeadProfilePage(props: PageProps) {
     return (
       <div className="page-stack">
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={persistedCase.message} title={messages.profile.title} />
-        <CaseRouteTabs caseId={persistedCase.caseId} locale={locale} />
+        <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
 
         <div className="two-column-grid">
           <Panel title={persistedCase.customerName}>
@@ -137,6 +139,21 @@ export default async function LeadProfilePage(props: PageProps) {
             />
           </Panel>
         </div>
+
+        {persistedCase.handoverCase ? (
+          <Panel title={locale === "ar" ? "حالة التسليم المرتبطة" : "Linked handover record"}>
+            <div className="row-between">
+              <div className="stack-tight">
+                <h3>{persistedCase.handoverCase.ownerName}</h3>
+                <p className="case-link-meta">{buildCaseReferenceCode(persistedCase.handoverCase.handoverCaseId)}</p>
+              </div>
+              <StatusBadge tone="success">{getPersistedHandoverStatusLabel(locale, persistedCase.handoverCase)}</StatusBadge>
+            </div>
+            <Link className="inline-link" href={`/${locale}/handover/${persistedCase.handoverCase.handoverCaseId}`}>
+              {locale === "ar" ? "فتح صفحة التسليم" : "Open handover page"}
+            </Link>
+          </Panel>
+        ) : null}
 
         <div className="two-column-grid">
           <Panel
@@ -250,7 +267,7 @@ export default async function LeadProfilePage(props: PageProps) {
   return (
     <div className="page-stack">
       <ScreenIntro badge={caseItem.referenceCode} summary={getLocalizedText(caseItem.summary, locale)} title={messages.profile.title} />
-      <CaseRouteTabs caseId={caseItem.id} locale={locale} />
+      <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
 
       <div className="two-column-grid">
         <Panel title={caseItem.customerName}>

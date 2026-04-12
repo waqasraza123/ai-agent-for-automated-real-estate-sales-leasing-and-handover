@@ -1,23 +1,29 @@
 import Fastify from "fastify";
 
 import {
+  createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
   manageCaseFollowUpInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
   updateAutomationStatusInputSchema,
-  updateDocumentRequestInputSchema
+  updateDocumentRequestInputSchema,
+  updateHandoverTaskStatusInputSchema
 } from "@real-estate-ai/contracts";
 import type { LeadCaptureStore } from "@real-estate-ai/database";
 import {
+  WorkflowRuleError,
   getPersistedCaseDetail,
+  getPersistedHandoverCaseDetail,
   listPersistedCases,
   managePersistedCaseFollowUp,
   qualifyPersistedCase,
   schedulePersistedVisit,
   setPersistedAutomationStatus,
+  startPersistedHandoverIntake,
   submitWebsiteLead,
-  updatePersistedDocumentRequest
+  updatePersistedDocumentRequest,
+  updatePersistedHandoverTask
 } from "@real-estate-ai/workflows";
 
 export function buildApiApp(dependencies: {
@@ -46,11 +52,9 @@ export function buildApiApp(dependencies: {
     return reply.status(201).send(createdCase);
   });
 
-  app.get("/v1/cases", async () => {
-    return {
-      cases: await listPersistedCases(dependencies.store)
-    };
-  });
+  app.get("/v1/cases", async () => ({
+    cases: await listPersistedCases(dependencies.store)
+  }));
 
   app.get<{
     Params: {
@@ -66,6 +70,22 @@ export function buildApiApp(dependencies: {
     }
 
     return caseDetail;
+  });
+
+  app.get<{
+    Params: {
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId", async (request, reply) => {
+    const handoverCase = await getPersistedHandoverCaseDetail(dependencies.store, request.params.handoverCaseId);
+
+    if (!handoverCase) {
+      return reply.status(404).send({
+        error: "handover_case_not_found"
+      });
+    }
+
+    return handoverCase;
   });
 
   app.post<{
@@ -168,6 +188,41 @@ export function buildApiApp(dependencies: {
     return reply.status(200).send(caseDetail);
   });
 
+  app.post<{
+    Params: {
+      caseId: string;
+    };
+  }>("/v1/cases/:caseId/handover-intake", async (request, reply) => {
+    const result = createHandoverIntakeInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const caseDetail = await startPersistedHandoverIntake(dependencies.store, request.params.caseId, result.data);
+
+      if (!caseDetail) {
+        return reply.status(404).send({
+          error: "case_not_found"
+        });
+      }
+
+      return reply.status(200).send(caseDetail);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
   app.patch<{
     Params: {
       caseId: string;
@@ -197,6 +252,37 @@ export function buildApiApp(dependencies: {
     }
 
     return reply.status(200).send(caseDetail);
+  });
+
+  app.patch<{
+    Params: {
+      handoverCaseId: string;
+      handoverTaskId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/tasks/:handoverTaskId", async (request, reply) => {
+    const result = updateHandoverTaskStatusInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const handoverCase = await updatePersistedHandoverTask(
+      dependencies.store,
+      request.params.handoverCaseId,
+      request.params.handoverTaskId,
+      result.data
+    );
+
+    if (!handoverCase) {
+      return reply.status(404).send({
+        error: "resource_not_found"
+      });
+    }
+
+    return reply.status(200).send(handoverCase);
   });
 
   return app;
