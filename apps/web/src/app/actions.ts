@@ -8,8 +8,10 @@ import {
   confirmHandoverAppointmentInputSchema,
   createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
+  markHandoverCustomerUpdateDispatchReadyInputSchema,
   manageCaseFollowUpInputSchema,
   planHandoverAppointmentInputSchema,
+  prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
   supportedLocaleSchema,
@@ -26,8 +28,10 @@ import {
   confirmHandoverAppointment,
   createHandoverIntake,
   createWebsiteLead,
+  markHandoverCustomerUpdateDispatchReady,
   manageCaseFollowUp,
   planHandoverAppointment,
+  prepareHandoverCustomerUpdateDelivery,
   qualifyCase,
   scheduleVisit,
   updateAutomationStatus,
@@ -496,6 +500,107 @@ export async function confirmHandoverAppointmentAction(_: FormActionState, formD
           locale === "ar"
             ? "لا يمكن تأكيد الموعد داخلياً قبل اعتماد حد تأكيد الموعد."
             : "The appointment cannot be confirmed internally until the appointment-confirmation boundary is approved.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function prepareHandoverCustomerUpdateDeliveryAction(
+  _: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const customerUpdateId = formData.get("customerUpdateId");
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof customerUpdateId !== "string" || typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = prepareHandoverCustomerUpdateDeliveryInputSchema.safeParse({
+    deliverySummary: formData.get("deliverySummary"),
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await prepareHandoverCustomerUpdateDelivery(handoverCaseId, customerUpdateId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم تجهيز تحديث العميل كرسالة جاهزة للإرسال لاحقاً من دون تشغيل أي مزود خارجي."
+          : "The customer update was prepared for later dispatch without triggering any external provider.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن تجهيز الإرسال قبل اعتماد حد التأكيد الداخلي وتثبيت الموعد داخلياً."
+            : "Delivery preparation stays locked until the appointment is internally confirmed and the boundary is approved.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function markHandoverCustomerUpdateDispatchReadyAction(
+  _: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const customerUpdateId = formData.get("customerUpdateId");
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof customerUpdateId !== "string" || typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = markHandoverCustomerUpdateDispatchReadyInputSchema.safeParse({
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await markHandoverCustomerUpdateDispatchReady(handoverCaseId, customerUpdateId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "أصبح تحديث العميل جاهزاً للإرسال، وتمت ترقية سجل التسليم إلى حالة مجدولة داخلياً."
+          : "The customer update is now ready to dispatch and the handover record has been promoted into a scheduled state.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن تحويل التحديث إلى جاهز للإرسال قبل تجهيز المحتوى أولاً."
+            : "Dispatch readiness requires a prepared delivery package first.",
         status: "error"
       };
     }

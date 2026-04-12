@@ -58,7 +58,7 @@ describe("lead capture api", () => {
     expect(detailResponse.json().handoverCase).toBeNull();
   });
 
-  it("promotes a document-complete case into handover planning, appointment scheduling, and internal confirmation", async () => {
+  it("promotes a document-complete case into handover planning, dispatch preparation, and scheduled readiness", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
@@ -345,13 +345,56 @@ describe("lead capture api", () => {
     expect(appointmentConfirmationResponse.statusCode).toBe(200);
     expect(appointmentConfirmationResponse.json().appointment.status).toBe("internally_confirmed");
 
+    const earlyDispatchReadyResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "ready_to_dispatch"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${appointmentConfirmationId}/dispatch-ready`
+    });
+
+    expect(earlyDispatchReadyResponse.statusCode).toBe(409);
+    expect(earlyDispatchReadyResponse.json().error).toBe("handover_delivery_preparation_required");
+
+    const deliveryPreparationResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        deliverySummary: "Arabic WhatsApp confirmation copy is prepared for manual dispatch after final ops review.",
+        status: "prepared_for_delivery"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${appointmentConfirmationId}/delivery`
+    });
+
+    expect(deliveryPreparationResponse.statusCode).toBe(200);
+    expect(
+      deliveryPreparationResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) => customerUpdate.customerUpdateId === appointmentConfirmationId
+      )?.status
+    ).toBe("prepared_for_delivery");
+
+    const dispatchReadyResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "ready_to_dispatch"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/customer-updates/${appointmentConfirmationId}/dispatch-ready`
+    });
+
+    expect(dispatchReadyResponse.statusCode).toBe(200);
+    expect(dispatchReadyResponse.json().status).toBe("scheduled");
+    expect(
+      dispatchReadyResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) => customerUpdate.customerUpdateId === appointmentConfirmationId
+      )?.status
+    ).toBe("ready_to_dispatch");
+
     const refreshedCaseResponse = await app.inject({
       method: "GET",
       url: `/v1/cases/${createdCase.caseId}`
     });
 
     expect(refreshedCaseResponse.statusCode).toBe(200);
-    expect(refreshedCaseResponse.json().handoverCase.status).toBe("customer_scheduling_ready");
+    expect(refreshedCaseResponse.json().handoverCase.status).toBe("scheduled");
   });
 
   it("rejects invalid payloads and invalid handover promotion attempts", async () => {

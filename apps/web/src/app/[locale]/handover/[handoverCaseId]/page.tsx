@@ -7,6 +7,8 @@ import { Panel, StatusBadge } from "@real-estate-ai/ui";
 import { HandoverAppointmentConfirmationForm } from "@/components/handover-appointment-confirmation-form";
 import { HandoverAppointmentForm } from "@/components/handover-appointment-form";
 import { HandoverCustomerUpdateApprovalForm } from "@/components/handover-customer-update-approval-form";
+import { HandoverCustomerUpdateDeliveryForm } from "@/components/handover-customer-update-delivery-form";
+import { HandoverCustomerUpdateDispatchReadyForm } from "@/components/handover-customer-update-dispatch-ready-form";
 import { HandoverMilestoneForm } from "@/components/handover-milestone-form";
 import { HandoverTaskStatusForm } from "@/components/handover-task-status-form";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
@@ -39,6 +41,7 @@ export default async function HandoverPage(props: PageProps) {
     const milestoneItems = getPersistedHandoverMilestoneDisplay(locale, persistedHandoverCase);
     const customerUpdateItems = getPersistedHandoverCustomerUpdateDisplay(locale, persistedHandoverCase);
     const appointmentHoldMilestone = milestoneItems.find((milestone) => milestone.type === "handover_appointment_hold");
+    const appointmentConfirmationUpdate = customerUpdateItems.find((customerUpdate) => customerUpdate.type === "appointment_confirmation");
 
     return (
       <div className="page-stack">
@@ -57,7 +60,13 @@ export default async function HandoverPage(props: PageProps) {
               </div>
               <div>
                 <p className="detail-label">{messages.common.stage}</p>
-                <StatusBadge tone={persistedHandoverCase.status === "customer_scheduling_ready" ? "success" : "warning"}>
+                <StatusBadge
+                  tone={
+                    persistedHandoverCase.status === "customer_scheduling_ready" || persistedHandoverCase.status === "scheduled"
+                      ? "success"
+                      : "warning"
+                  }
+                >
                   {getPersistedHandoverStatusLabel(locale, persistedHandoverCase)}
                 </StatusBadge>
               </div>
@@ -176,6 +185,83 @@ export default async function HandoverPage(props: PageProps) {
                 {locale === "ar"
                   ? "سيظهر تأكيد الموعد بعد حفظ موعد داخلي فعلي."
                   : "Appointment confirmation appears after a real internal appointment has been planned."}
+              </p>
+            )}
+          </Panel>
+        </div>
+
+        <div className="two-column-grid">
+          <Panel title={locale === "ar" ? "تجهيز الإرسال" : "Delivery preparation"}>
+            {appointmentConfirmationUpdate ? (
+              <div className="page-stack">
+                <p className="panel-summary">
+                  {locale === "ar"
+                    ? "هذه الخطوة تحفظ صياغة التأكيد المعتمدة كرسالة جاهزة للإرسال لاحقاً من دون تشغيل أي قناة فعلية."
+                    : "This stores the approved confirmation as outbound-ready content for later dispatch without triggering any live channel."}
+                </p>
+                {appointmentConfirmationUpdate.deliverySummary ? (
+                  <div className="detail-grid">
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "ملخص التجهيز" : "Delivery summary"}</p>
+                      <p>{appointmentConfirmationUpdate.deliverySummary}</p>
+                    </div>
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "تم التجهيز في" : "Prepared at"}</p>
+                      <p>{appointmentConfirmationUpdate.deliveryPreparedAt}</p>
+                    </div>
+                  </div>
+                ) : null}
+                <HandoverCustomerUpdateDeliveryForm
+                  customerUpdateId={appointmentConfirmationUpdate.customerUpdateId}
+                  deliverySummary={appointmentConfirmationUpdate.deliverySummary ?? ""}
+                  handoverCaseId={persistedHandoverCase.handoverCaseId}
+                  locale={locale}
+                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                  status={appointmentConfirmationUpdate.status}
+                />
+              </div>
+            ) : (
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "سيظهر تجهيز الإرسال بعد إنشاء حد تأكيد الموعد في هذا السجل."
+                  : "Delivery preparation appears after the appointment-confirmation boundary exists on this record."}
+              </p>
+            )}
+          </Panel>
+
+          <Panel title={locale === "ar" ? "جاهزية الإرسال" : "Dispatch readiness"}>
+            {appointmentConfirmationUpdate ? (
+              <div className="page-stack">
+                <p className="panel-summary">
+                  {locale === "ar"
+                    ? "هذه الخطوة لا ترسل أي رسالة، لكنها ترفع سجل التسليم إلى حالة مجدولة داخلياً بمجرد اكتمال التجهيز."
+                    : "This still does not send anything, but it promotes the handover record into an internally scheduled state once preparation is complete."}
+                </p>
+                {appointmentConfirmationUpdate.dispatchReadyAt ? (
+                  <div className="detail-grid">
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "جاهز للإرسال منذ" : "Ready since"}</p>
+                      <p>{appointmentConfirmationUpdate.dispatchReadyAt}</p>
+                    </div>
+                    <div>
+                      <p className="detail-label">{locale === "ar" ? "حالة الحد" : "Boundary status"}</p>
+                      <StatusBadge tone={appointmentConfirmationUpdate.statusTone}>{appointmentConfirmationUpdate.statusLabel}</StatusBadge>
+                    </div>
+                  </div>
+                ) : null}
+                <HandoverCustomerUpdateDispatchReadyForm
+                  customerUpdateId={appointmentConfirmationUpdate.customerUpdateId}
+                  handoverCaseId={persistedHandoverCase.handoverCaseId}
+                  locale={locale}
+                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                  status={appointmentConfirmationUpdate.status}
+                />
+              </div>
+            ) : (
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "ستظهر جاهزية الإرسال بعد تجهيز حد تأكيد الموعد."
+                  : "Dispatch readiness appears after the appointment-confirmation update is prepared."}
               </p>
             )}
           </Panel>

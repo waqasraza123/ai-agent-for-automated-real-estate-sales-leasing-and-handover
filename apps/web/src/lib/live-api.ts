@@ -4,8 +4,10 @@ import type {
   CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  MarkHandoverCustomerUpdateDispatchReadyInput,
   ManageCaseFollowUpInput,
   PlanHandoverAppointmentInput,
+  PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedHandoverCaseDetail,
@@ -187,6 +189,34 @@ export async function confirmHandoverAppointment(
     method: "PATCH",
     payload: input
   });
+}
+
+export async function prepareHandoverCustomerUpdateDelivery(
+  handoverCaseId: string,
+  customerUpdateId: string,
+  input: PrepareHandoverCustomerUpdateDeliveryInput
+) {
+  return requestJson<PersistedHandoverCaseDetail>(
+    `/v1/handover-cases/${handoverCaseId}/customer-updates/${customerUpdateId}/delivery`,
+    {
+      method: "PATCH",
+      payload: input
+    }
+  );
+}
+
+export async function markHandoverCustomerUpdateDispatchReady(
+  handoverCaseId: string,
+  customerUpdateId: string,
+  input: MarkHandoverCustomerUpdateDispatchReadyInput
+) {
+  return requestJson<PersistedHandoverCaseDetail>(
+    `/v1/handover-cases/${handoverCaseId}/customer-updates/${customerUpdateId}/dispatch-ready`,
+    {
+      method: "PATCH",
+      payload: input
+    }
+  );
 }
 
 export function getWebApiBaseUrl() {

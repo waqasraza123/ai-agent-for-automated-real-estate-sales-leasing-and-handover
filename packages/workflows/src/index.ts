@@ -4,8 +4,10 @@ import type {
   CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  MarkHandoverCustomerUpdateDispatchReadyInput,
   ManageCaseFollowUpInput,
   PlanHandoverAppointmentInput,
+  PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedHandoverCaseDetail,
@@ -200,7 +202,12 @@ export async function updatePersistedHandoverTask(
   }
 
   const updatedTasks = handoverCase.tasks.map((task) => (task.taskId === handoverTaskId ? { ...task, status: input.status } : task));
-  const nextHandoverStatus = deriveHandoverCaseStatus(updatedTasks, handoverCase.milestones);
+  const nextHandoverStatus = deriveHandoverCaseStatus(
+    updatedTasks,
+    handoverCase.milestones,
+    handoverCase.customerUpdates,
+    handoverCase.appointment
+  );
 
   return store.updateHandoverTaskStatus(handoverCaseId, handoverTaskId, {
     nextAction: getHandoverCaseNextAction(
@@ -249,24 +256,38 @@ export async function planPersistedHandoverAppointment(
     status: "planned" as const,
     updatedAt: new Date().toISOString()
   };
+  const updatedCustomerUpdates = handoverCase.customerUpdates.map((customerUpdate) =>
+    customerUpdate.type === "appointment_confirmation" &&
+    (customerUpdate.status === "prepared_for_delivery" || customerUpdate.status === "ready_to_dispatch")
+        ? {
+            ...customerUpdate,
+            deliveryPreparedAt: null,
+            deliverySummary: null,
+            dispatchReadyAt: null,
+            status: "approved" as const
+          }
+      : customerUpdate
+  );
+  const nextHandoverStatus = deriveHandoverCaseStatus(handoverCase.tasks, handoverCase.milestones, updatedCustomerUpdates, nextAppointment);
 
   return store.planHandoverAppointment(handoverCaseId, {
     ...input,
     nextAction: getHandoverCaseNextAction(
       handoverCase.preferredLocale,
-      handoverCase.status,
+      nextHandoverStatus,
       handoverCase.tasks,
       handoverCase.milestones,
-      handoverCase.customerUpdates,
+      updatedCustomerUpdates,
       nextAppointment
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
-      handoverCase.status,
+      nextHandoverStatus,
       handoverCase.tasks,
       handoverCase.milestones,
-      handoverCase.customerUpdates,
+      updatedCustomerUpdates,
       nextAppointment
-    )
+    ),
+    nextHandoverStatus
   });
 }
 
@@ -308,10 +329,23 @@ export async function updatePersistedHandoverMilestone(
         : "appointment_confirmation";
 
   const updatedCustomerUpdates = handoverCase.customerUpdates.map((customerUpdate) =>
-    customerUpdate.type === linkedCustomerUpdateType ? { ...customerUpdate, status: nextCustomerUpdateStatus } : customerUpdate
+    customerUpdate.type === linkedCustomerUpdateType
+      ? {
+          ...customerUpdate,
+          deliveryPreparedAt: null,
+          deliverySummary: null,
+          dispatchReadyAt: null,
+          status: nextCustomerUpdateStatus
+        }
+      : customerUpdate
   );
 
-  const nextHandoverStatus = deriveHandoverCaseStatus(handoverCase.tasks, updatedMilestones);
+  const nextHandoverStatus = deriveHandoverCaseStatus(
+    handoverCase.tasks,
+    updatedMilestones,
+    updatedCustomerUpdates,
+    handoverCase.appointment
+  );
 
   return store.updateHandoverMilestone(handoverCaseId, milestoneId, {
     ...input,
@@ -360,7 +394,12 @@ export async function approvePersistedHandoverCustomerUpdate(
   const updatedCustomerUpdates = handoverCase.customerUpdates.map((item) =>
     item.customerUpdateId === customerUpdateId ? { ...item, status: input.status } : item
   );
-  const nextHandoverStatus = deriveHandoverCaseStatus(handoverCase.tasks, handoverCase.milestones);
+  const nextHandoverStatus = deriveHandoverCaseStatus(
+    handoverCase.tasks,
+    handoverCase.milestones,
+    updatedCustomerUpdates,
+    handoverCase.appointment
+  );
 
   return store.updateHandoverCustomerUpdateStatus(handoverCaseId, customerUpdateId, {
     ...input,
@@ -409,24 +448,159 @@ export async function confirmPersistedHandoverAppointment(
     ...handoverCase.appointment,
     status: input.status
   };
+  const nextHandoverStatus = deriveHandoverCaseStatus(
+    handoverCase.tasks,
+    handoverCase.milestones,
+    handoverCase.customerUpdates,
+    confirmedAppointment
+  );
 
   return store.confirmHandoverAppointment(handoverCaseId, appointmentId, {
     ...input,
     nextAction: getHandoverCaseNextAction(
       handoverCase.preferredLocale,
-      handoverCase.status,
+      nextHandoverStatus,
       handoverCase.tasks,
       handoverCase.milestones,
       handoverCase.customerUpdates,
       confirmedAppointment
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
-      handoverCase.status,
+      nextHandoverStatus,
       handoverCase.tasks,
       handoverCase.milestones,
       handoverCase.customerUpdates,
       confirmedAppointment
-    )
+    ),
+    nextHandoverStatus
+  });
+}
+
+export async function preparePersistedHandoverCustomerUpdateDelivery(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  customerUpdateId: string,
+  input: PrepareHandoverCustomerUpdateDeliveryInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  const customerUpdate = handoverCase.customerUpdates.find((item) => item.customerUpdateId === customerUpdateId);
+
+  if (!customerUpdate || customerUpdate.type !== "appointment_confirmation") {
+    throw new WorkflowRuleError("handover_delivery_target_not_supported");
+  }
+
+  if (customerUpdate.status !== "approved") {
+    throw new WorkflowRuleError("handover_delivery_boundary_not_approved");
+  }
+
+  if (handoverCase.appointment?.status !== "internally_confirmed") {
+    throw new WorkflowRuleError("handover_appointment_not_confirmed");
+  }
+
+  const updatedCustomerUpdates = handoverCase.customerUpdates.map((item) =>
+    item.customerUpdateId === customerUpdateId
+      ? {
+          ...item,
+          deliveryPreparedAt: new Date().toISOString(),
+          deliverySummary: input.deliverySummary,
+          dispatchReadyAt: null,
+          status: input.status
+        }
+      : item
+  );
+  const nextHandoverStatus = deriveHandoverCaseStatus(
+    handoverCase.tasks,
+    handoverCase.milestones,
+    updatedCustomerUpdates,
+    handoverCase.appointment
+  );
+
+  return store.prepareHandoverCustomerUpdateDelivery(handoverCaseId, customerUpdateId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      nextHandoverStatus,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      updatedCustomerUpdates,
+      handoverCase.appointment
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      nextHandoverStatus,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      updatedCustomerUpdates,
+      handoverCase.appointment
+    ),
+    nextHandoverStatus
+  });
+}
+
+export async function markPersistedHandoverCustomerUpdateDispatchReady(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  customerUpdateId: string,
+  input: MarkHandoverCustomerUpdateDispatchReadyInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  const customerUpdate = handoverCase.customerUpdates.find((item) => item.customerUpdateId === customerUpdateId);
+
+  if (!customerUpdate || customerUpdate.type !== "appointment_confirmation") {
+    throw new WorkflowRuleError("handover_delivery_target_not_supported");
+  }
+
+  if (customerUpdate.status !== "prepared_for_delivery") {
+    throw new WorkflowRuleError("handover_delivery_preparation_required");
+  }
+
+  if (handoverCase.appointment?.status !== "internally_confirmed") {
+    throw new WorkflowRuleError("handover_appointment_not_confirmed");
+  }
+
+  const updatedCustomerUpdates = handoverCase.customerUpdates.map((item) =>
+    item.customerUpdateId === customerUpdateId
+      ? {
+          ...item,
+          dispatchReadyAt: new Date().toISOString(),
+          status: input.status
+        }
+      : item
+  );
+  const nextHandoverStatus = deriveHandoverCaseStatus(
+    handoverCase.tasks,
+    handoverCase.milestones,
+    updatedCustomerUpdates,
+    handoverCase.appointment
+  );
+
+  return store.markHandoverCustomerUpdateDispatchReady(handoverCaseId, customerUpdateId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      nextHandoverStatus,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      updatedCustomerUpdates,
+      handoverCase.appointment
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      nextHandoverStatus,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      updatedCustomerUpdates,
+      handoverCase.appointment
+    ),
+    nextHandoverStatus
   });
 }
 

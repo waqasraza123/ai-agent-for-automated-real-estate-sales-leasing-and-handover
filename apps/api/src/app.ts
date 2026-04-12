@@ -5,8 +5,10 @@ import {
   confirmHandoverAppointmentInputSchema,
   createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
+  markHandoverCustomerUpdateDispatchReadyInputSchema,
   manageCaseFollowUpInputSchema,
   planHandoverAppointmentInputSchema,
+  prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
   updateAutomationStatusInputSchema,
@@ -22,8 +24,10 @@ import {
   getPersistedCaseDetail,
   getPersistedHandoverCaseDetail,
   listPersistedCases,
+  markPersistedHandoverCustomerUpdateDispatchReady,
   managePersistedCaseFollowUp,
   planPersistedHandoverAppointment,
+  preparePersistedHandoverCustomerUpdateDelivery,
   qualifyPersistedCase,
   schedulePersistedVisit,
   setPersistedAutomationStatus,
@@ -317,6 +321,88 @@ export function buildApiApp(dependencies: {
         dependencies.store,
         request.params.handoverCaseId,
         request.params.appointmentId,
+        result.data
+      );
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch<{
+    Params: {
+      customerUpdateId: string;
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/customer-updates/:customerUpdateId/delivery", async (request, reply) => {
+    const result = prepareHandoverCustomerUpdateDeliveryInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await preparePersistedHandoverCustomerUpdateDelivery(
+        dependencies.store,
+        request.params.handoverCaseId,
+        request.params.customerUpdateId,
+        result.data
+      );
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch<{
+    Params: {
+      customerUpdateId: string;
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/customer-updates/:customerUpdateId/dispatch-ready", async (request, reply) => {
+    const result = markHandoverCustomerUpdateDispatchReadyInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await markPersistedHandoverCustomerUpdateDispatchReady(
+        dependencies.store,
+        request.params.handoverCaseId,
+        request.params.customerUpdateId,
         result.data
       );
 

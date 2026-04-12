@@ -169,12 +169,14 @@ export function getHandoverCaseStatusLabel(locale: SupportedLocale, status: Hand
     ar: {
       customer_scheduling_ready: "جاهزة لجدولة التسليم",
       internal_tasks_open: "المهام الداخلية قيد التنفيذ",
-      pending_readiness: "بانتظار بدء الجاهزية"
+      pending_readiness: "بانتظار بدء الجاهزية",
+      scheduled: "مجدولة داخلياً"
     },
     en: {
       customer_scheduling_ready: "Ready for customer scheduling",
       internal_tasks_open: "Internal tasks in progress",
-      pending_readiness: "Pending readiness"
+      pending_readiness: "Pending readiness",
+      scheduled: "Internally scheduled"
     }
   } as const;
 
@@ -329,6 +331,40 @@ export function getHandoverAppointmentConfirmationCopy(locale: SupportedLocale) 
   };
 }
 
+export function getHandoverDeliveryPreparationCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "تجهيز التحديث للإرسال",
+      deliverySummary: "ملخص التجهيز",
+      helper: "يحفظ هذا الإجراء رسالة مؤكدة جاهزة للإرسال لاحقاً من دون تشغيل أي قناة أو مزود خارجي.",
+      title: "تجهيز الإرسال"
+    };
+  }
+
+  return {
+    action: "Prepare for dispatch",
+    deliverySummary: "Delivery summary",
+    helper: "This stores the approved update as outbound-ready content for later dispatch without triggering any live channel or provider.",
+    title: "Delivery preparation"
+  };
+}
+
+export function getHandoverDispatchReadyCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "تحويله إلى جاهز للإرسال",
+      helper: "هذه الخطوة لا ترسل شيئاً للعميل، لكنها ترفع سجل التسليم إلى حالة مجدولة داخلياً.",
+      title: "جاهزية الإرسال"
+    };
+  }
+
+  return {
+    action: "Mark ready to dispatch",
+    helper: "This still does not send anything to the customer, but it promotes the handover record into an internally scheduled state.",
+    title: "Dispatch readiness"
+  };
+}
+
 export function getHandoverTaskStatusLabel(locale: SupportedLocale, status: HandoverTaskStatus) {
   const labels = {
     ar: {
@@ -367,12 +403,16 @@ export function getHandoverCustomerUpdateStatusLabel(locale: SupportedLocale, st
     ar: {
       approved: "معتمد",
       blocked: "محجوب",
-      ready_for_approval: "جاهز للاعتماد"
+      prepared_for_delivery: "مجهز للإرسال",
+      ready_for_approval: "جاهز للاعتماد",
+      ready_to_dispatch: "جاهز للإرسال"
     },
     en: {
       approved: "Approved",
       blocked: "Blocked",
-      ready_for_approval: "Ready for approval"
+      prepared_for_delivery: "Prepared for delivery",
+      ready_for_approval: "Ready for approval",
+      ready_to_dispatch: "Ready to dispatch"
     }
   } as const;
 
@@ -382,12 +422,12 @@ export function getHandoverCustomerUpdateStatusLabel(locale: SupportedLocale, st
 export function getHandoverCustomerUpdateTypeDetail(locale: SupportedLocale, type: HandoverCustomerUpdateType) {
   const details = {
     ar: {
-      appointment_confirmation: "حد داخلي لتأكيد موعد التسليم عندما تصبح المحطة النهائية جاهزة.",
+      appointment_confirmation: "حد داخلي لتأكيد موعد التسليم ثم تجهيزه كرسالة جاهزة للإرسال عندما تصبح المحطة النهائية مكتملة.",
       readiness_update: "حد مبكر لمشاركة تقدم الجاهزية مع العميل عند اكتمال المراجعة الأولية.",
       scheduling_invite: "حد واضح لتوجيه دعوة جدولة التسليم عندما تجهز النافذة التشغيلية."
     },
     en: {
-      appointment_confirmation: "Internal boundary for confirming the handover appointment once the final checkpoint is ready.",
+      appointment_confirmation: "Internal boundary for confirming the handover appointment and then preparing the eventual customer update once the final checkpoint is ready.",
       readiness_update: "Early boundary for sharing readiness progress with the customer after the initial gate is ready.",
       scheduling_invite: "Clear boundary for offering customer scheduling once the operational window is ready."
     }

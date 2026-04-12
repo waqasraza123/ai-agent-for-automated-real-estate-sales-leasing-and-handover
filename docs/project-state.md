@@ -38,6 +38,7 @@
 - The first persisted Phase 4 intake boundary is now live locally: manager-approved promotion from document-complete cases into handover intake with readiness-task tracking
 - The next persisted Phase 4 planning boundary is now live locally: manager-visible milestone planning and approval-only customer-update readiness states on each handover record
 - The next persisted Phase 4 scheduling boundary is now live locally: appointment planning and internal confirmation on each handover record behind explicit customer-update approvals
+- The next persisted Phase 4 outbound-preparation boundary is now live locally: appointment-confirmation delivery preparation and dispatch-ready promotion into a scheduled handover state without provider sending
 - Phase 5: hardening and enterprise controls
 
 ## Completed Major Slices
@@ -57,6 +58,7 @@
 - Added the first persisted handover slice with manager-approved intake creation, seeded readiness tasks, handover audit events, and live handover-task status updates
 - Added the next persisted handover slice with milestone planning, customer-update approval boundaries, linked audit events, and live handover milestone/customer-boundary controls
 - Added the next persisted handover slice with appointment planning, internal confirmation, linked audit events, and live handover appointment controls
+- Added the next persisted handover slice with outbound delivery preparation, dispatch-ready promotion, scheduled-state progression, linked audit events, and live delivery-boundary controls
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -74,8 +76,9 @@
 - Website lead intake is the first persistence-backed workflow boundary before qualification, scheduling, or follow-up automation are introduced
 - The first background-automation slice uses a local `PGlite` queue model in `apps/worker` before Redis or BullMQ are introduced
 - The web app intentionally falls back to seeded demo data when `apps/api` is unavailable so the premium shell remains buildable and demo-safe
-- The first persisted handover boundary starts only from document-complete cases and now includes milestone planning, approval-only customer-update readiness, and internal appointment planning or confirmation, while outbound sending and completion automation remain deferred
+- The first persisted handover boundary starts only from document-complete cases and now includes milestone planning, approval-only customer-update readiness, internal appointment planning or confirmation, and dispatch-ready preparation, while provider sending and completion automation remain deferred
 - Handover appointment planning is gated by approved scheduling readiness and internal confirmation is gated by a separate approved confirmation boundary
+- The appointment-confirmation update must be explicitly prepared and then marked dispatch-ready before the handover record is promoted into a scheduled state
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - The repository uses a versioned `core.hooksPath` pointing to `.githooks`
 - Normal `git push` runs `scripts/verify-push.sh` via `.githooks/pre-push`
@@ -91,7 +94,7 @@
 - Deeper qualification policy logic and approval boundaries beyond the current structured alpha form
 - Redis or BullMQ-backed durable job orchestration beyond the current local alpha worker
 - Leasing-specific rejection reasons and policy rules beyond the current shared document-request model
-- Real outbound customer communication, snag tracking, appointment execution, and completion workflows beyond the current handover planning and internal confirmation boundary
+- Real outbound customer communication, snag tracking, appointment execution, and completion workflows beyond the current handover planning, internal confirmation, and dispatch-ready boundary
 
 ## Risks / Watchouts
 - Arabic UX can degrade quickly if RTL support is not designed from the foundation
@@ -102,7 +105,7 @@
 - The web shell must not drift into mixed fixture and persisted state without an explicit boundary during Phase 2
 - The local `PGlite` alpha store is a development convenience and must not be mistaken for the long-term production deployment model
 - The current local queue model is intentionally transitional and must not be mistaken for the long-term distributed worker architecture
-- Phase 4 should not be overextended prematurely; the current handover slice is intentionally limited to intake, milestone planning, approval-only customer boundaries, and internal appointment confirmation, not full outbound or completion automation
+- Phase 4 should not be overextended prematurely; the current handover slice is intentionally limited to intake, milestone planning, approval-only customer boundaries, internal appointment confirmation, and dispatch-ready preparation, not live provider sending or completion automation
 
 ## Standard Verification
 - `git status --short`

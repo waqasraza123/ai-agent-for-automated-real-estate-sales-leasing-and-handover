@@ -156,6 +156,9 @@ export function getPersistedHandoverMilestoneDisplay(locale: SupportedLocale, ha
 export function getPersistedHandoverCustomerUpdateDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
   return handoverCase.customerUpdates.map((customerUpdate) => ({
     customerUpdateId: customerUpdate.customerUpdateId,
+    deliveryPreparedAt: customerUpdate.deliveryPreparedAt ? new Date(customerUpdate.deliveryPreparedAt).toLocaleString(locale) : null,
+    deliverySummary: customerUpdate.deliverySummary,
+    dispatchReadyAt: customerUpdate.dispatchReadyAt ? new Date(customerUpdate.dispatchReadyAt).toLocaleString(locale) : null,
     status: customerUpdate.status,
     statusLabel: getHandoverCustomerUpdateStatusLabel(locale, customerUpdate.status),
     statusTone: getHandoverCustomerUpdateTone(customerUpdate.status),
@@ -255,6 +258,30 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "تم اعتماد انتقال الحالة إلى مسار التسليم وفتح قائمة الجاهزية الأولية.",
         title: "بدء مسار التسليم"
       },
+      handover_appointment_confirmed: {
+        detail: "تم تأكيد موعد التسليم داخلياً دون تشغيل أي إرسال خارجي.",
+        title: "تأكيد الموعد داخلياً"
+      },
+      handover_appointment_planned: {
+        detail: "تم حفظ موعد تسليم داخلي فعلي بعد اعتماد حد الجدولة.",
+        title: "تخطيط موعد التسليم"
+      },
+      handover_customer_delivery_prepared: {
+        detail: "تم تجهيز تحديث العميل المعتمد كرسالة جاهزة للإرسال لاحقاً من دون التواصل مع العميل بعد.",
+        title: "تجهيز الإرسال"
+      },
+      handover_customer_dispatch_ready: {
+        detail: "أصبح تحديث العميل المجهز جاهزاً للإرسال، وانتقل السجل إلى حالة مجدولة داخلياً.",
+        title: "جاهزية الإرسال"
+      },
+      handover_customer_update_approved: {
+        detail: "تم اعتماد حد تواصل مخصص للعميل من دون إرسال أي رسالة حية.",
+        title: "اعتماد حد التواصل"
+      },
+      handover_milestone_updated: {
+        detail: "تم تحديث محطة التسليم وإعادة احتساب حالة حد التواصل المرتبط بها.",
+        title: "تحديث محطة التسليم"
+      },
       handover_task_updated: {
         detail: "تم تحديث أحد عناصر جاهزية التسليم وربط الأثر بالحالة الأساسية.",
         title: "تحديث عنصر جاهزية"
@@ -304,6 +331,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       handover_appointment_planned: {
         detail: "A real internal handover appointment was attached to the record behind the approved scheduling boundary.",
         title: "Appointment planned"
+      },
+      handover_customer_delivery_prepared: {
+        detail: "The approved appointment-confirmation update was prepared for later dispatch without contacting the customer yet.",
+        title: "Delivery prepared"
+      },
+      handover_customer_dispatch_ready: {
+        detail: "The prepared customer update was promoted into a ready-to-dispatch boundary and the handover moved into a scheduled state.",
+        title: "Dispatch readiness saved"
       },
       handover_customer_update_approved: {
         detail: "A customer-facing handover boundary was approved without sending any live outbound message.",
@@ -362,6 +397,14 @@ function describeHandoverAuditEvent(
         detail: "تم إرفاق موعد تسليم داخلي حي بالسجل بعد اعتماد حد الجدولة.",
         title: "تخطيط موعد التسليم"
       },
+      handover_customer_delivery_prepared: {
+        detail: "تم تجهيز رسالة تأكيد الموعد المعتمدة كحد جاهز للإرسال لاحقاً دون التواصل مع العميل بعد.",
+        title: "تجهيز التحديث للإرسال"
+      },
+      handover_customer_dispatch_ready: {
+        detail: "أصبح تحديث العميل المجهز جاهزاً للإرسال، وانتقل سجل التسليم إلى حالة مجدولة داخلياً.",
+        title: "جاهزية الإرسال"
+      },
       handover_customer_update_approved: {
         detail: "تم اعتماد حد تواصل مخصص للعميل دون إرسال أي رسالة فعلية.",
         title: "اعتماد حد تواصل"
@@ -383,6 +426,30 @@ function describeHandoverAuditEvent(
       handover_intake_created: {
         detail: `A live handover record was created for this case and assigned to ${handoverCase.ownerName}.`,
         title: "Handover record created"
+      },
+      handover_appointment_confirmed: {
+        detail: "The internal handover appointment was confirmed without triggering any live delivery.",
+        title: "Appointment confirmed internally"
+      },
+      handover_appointment_planned: {
+        detail: "A real internal handover appointment was planned on the live handover record.",
+        title: "Appointment planned"
+      },
+      handover_customer_delivery_prepared: {
+        detail: "The approved appointment-confirmation update was prepared for later dispatch without contacting the customer yet.",
+        title: "Delivery prepared"
+      },
+      handover_customer_dispatch_ready: {
+        detail: "The prepared customer update is now ready to dispatch and the handover record is internally scheduled.",
+        title: "Dispatch readiness saved"
+      },
+      handover_customer_update_approved: {
+        detail: "A customer-facing handover boundary was approved without triggering any real outbound message.",
+        title: "Customer boundary approved"
+      },
+      handover_milestone_updated: {
+        detail: "A milestone changed and the linked customer-update boundary was recalculated.",
+        title: "Milestone plan updated"
       },
       handover_task_updated: {
         detail: "One of the internal readiness items changed status.",
@@ -447,7 +514,7 @@ function getHandoverMilestoneTone(
 function getHandoverCustomerUpdateTone(
   status: PersistedHandoverCaseDetail["customerUpdates"][number]["status"]
 ): "success" | "critical" | "warning" {
-  if (status === "approved") {
+  if (status === "approved" || status === "prepared_for_delivery" || status === "ready_to_dispatch") {
     return "success";
   }
 

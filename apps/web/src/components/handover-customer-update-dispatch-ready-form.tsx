@@ -5,21 +5,21 @@ import { useActionState } from "react";
 import type { HandoverCustomerUpdateStatus, SupportedLocale } from "@real-estate-ai/contracts";
 import { cx } from "@real-estate-ai/ui";
 
-import { approveHandoverCustomerUpdateAction, initialFormActionState } from "@/app/actions";
+import { initialFormActionState, markHandoverCustomerUpdateDispatchReadyAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
-import { getHandoverCustomerUpdateApprovalCopy } from "@/lib/live-copy";
+import { getHandoverDispatchReadyCopy } from "@/lib/live-copy";
 
-export function HandoverCustomerUpdateApprovalForm(props: {
+export function HandoverCustomerUpdateDispatchReadyForm(props: {
   customerUpdateId: string;
   handoverCaseId: string;
   locale: SupportedLocale;
   returnPath: string;
   status: HandoverCustomerUpdateStatus;
 }) {
-  const copy = getHandoverCustomerUpdateApprovalCopy(props.locale);
-  const [state, action] = useActionState(approveHandoverCustomerUpdateAction, initialFormActionState);
-  const isReady = props.status === "ready_for_approval";
-  const isApproved = props.status === "approved" || props.status === "prepared_for_delivery" || props.status === "ready_to_dispatch";
+  const copy = getHandoverDispatchReadyCopy(props.locale);
+  const [state, action] = useActionState(markHandoverCustomerUpdateDispatchReadyAction, initialFormActionState);
+  const isPrepared = props.status === "prepared_for_delivery";
+  const isDispatchReady = props.status === "ready_to_dispatch";
 
   return (
     <form action={action} className="form-stack">
@@ -27,14 +27,18 @@ export function HandoverCustomerUpdateApprovalForm(props: {
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
-      <input name="status" type="hidden" value="approved" />
+      <input name="status" type="hidden" value="ready_to_dispatch" />
 
       <div className="form-actions-row">
-        {isReady ? (
-          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الاعتماد..." : "Approving..."} />
+        {isDispatchReady ? (
+          <button className="primary-button" disabled type="button">
+            {props.locale === "ar" ? "جاهز للإرسال" : "Ready to dispatch"}
+          </button>
+        ) : isPrepared ? (
+          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ التحويل..." : "Marking..."} />
         ) : (
           <button className="primary-button" disabled type="button">
-            {isApproved ? (props.locale === "ar" ? "تم الاعتماد" : "Already approved") : (props.locale === "ar" ? "بانتظار الجاهزية" : "Waiting for readiness")}
+            {props.locale === "ar" ? "بانتظار التجهيز" : "Waiting for preparation"}
           </button>
         )}
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>

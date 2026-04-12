@@ -11,13 +11,19 @@ export const automationStatusSchema = z.enum(["active", "paused"]);
 export const managerInterventionTypeSchema = z.enum(["follow_up_overdue"]);
 export const managerInterventionSeveritySchema = z.enum(["warning", "critical"]);
 export const managerInterventionStatusSchema = z.enum(["open", "resolved"]);
-export const handoverCaseStatusSchema = z.enum(["pending_readiness", "internal_tasks_open", "customer_scheduling_ready"]);
+export const handoverCaseStatusSchema = z.enum(["pending_readiness", "internal_tasks_open", "customer_scheduling_ready", "scheduled"]);
 export const handoverTaskTypeSchema = z.enum(["unit_readiness_review", "customer_document_pack", "access_preparation"]);
 export const handoverTaskStatusSchema = z.enum(["open", "blocked", "complete"]);
 export const handoverMilestoneTypeSchema = z.enum(["readiness_gate", "customer_scheduling_window", "handover_appointment_hold"]);
 export const handoverMilestoneStatusSchema = z.enum(["planned", "blocked", "ready"]);
 export const handoverCustomerUpdateTypeSchema = z.enum(["readiness_update", "scheduling_invite", "appointment_confirmation"]);
-export const handoverCustomerUpdateStatusSchema = z.enum(["blocked", "ready_for_approval", "approved"]);
+export const handoverCustomerUpdateStatusSchema = z.enum([
+  "blocked",
+  "ready_for_approval",
+  "approved",
+  "prepared_for_delivery",
+  "ready_to_dispatch"
+]);
 export const handoverAppointmentStatusSchema = z.enum(["planned", "internally_confirmed"]);
 
 export const createWebsiteLeadInputSchema = z.object({
@@ -73,6 +79,15 @@ export const updateHandoverMilestoneInputSchema = z.object({
 
 export const approveHandoverCustomerUpdateInputSchema = z.object({
   status: z.literal("approved")
+});
+
+export const prepareHandoverCustomerUpdateDeliveryInputSchema = z.object({
+  deliverySummary: z.string().trim().min(10).max(280),
+  status: z.literal("prepared_for_delivery")
+});
+
+export const markHandoverCustomerUpdateDispatchReadyInputSchema = z.object({
+  status: z.literal("ready_to_dispatch")
 });
 
 export const planHandoverAppointmentInputSchema = z.object({
@@ -142,6 +157,9 @@ export const persistedHandoverMilestoneSchema = z.object({
 export const persistedHandoverCustomerUpdateSchema = z.object({
   createdAt: z.iso.datetime(),
   customerUpdateId: z.uuid(),
+  deliveryPreparedAt: z.iso.datetime().nullable(),
+  deliverySummary: z.string().nullable(),
+  dispatchReadyAt: z.iso.datetime().nullable(),
   status: handoverCustomerUpdateStatusSchema,
   type: handoverCustomerUpdateTypeSchema,
   updatedAt: z.iso.datetime()
@@ -237,6 +255,7 @@ export type HandoverMilestoneType = z.infer<typeof handoverMilestoneTypeSchema>;
 export type HandoverTaskStatus = z.infer<typeof handoverTaskStatusSchema>;
 export type HandoverTaskType = z.infer<typeof handoverTaskTypeSchema>;
 export type ManageCaseFollowUpInput = z.infer<typeof manageCaseFollowUpInputSchema>;
+export type MarkHandoverCustomerUpdateDispatchReadyInput = z.infer<typeof markHandoverCustomerUpdateDispatchReadyInputSchema>;
 export type ManagerInterventionSeverity = z.infer<typeof managerInterventionSeveritySchema>;
 export type ManagerInterventionStatus = z.infer<typeof managerInterventionStatusSchema>;
 export type ManagerInterventionType = z.infer<typeof managerInterventionTypeSchema>;
@@ -253,6 +272,7 @@ export type PersistedManagerIntervention = z.infer<typeof persistedManagerInterv
 export type PersistedQualificationSnapshot = z.infer<typeof persistedQualificationSnapshotSchema>;
 export type PersistedVisit = z.infer<typeof persistedVisitSchema>;
 export type PlanHandoverAppointmentInput = z.infer<typeof planHandoverAppointmentInputSchema>;
+export type PrepareHandoverCustomerUpdateDeliveryInput = z.infer<typeof prepareHandoverCustomerUpdateDeliveryInputSchema>;
 export type QualificationReadiness = z.infer<typeof qualificationReadinessSchema>;
 export type QualifyCaseInput = z.infer<typeof qualifyCaseInputSchema>;
 export type ScheduleVisitInput = z.infer<typeof scheduleVisitInputSchema>;
