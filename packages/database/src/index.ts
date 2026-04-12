@@ -5,6 +5,7 @@ import type {
   ApproveHandoverCustomerUpdateInput,
   AutomationStatus,
   CaseStage,
+  CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
   CreateHandoverIntakeInput,
   CreateHandoverBlockerInput,
@@ -45,6 +46,7 @@ import type {
   QualifyCaseInput,
   QualificationReadiness,
   ScheduleVisitInput,
+  StartHandoverExecutionInput,
   SupportedLocale,
   UpdateHandoverMilestoneInput,
   UpdateHandoverBlockerInput,
@@ -136,7 +138,10 @@ const handoverCases = pgTable("handover_cases", {
     .notNull()
     .unique()
     .references(() => cases.id, { onDelete: "cascade" }),
+  completedAt: timestamp("completed_at", { mode: "string", withTimezone: true }),
+  completionSummary: text("completion_summary"),
   createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  executionStartedAt: timestamp("execution_started_at", { mode: "string", withTimezone: true }),
   id: uuid("id").primaryKey(),
   ownerName: text("owner_name").notNull(),
   readinessSummary: text("readiness_summary").notNull(),
@@ -283,6 +288,14 @@ export interface LeadCaptureStore {
       nextHandoverStatus: HandoverCaseStatus;
     }
   ): Promise<PersistedHandoverCaseDetail | null>;
+  startHandoverExecution(
+    handoverCaseId: string,
+    input: StartHandoverExecutionInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+      nextHandoverStatus: HandoverCaseStatus;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
   runDueFollowUpCycle(input: {
     limit: number;
     runAt: string;
@@ -346,6 +359,14 @@ export interface LeadCaptureStore {
     handoverCaseId: string,
     customerUpdateId: string,
     input: PrepareHandoverCustomerUpdateDeliveryInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+      nextHandoverStatus: HandoverCaseStatus;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
+  completeHandover(
+    handoverCaseId: string,
+    input: CompleteHandoverInput & {
       nextAction: string;
       nextActionDueAt: string;
       nextHandoverStatus: HandoverCaseStatus;
@@ -476,9 +497,16 @@ export async function createAlphaLeadCaptureStore(options?: {
       owner_name text not null,
       readiness_summary text not null,
       status text not null,
+      execution_started_at timestamptz,
+      completed_at timestamptz,
+      completion_summary text,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
+
+    alter table handover_cases add column if not exists execution_started_at timestamptz;
+    alter table handover_cases add column if not exists completed_at timestamptz;
+    alter table handover_cases add column if not exists completion_summary text;
 
     create table if not exists handover_tasks (
       id uuid primary key,
@@ -593,8 +621,11 @@ export async function createAlphaLeadCaptureStore(options?: {
     const handoverRecord = await db
       .select({
         caseId: handoverCases.caseId,
+        completedAt: handoverCases.completedAt,
+        completionSummary: handoverCases.completionSummary,
         createdAt: handoverCases.createdAt,
         customerName: leads.customerName,
+        executionStartedAt: handoverCases.executionStartedAt,
         handoverCaseId: handoverCases.id,
         ownerName: handoverCases.ownerName,
         preferredLocale: leads.preferredLocale,
@@ -704,9 +735,12 @@ export async function createAlphaLeadCaptureStore(options?: {
       appointment: appointmentRecords[0] ? hydrateHandoverAppointment(appointmentRecords[0]) : null,
       blockers: blockerRecords.map((blocker) => hydrateHandoverBlocker(blocker)),
       caseId: baseRecord.caseId,
+      completedAt: baseRecord.completedAt,
+      completionSummary: baseRecord.completionSummary,
       createdAt: baseRecord.createdAt,
       customerUpdates: customerUpdateRecords.map((customerUpdate) => hydrateHandoverCustomerUpdate(customerUpdate)),
       customerName: baseRecord.customerName,
+      executionStartedAt: baseRecord.executionStartedAt,
       handoverCaseId: baseRecord.handoverCaseId,
       milestones: milestoneRecords.map((milestone) => hydrateHandoverMilestone(milestone)),
       ownerName: baseRecord.ownerName,
@@ -1940,6 +1974,124 @@ export async function createAlphaLeadCaptureStore(options?: {
 
       return getHandoverCaseDetail(handoverCaseId);
     },
+    async startHandoverExecution(handoverCaseId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(handoverCases)
+          .set({
+            completedAt: null,
+            completionSummary: null,
+            executionStartedAt: updatedAt,
+            status: input.nextHandoverStatus,
+            updatedAt
+          })
+          .where(eq(handoverCases.id, handoverCaseId));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_execution_started",
+          id: randomUUID(),
+          payload: {
+            executionStartedAt: updatedAt,
+            handoverCaseId,
+            status: input.status
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
+    },
+    async completeHandover(handoverCaseId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(handoverCases)
+          .set({
+            completedAt: updatedAt,
+            completionSummary: input.completionSummary,
+            status: input.nextHandoverStatus,
+            updatedAt
+          })
+          .where(eq(handoverCases.id, handoverCaseId));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_completed",
+          id: randomUUID(),
+          payload: {
+            completedAt: updatedAt,
+            completionSummary: input.completionSummary,
+            handoverCaseId,
+            status: input.status
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
+    },
     async prepareHandoverCustomerUpdateDelivery(handoverCaseId, customerUpdateId, input) {
       const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
 
@@ -2388,13 +2540,37 @@ function getHandoverCaseNextAction(
   const appointmentConfirmationStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "appointment_confirmation")?.status;
   const openBlockers = blockers.filter((blocker) => blocker.status !== "resolved");
 
+  if (status === "completed") {
+    return locale === "ar"
+      ? "مراجعة سجل التسليم المكتمل وأي ملاحظات متابعة لاحقة يدوياً"
+      : "Review the completed handover record and any post-handover follow-up manually";
+  }
+
+  if (status === "in_progress" && openBlockers.length > 0) {
+    return locale === "ar"
+      ? "معالجة عوائق التنفيذ المفتوحة قبل إغلاق يوم التسليم"
+      : "Resolve the open execution blockers before closing the handover day";
+  }
+
+  if (status === "in_progress") {
+    return locale === "ar"
+      ? "إغلاق يوم التسليم بملخص إتمام مضبوط بعد انتهاء التنفيذ الميداني"
+      : "Close the handover day with a controlled completion summary after field execution";
+  }
+
   if (status === "scheduled" && openBlockers.length > 0) {
     return locale === "ar"
       ? "معالجة عوائق التنفيذ المفتوحة قبل المتابعة في يوم التسليم"
       : "Resolve the open execution blockers before advancing the handover day plan";
   }
 
-  if (status === "scheduled" || appointmentConfirmationStatus === "ready_to_dispatch") {
+  if (status === "scheduled") {
+    return locale === "ar"
+      ? "بدء حالة التنفيذ في يوم التسليم بعد التأكد من خلو السجل من العوائق المفتوحة"
+      : "Start the handover-day execution state once the scheduled record has no open blockers";
+  }
+
+  if (appointmentConfirmationStatus === "ready_to_dispatch") {
     return locale === "ar"
       ? "الاحتفاظ بالتسليم المجدول حتى يتوفر مسار إرسال أو تنفيذ فعلي"
       : "Hold the scheduled handover until real delivery or execution is enabled";
@@ -2465,11 +2641,27 @@ function getHandoverCaseNextActionDueAt(
     .filter((blocker) => blocker.status !== "resolved")
     .sort((left, right) => new Date(left.dueAt).getTime() - new Date(right.dueAt).getTime())[0];
 
+  if (status === "completed") {
+    return createFutureTimestamp(new Date().toISOString(), 24);
+  }
+
+  if (status === "in_progress" && openBlocker) {
+    return openBlocker.dueAt;
+  }
+
+  if (status === "in_progress") {
+    return createFutureTimestamp(new Date().toISOString(), 2);
+  }
+
   if (status === "scheduled" && openBlocker) {
     return openBlocker.dueAt;
   }
 
-  if (status === "scheduled" || appointmentConfirmationStatus === "ready_to_dispatch") {
+  if (status === "scheduled") {
+    return appointment?.scheduledAt ?? createFutureTimestamp(new Date().toISOString(), 4);
+  }
+
+  if (appointmentConfirmationStatus === "ready_to_dispatch") {
     return appointment?.scheduledAt ?? createFutureTimestamp(new Date().toISOString(), 12);
   }
 
@@ -2697,7 +2889,14 @@ function toFollowUpStatus(nextActionDueAt: string): FollowUpStatus {
 }
 
 function toHandoverCaseStatus(value: string): HandoverCaseStatus {
-  if (value === "pending_readiness" || value === "internal_tasks_open" || value === "customer_scheduling_ready" || value === "scheduled") {
+  if (
+    value === "pending_readiness" ||
+    value === "internal_tasks_open" ||
+    value === "customer_scheduling_ready" ||
+    value === "scheduled" ||
+    value === "in_progress" ||
+    value === "completed"
+  ) {
     return value;
   }
 

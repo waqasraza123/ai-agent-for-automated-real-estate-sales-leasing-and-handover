@@ -40,6 +40,7 @@
 - The next persisted Phase 4 scheduling boundary is now live locally: appointment planning and internal confirmation on each handover record behind explicit customer-update approvals
 - The next persisted Phase 4 outbound-preparation boundary is now live locally: appointment-confirmation delivery preparation and dispatch-ready promotion into a scheduled handover state without provider sending
 - The next persisted Phase 4 execution-readiness boundary is now live locally: scheduled handover blockers and snag tracking with visible owner, severity, due time, and audit history
+- The next persisted Phase 4 execution-day boundary is now live locally: scheduled handover records can move into a real in-progress state and then close through a controlled completion summary without provider callbacks
 - Phase 5: hardening and enterprise controls
 
 ## Completed Major Slices
@@ -61,6 +62,7 @@
 - Added the next persisted handover slice with appointment planning, internal confirmation, linked audit events, and live handover appointment controls
 - Added the next persisted handover slice with outbound delivery preparation, dispatch-ready promotion, scheduled-state progression, linked audit events, and live delivery-boundary controls
 - Added the next persisted handover slice with scheduled-boundary blocker logging, snag tracking, blocker updates, linked audit events, and live execution-readiness controls
+- Added the next persisted handover slice with explicit execution start, controlled completion, persisted execution timestamps, completion summaries, linked audit events, and live handover-day controls
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -82,6 +84,8 @@
 - Handover appointment planning is gated by approved scheduling readiness and internal confirmation is gated by a separate approved confirmation boundary
 - The appointment-confirmation update must be explicitly prepared and then marked dispatch-ready before the handover record is promoted into a scheduled state
 - Execution blockers and snags can only be logged after the handover record reaches the scheduled boundary
+- Handover-day execution can only start from the scheduled boundary after internal confirmation is complete and all open blockers are resolved
+- Controlled handover completion can only happen from the in-progress boundary and must capture a completion summary on the persisted record
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - The repository uses a versioned `core.hooksPath` pointing to `.githooks`
 - Normal `git push` runs `scripts/verify-push.sh` via `.githooks/pre-push`
@@ -97,7 +101,7 @@
 - Deeper qualification policy logic and approval boundaries beyond the current structured alpha form
 - Redis or BullMQ-backed durable job orchestration beyond the current local alpha worker
 - Leasing-specific rejection reasons and policy rules beyond the current shared document-request model
-- Real outbound customer communication, appointment execution, provider callbacks, and completion workflows beyond the current handover planning, internal confirmation, dispatch-ready, and blocker-tracking boundary
+- Real outbound customer communication, provider callbacks, post-completion workflows, and fully automated handover execution beyond the current planning, dispatch-ready, blocker, in-progress, and controlled-completion boundaries
 
 ## Risks / Watchouts
 - Arabic UX can degrade quickly if RTL support is not designed from the foundation
@@ -108,7 +112,7 @@
 - The web shell must not drift into mixed fixture and persisted state without an explicit boundary during Phase 2
 - The local `PGlite` alpha store is a development convenience and must not be mistaken for the long-term production deployment model
 - The current local queue model is intentionally transitional and must not be mistaken for the long-term distributed worker architecture
-- Phase 4 should not be overextended prematurely; the current handover slice is intentionally limited to intake, milestone planning, approval-only customer boundaries, internal appointment confirmation, dispatch-ready preparation, and blocker tracking, not live provider sending or completion automation
+- Phase 4 should not be overextended prematurely; the current handover slice is intentionally limited to intake, milestone planning, approval-only customer boundaries, internal appointment confirmation, dispatch-ready preparation, blocker tracking, explicit execution start, and controlled completion, not live provider sending or downstream automation
 
 ## Standard Verification
 - `git status --short`

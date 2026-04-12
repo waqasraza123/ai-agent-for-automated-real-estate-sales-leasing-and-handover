@@ -170,13 +170,17 @@ export function getFollowUpStatusLabel(locale: SupportedLocale, status: FollowUp
 export function getHandoverCaseStatusLabel(locale: SupportedLocale, status: HandoverCaseStatus) {
   const labels = {
     ar: {
+      completed: "مكتملة",
       customer_scheduling_ready: "جاهزة لجدولة التسليم",
+      in_progress: "قيد التنفيذ",
       internal_tasks_open: "المهام الداخلية قيد التنفيذ",
       pending_readiness: "بانتظار بدء الجاهزية",
       scheduled: "مجدولة داخلياً"
     },
     en: {
+      completed: "Completed",
       customer_scheduling_ready: "Ready for customer scheduling",
+      in_progress: "In progress",
       internal_tasks_open: "Internal tasks in progress",
       pending_readiness: "Pending readiness",
       scheduled: "Internally scheduled"
@@ -227,6 +231,40 @@ export function getHandoverMilestoneCopy(locale: SupportedLocale) {
     summary: "Plan the next handover milestones and make each checkpoint explicit before any customer-facing update is approved.",
     targetAt: "Target date",
     title: "Handover milestone plan"
+  };
+}
+
+export function getHandoverExecutionCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "بدء التنفيذ",
+      helper: "ينقل هذا السجل من حالة مجدولة إلى حالة تنفيذ حي بعد تصفية جميع العوائق المفتوحة، من دون ادعاء أي تكامل خارجي.",
+      title: "بدء يوم التسليم"
+    };
+  }
+
+  return {
+    action: "Start execution",
+    helper: "This promotes the record from scheduled into live handover-day execution once all open blockers are cleared, without pretending any external integration exists.",
+    title: "Start handover day"
+  };
+}
+
+export function getHandoverCompletionCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "إتمام التسليم",
+      completionSummary: "ملخص الإتمام",
+      helper: "أغلق يوم التسليم بملخص مضبوط بعد انتهاء التنفيذ ومعالجة العوائق المفتوحة.",
+      title: "إتمام مضبوط"
+    };
+  }
+
+  return {
+    action: "Complete handover",
+    completionSummary: "Completion summary",
+    helper: "Close the handover day with a controlled summary after execution is complete and open blockers are resolved.",
+    title: "Controlled completion"
   };
 }
 

@@ -2,6 +2,7 @@ import Fastify from "fastify";
 
 import {
   approveHandoverCustomerUpdateInputSchema,
+  completeHandoverInputSchema,
   confirmHandoverAppointmentInputSchema,
   createHandoverBlockerInputSchema,
   createHandoverIntakeInputSchema,
@@ -12,6 +13,7 @@ import {
   prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
+  startHandoverExecutionInputSchema,
   updateAutomationStatusInputSchema,
   updateDocumentRequestInputSchema,
   updateHandoverBlockerInputSchema,
@@ -21,8 +23,10 @@ import {
 import type { LeadCaptureStore } from "@real-estate-ai/database";
 import {
   approvePersistedHandoverCustomerUpdate,
+  completePersistedHandover,
   confirmPersistedHandoverAppointment,
   createPersistedHandoverBlocker,
+  startPersistedHandoverExecution,
   WorkflowRuleError,
   getPersistedCaseDetail,
   getPersistedHandoverCaseDetail,
@@ -492,6 +496,76 @@ export function buildApiApp(dependencies: {
     }
 
     return reply.status(200).send(handoverCase);
+  });
+
+  app.patch<{
+    Params: {
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/execution", async (request, reply) => {
+    const result = startHandoverExecutionInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await startPersistedHandoverExecution(dependencies.store, request.params.handoverCaseId, result.data);
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch<{
+    Params: {
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/completion", async (request, reply) => {
+    const result = completeHandoverInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await completePersistedHandover(dependencies.store, request.params.handoverCaseId, result.data);
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
   });
 
   app.patch<{

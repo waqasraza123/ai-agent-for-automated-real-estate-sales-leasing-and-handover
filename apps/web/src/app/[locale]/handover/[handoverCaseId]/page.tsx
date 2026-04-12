@@ -8,9 +8,11 @@ import { HandoverAppointmentConfirmationForm } from "@/components/handover-appoi
 import { HandoverAppointmentForm } from "@/components/handover-appointment-form";
 import { HandoverBlockerForm } from "@/components/handover-blocker-form";
 import { HandoverBlockerStatusForm } from "@/components/handover-blocker-status-form";
+import { HandoverCompletionForm } from "@/components/handover-completion-form";
 import { HandoverCustomerUpdateApprovalForm } from "@/components/handover-customer-update-approval-form";
 import { HandoverCustomerUpdateDeliveryForm } from "@/components/handover-customer-update-delivery-form";
 import { HandoverCustomerUpdateDispatchReadyForm } from "@/components/handover-customer-update-dispatch-ready-form";
+import { HandoverExecutionStartForm } from "@/components/handover-execution-start-form";
 import { HandoverMilestoneForm } from "@/components/handover-milestone-form";
 import { HandoverTaskStatusForm } from "@/components/handover-task-status-form";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
@@ -41,6 +43,7 @@ export default async function HandoverPage(props: PageProps) {
   if (persistedHandoverCase) {
     const appointmentItem = getPersistedHandoverAppointmentDisplay(locale, persistedHandoverCase);
     const blockerItems = getPersistedHandoverBlockerDisplay(locale, persistedHandoverCase);
+    const openBlockerItems = blockerItems.filter((blocker) => blocker.status !== "resolved");
     const taskItems = getPersistedHandoverDisplay(locale, persistedHandoverCase);
     const milestoneItems = getPersistedHandoverMilestoneDisplay(locale, persistedHandoverCase);
     const customerUpdateItems = getPersistedHandoverCustomerUpdateDisplay(locale, persistedHandoverCase);
@@ -66,8 +69,12 @@ export default async function HandoverPage(props: PageProps) {
                 <p className="detail-label">{messages.common.stage}</p>
                 <StatusBadge
                   tone={
-                    persistedHandoverCase.status === "customer_scheduling_ready" || persistedHandoverCase.status === "scheduled"
+                    persistedHandoverCase.status === "customer_scheduling_ready" ||
+                    persistedHandoverCase.status === "scheduled" ||
+                    persistedHandoverCase.status === "completed"
                       ? "success"
+                      : persistedHandoverCase.status === "in_progress"
+                        ? "warning"
                       : "warning"
                   }
                 >
@@ -117,6 +124,76 @@ export default async function HandoverPage(props: PageProps) {
             )}
           />
         </Panel>
+
+        <div className="two-column-grid">
+          <Panel title={locale === "ar" ? "تنفيذ يوم التسليم" : "Handover-day execution"}>
+            <div className="page-stack">
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "ابدأ حالة التنفيذ الحي بعد اكتمال الجدولة الداخلية وتصفية العوائق المفتوحة، من دون تشغيل أي تكامل خارجي."
+                  : "Start the live execution state after internal scheduling is complete and open blockers are cleared, without triggering any external integration."}
+              </p>
+              <div className="detail-grid">
+                <div>
+                  <p className="detail-label">{locale === "ar" ? "بدأ التنفيذ" : "Execution started"}</p>
+                  <p>
+                    {persistedHandoverCase.executionStartedAt
+                      ? new Date(persistedHandoverCase.executionStartedAt).toLocaleString(locale)
+                      : locale === "ar"
+                        ? "لم يبدأ بعد"
+                        : "Not started yet"}
+                  </p>
+                </div>
+                <div>
+                  <p className="detail-label">{locale === "ar" ? "العوائق المفتوحة" : "Open blockers"}</p>
+                  <p>{openBlockerItems.length}</p>
+                </div>
+              </div>
+              <HandoverExecutionStartForm
+                handoverCaseId={persistedHandoverCase.handoverCaseId}
+                locale={locale}
+                returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                status={persistedHandoverCase.status}
+              />
+            </div>
+          </Panel>
+
+          <Panel title={locale === "ar" ? "الإتمام المضبوط" : "Controlled completion"}>
+            <div className="page-stack">
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "أغلق يوم التسليم بملخص إتمام واضح بعد انتهاء التنفيذ ومعالجة العوائق المفتوحة."
+                  : "Close the handover day with a clear completion summary after execution finishes and open blockers are resolved."}
+              </p>
+              <div className="detail-grid">
+                <div>
+                  <p className="detail-label">{locale === "ar" ? "اكتمل في" : "Completed at"}</p>
+                  <p>
+                    {persistedHandoverCase.completedAt
+                      ? new Date(persistedHandoverCase.completedAt).toLocaleString(locale)
+                      : locale === "ar"
+                        ? "بانتظار الإتمام"
+                        : "Waiting for completion"}
+                  </p>
+                </div>
+                <div>
+                  <p className="detail-label">{locale === "ar" ? "ملخص الإتمام الحالي" : "Current completion summary"}</p>
+                  <p>
+                    {persistedHandoverCase.completionSummary ??
+                      (locale === "ar" ? "لم يتم حفظ ملخص الإتمام بعد." : "No completion summary has been saved yet.")}
+                  </p>
+                </div>
+              </div>
+              <HandoverCompletionForm
+                completionSummary={persistedHandoverCase.completionSummary ?? ""}
+                handoverCaseId={persistedHandoverCase.handoverCaseId}
+                locale={locale}
+                returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                status={persistedHandoverCase.status}
+              />
+            </div>
+          </Panel>
+        </div>
 
         <div className="two-column-grid">
           <Panel title={locale === "ar" ? "الموعد الداخلي" : "Internal appointment"}>

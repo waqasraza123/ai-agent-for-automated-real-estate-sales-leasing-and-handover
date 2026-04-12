@@ -290,6 +290,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "تم حفظ موعد تسليم داخلي فعلي بعد اعتماد حد الجدولة.",
         title: "تخطيط موعد التسليم"
       },
+      handover_completed: {
+        detail: "تم إغلاق يوم التسليم بملخص إتمام مضبوط بعد اكتمال التنفيذ الميداني.",
+        title: "إتمام التسليم"
+      },
       handover_customer_delivery_prepared: {
         detail: "تم تجهيز تحديث العميل المعتمد كرسالة جاهزة للإرسال لاحقاً من دون التواصل مع العميل بعد.",
         title: "تجهيز الإرسال"
@@ -297,6 +301,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       handover_customer_dispatch_ready: {
         detail: "أصبح تحديث العميل المجهز جاهزاً للإرسال، وانتقل السجل إلى حالة مجدولة داخلياً.",
         title: "جاهزية الإرسال"
+      },
+      handover_execution_started: {
+        detail: "تم فتح حالة تنفيذ حي ليوم التسليم بعد تصفية العوائق المفتوحة.",
+        title: "بدء التنفيذ"
       },
       handover_customer_update_approved: {
         detail: "تم اعتماد حد تواصل مخصص للعميل من دون إرسال أي رسالة حية.",
@@ -356,6 +364,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "A real internal handover appointment was attached to the record behind the approved scheduling boundary.",
         title: "Appointment planned"
       },
+      handover_completed: {
+        detail: "The handover day was closed with a controlled completion summary after field execution was finished.",
+        title: "Handover completed"
+      },
       handover_blocker_logged: {
         detail: "A live execution blocker was attached to the scheduled handover record to keep snag or field risk visible.",
         title: "Execution blocker logged"
@@ -363,6 +375,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       handover_blocker_updated: {
         detail: "A handover execution blocker changed status, ownership, or due time on the live record.",
         title: "Execution blocker updated"
+      },
+      handover_execution_started: {
+        detail: "The scheduled handover moved into a live execution state once open blockers were cleared.",
+        title: "Execution started"
       },
       handover_customer_delivery_prepared: {
         detail: "The approved appointment-confirmation update was prepared for later dispatch without contacting the customer yet.",
@@ -429,6 +445,10 @@ function describeHandoverAuditEvent(
         detail: "تم إرفاق موعد تسليم داخلي حي بالسجل بعد اعتماد حد الجدولة.",
         title: "تخطيط موعد التسليم"
       },
+      handover_completed: {
+        detail: "تم إغلاق يوم التسليم بملخص إتمام مضبوط وربطه بالسجل الحي.",
+        title: "إتمام التسليم"
+      },
       handover_blocker_logged: {
         detail: "تم تسجيل عائق تنفيذ حي لإبقاء المخاطر الميدانية أو الـ snag ظاهرة قبل يوم التسليم.",
         title: "تسجيل عائق تنفيذ"
@@ -436,6 +456,10 @@ function describeHandoverAuditEvent(
       handover_blocker_updated: {
         detail: "تم تحديث حالة عائق التنفيذ أو مالكه أو موعد معالجته في السجل الحي.",
         title: "تحديث عائق التنفيذ"
+      },
+      handover_execution_started: {
+        detail: "تم نقل السجل المجدول إلى حالة تنفيذ حي بعد إغلاق العوائق المفتوحة.",
+        title: "بدء التنفيذ"
       },
       handover_customer_delivery_prepared: {
         detail: "تم تجهيز رسالة تأكيد الموعد المعتمدة كحد جاهز للإرسال لاحقاً دون التواصل مع العميل بعد.",
@@ -474,6 +498,14 @@ function describeHandoverAuditEvent(
       handover_appointment_planned: {
         detail: "A real internal handover appointment was planned on the live handover record.",
         title: "Appointment planned"
+      },
+      handover_completed: {
+        detail: "The handover day was closed with a controlled completion summary on the live record.",
+        title: "Handover completed"
+      },
+      handover_execution_started: {
+        detail: "The scheduled record was promoted into a live handover-day execution state.",
+        title: "Execution started"
       },
       handover_customer_delivery_prepared: {
         detail: "The approved appointment-confirmation update was prepared for later dispatch without contacting the customer yet.",

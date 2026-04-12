@@ -58,7 +58,7 @@ describe("lead capture api", () => {
     expect(detailResponse.json().handoverCase).toBeNull();
   });
 
-  it("promotes a document-complete case into scheduled readiness with execution blockers", async () => {
+  it("promotes a document-complete case into controlled handover execution and completion", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
@@ -423,6 +423,17 @@ describe("lead capture api", () => {
 
     const blockerId = blockerCreateResponse.json().blockers[0]?.blockerId;
 
+    const earlyExecutionStartResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "in_progress"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/execution`
+    });
+
+    expect(earlyExecutionStartResponse.statusCode).toBe(409);
+    expect(earlyExecutionStartResponse.json().error).toBe("handover_execution_blockers_open");
+
     const blockerProgressResponse = await app.inject({
       method: "PATCH",
       payload: {
@@ -453,14 +464,52 @@ describe("lead capture api", () => {
     expect(blockerResolvedResponse.statusCode).toBe(200);
     expect(blockerResolvedResponse.json().blockers[0]?.status).toBe("resolved");
 
+    const earlyCompletionResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        completionSummary: "Attempt to complete the handover before execution has started on the live record.",
+        status: "completed"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/completion`
+    });
+
+    expect(earlyCompletionResponse.statusCode).toBe(409);
+    expect(earlyCompletionResponse.json().error).toBe("handover_completion_not_ready");
+
+    const executionStartResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "in_progress"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/execution`
+    });
+
+    expect(executionStartResponse.statusCode).toBe(200);
+    expect(executionStartResponse.json().status).toBe("in_progress");
+    expect(executionStartResponse.json().executionStartedAt).not.toBeNull();
+
+    const completionResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        completionSummary: "Keys were released, the final walkthrough was acknowledged, and the live handover record is now complete.",
+        status: "completed"
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/completion`
+    });
+
+    expect(completionResponse.statusCode).toBe(200);
+    expect(completionResponse.json().status).toBe("completed");
+    expect(completionResponse.json().completedAt).not.toBeNull();
+    expect(completionResponse.json().completionSummary).toContain("final walkthrough");
+
     const refreshedCaseResponse = await app.inject({
       method: "GET",
       url: `/v1/cases/${createdCase.caseId}`
     });
 
     expect(refreshedCaseResponse.statusCode).toBe(200);
-    expect(refreshedCaseResponse.json().handoverCase.status).toBe("scheduled");
-  }, 40000);
+    expect(refreshedCaseResponse.json().handoverCase.status).toBe("completed");
+  }, 50000);
 
   it("rejects invalid payloads and invalid handover promotion attempts", async () => {
     const createResponse = await app.inject({

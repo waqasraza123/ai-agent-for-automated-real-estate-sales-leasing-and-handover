@@ -1,5 +1,6 @@
 import type {
   ApproveHandoverCustomerUpdateInput,
+  CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
   CreateHandoverBlockerInput,
   CreateHandoverIntakeInput,
@@ -14,6 +15,7 @@ import type {
   PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ScheduleVisitInput,
+  StartHandoverExecutionInput,
   UpdateAutomationStatusInput,
   UpdateHandoverBlockerInput,
   UpdateDocumentRequestInput,
@@ -29,6 +31,7 @@ import {
   type FollowUpCycleResult,
   type LeadCaptureStore
 } from "@real-estate-ai/database";
+import type { HandoverCaseStatus } from "@real-estate-ai/contracts";
 
 export class WorkflowRuleError extends Error {
   code: string;
@@ -37,6 +40,14 @@ export class WorkflowRuleError extends Error {
     super(code);
     this.code = code;
   }
+}
+
+function preserveAdvancedHandoverStatus(currentStatus: HandoverCaseStatus, derivedStatus: HandoverCaseStatus): HandoverCaseStatus {
+  if (currentStatus === "completed" || currentStatus === "in_progress") {
+    return currentStatus;
+  }
+
+  return derivedStatus;
 }
 
 export async function getPersistedCaseDetail(store: LeadCaptureStore, caseId: string): Promise<PersistedCaseDetail | null> {
@@ -204,11 +215,9 @@ export async function updatePersistedHandoverTask(
   }
 
   const updatedTasks = handoverCase.tasks.map((task) => (task.taskId === handoverTaskId ? { ...task, status: input.status } : task));
-  const nextHandoverStatus = deriveHandoverCaseStatus(
-    updatedTasks,
-    handoverCase.milestones,
-    handoverCase.customerUpdates,
-    handoverCase.appointment
+  const nextHandoverStatus = preserveAdvancedHandoverStatus(
+    handoverCase.status,
+    deriveHandoverCaseStatus(updatedTasks, handoverCase.milestones, handoverCase.customerUpdates, handoverCase.appointment)
   );
 
   return store.updateHandoverTaskStatus(handoverCaseId, handoverTaskId, {
@@ -341,6 +350,94 @@ export async function updatePersistedHandoverBlocker(
   });
 }
 
+export async function startPersistedHandoverExecution(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  input: StartHandoverExecutionInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  if (handoverCase.status !== "scheduled") {
+    throw new WorkflowRuleError("handover_execution_not_ready");
+  }
+
+  if (handoverCase.appointment?.status !== "internally_confirmed") {
+    throw new WorkflowRuleError("handover_execution_appointment_not_confirmed");
+  }
+
+  if (handoverCase.blockers.some((blocker) => blocker.status !== "resolved")) {
+    throw new WorkflowRuleError("handover_execution_blockers_open");
+  }
+
+  return store.startHandoverExecution(handoverCaseId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      input.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      input.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers
+    ),
+    nextHandoverStatus: input.status
+  });
+}
+
+export async function completePersistedHandover(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  input: CompleteHandoverInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  if (handoverCase.status !== "in_progress") {
+    throw new WorkflowRuleError("handover_completion_not_ready");
+  }
+
+  if (handoverCase.blockers.some((blocker) => blocker.status !== "resolved")) {
+    throw new WorkflowRuleError("handover_completion_blockers_open");
+  }
+
+  return store.completeHandover(handoverCaseId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      input.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      input.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers
+    ),
+    nextHandoverStatus: input.status
+  });
+}
+
 export async function planPersistedHandoverAppointment(
   store: LeadCaptureStore,
   handoverCaseId: string,
@@ -459,12 +556,13 @@ export async function updatePersistedHandoverMilestone(
     updatedCustomerUpdates,
     handoverCase.appointment
   );
+  const preservedHandoverStatus = preserveAdvancedHandoverStatus(handoverCase.status, nextHandoverStatus);
 
   return store.updateHandoverMilestone(handoverCaseId, milestoneId, {
     ...input,
     nextAction: getHandoverCaseNextAction(
       handoverCase.preferredLocale,
-      nextHandoverStatus,
+      preservedHandoverStatus,
       handoverCase.tasks,
       updatedMilestones,
       updatedCustomerUpdates,
@@ -472,7 +570,7 @@ export async function updatePersistedHandoverMilestone(
       handoverCase.blockers
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
-      nextHandoverStatus,
+      preservedHandoverStatus,
       handoverCase.tasks,
       updatedMilestones,
       updatedCustomerUpdates,
@@ -480,7 +578,7 @@ export async function updatePersistedHandoverMilestone(
       handoverCase.blockers
     ),
     nextCustomerUpdateStatus,
-    nextHandoverStatus
+    nextHandoverStatus: preservedHandoverStatus
   });
 }
 
@@ -509,11 +607,9 @@ export async function approvePersistedHandoverCustomerUpdate(
   const updatedCustomerUpdates = handoverCase.customerUpdates.map((item) =>
     item.customerUpdateId === customerUpdateId ? { ...item, status: input.status } : item
   );
-  const nextHandoverStatus = deriveHandoverCaseStatus(
-    handoverCase.tasks,
-    handoverCase.milestones,
-    updatedCustomerUpdates,
-    handoverCase.appointment
+  const nextHandoverStatus = preserveAdvancedHandoverStatus(
+    handoverCase.status,
+    deriveHandoverCaseStatus(handoverCase.tasks, handoverCase.milestones, updatedCustomerUpdates, handoverCase.appointment)
   );
 
   return store.updateHandoverCustomerUpdateStatus(handoverCaseId, customerUpdateId, {
@@ -565,11 +661,9 @@ export async function confirmPersistedHandoverAppointment(
     ...handoverCase.appointment,
     status: input.status
   };
-  const nextHandoverStatus = deriveHandoverCaseStatus(
-    handoverCase.tasks,
-    handoverCase.milestones,
-    handoverCase.customerUpdates,
-    confirmedAppointment
+  const nextHandoverStatus = preserveAdvancedHandoverStatus(
+    handoverCase.status,
+    deriveHandoverCaseStatus(handoverCase.tasks, handoverCase.milestones, handoverCase.customerUpdates, confirmedAppointment)
   );
 
   return store.confirmHandoverAppointment(handoverCaseId, appointmentId, {

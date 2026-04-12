@@ -11,7 +11,14 @@ export const automationStatusSchema = z.enum(["active", "paused"]);
 export const managerInterventionTypeSchema = z.enum(["follow_up_overdue"]);
 export const managerInterventionSeveritySchema = z.enum(["warning", "critical"]);
 export const managerInterventionStatusSchema = z.enum(["open", "resolved"]);
-export const handoverCaseStatusSchema = z.enum(["pending_readiness", "internal_tasks_open", "customer_scheduling_ready", "scheduled"]);
+export const handoverCaseStatusSchema = z.enum([
+  "pending_readiness",
+  "internal_tasks_open",
+  "customer_scheduling_ready",
+  "scheduled",
+  "in_progress",
+  "completed"
+]);
 export const handoverTaskTypeSchema = z.enum(["unit_readiness_review", "customer_document_pack", "access_preparation"]);
 export const handoverTaskStatusSchema = z.enum(["open", "blocked", "complete"]);
 export const handoverBlockerTypeSchema = z.enum(["unit_snag", "access_blocker", "document_gap"]);
@@ -118,6 +125,15 @@ export const planHandoverAppointmentInputSchema = z.object({
 
 export const confirmHandoverAppointmentInputSchema = z.object({
   status: z.literal("internally_confirmed")
+});
+
+export const startHandoverExecutionInputSchema = z.object({
+  status: z.literal("in_progress")
+});
+
+export const completeHandoverInputSchema = z.object({
+  completionSummary: z.string().trim().min(10).max(280),
+  status: z.literal("completed")
 });
 
 export const persistedQualificationSnapshotSchema = z.object({
@@ -256,8 +272,11 @@ export const persistedHandoverCaseDetailSchema = persistedLinkedHandoverCaseSche
   appointment: persistedHandoverAppointmentSchema.nullable(),
   blockers: z.array(persistedHandoverBlockerSchema),
   caseId: z.uuid(),
+  completedAt: z.iso.datetime().nullable(),
+  completionSummary: z.string().nullable(),
   customerUpdates: z.array(persistedHandoverCustomerUpdateSchema),
   customerName: z.string(),
+  executionStartedAt: z.iso.datetime().nullable(),
   milestones: z.array(persistedHandoverMilestoneSchema),
   preferredLocale: supportedLocaleSchema,
   projectInterest: z.string(),
@@ -272,6 +291,7 @@ export const createWebsiteLeadResultSchema = persistedCaseSummarySchema.extend({
 export type ApproveHandoverCustomerUpdateInput = z.infer<typeof approveHandoverCustomerUpdateInputSchema>;
 export type AutomationStatus = z.infer<typeof automationStatusSchema>;
 export type CaseStage = z.infer<typeof caseStageSchema>;
+export type CompleteHandoverInput = z.infer<typeof completeHandoverInputSchema>;
 export type ConfirmHandoverAppointmentInput = z.infer<typeof confirmHandoverAppointmentInputSchema>;
 export type CreateHandoverBlockerInput = z.infer<typeof createHandoverBlockerInputSchema>;
 export type CreateHandoverIntakeInput = z.infer<typeof createHandoverIntakeInputSchema>;
@@ -314,6 +334,7 @@ export type PrepareHandoverCustomerUpdateDeliveryInput = z.infer<typeof prepareH
 export type QualificationReadiness = z.infer<typeof qualificationReadinessSchema>;
 export type QualifyCaseInput = z.infer<typeof qualifyCaseInputSchema>;
 export type ScheduleVisitInput = z.infer<typeof scheduleVisitInputSchema>;
+export type StartHandoverExecutionInput = z.infer<typeof startHandoverExecutionInputSchema>;
 export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
 export type UpdateHandoverMilestoneInput = z.infer<typeof updateHandoverMilestoneInputSchema>;
 export type UpdateAutomationStatusInput = z.infer<typeof updateAutomationStatusInputSchema>;

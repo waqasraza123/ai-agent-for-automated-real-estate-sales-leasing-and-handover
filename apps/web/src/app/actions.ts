@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import {
   approveHandoverCustomerUpdateInputSchema,
+  completeHandoverInputSchema,
   confirmHandoverAppointmentInputSchema,
   createHandoverBlockerInputSchema,
   createHandoverIntakeInputSchema,
@@ -15,6 +16,7 @@ import {
   prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
+  startHandoverExecutionInputSchema,
   supportedLocaleSchema,
   updateAutomationStatusInputSchema,
   updateDocumentRequestInputSchema,
@@ -27,6 +29,7 @@ import { initialFormActionState, type FormActionState } from "@/lib/form-action-
 import {
   WebApiError,
   approveHandoverCustomerUpdate,
+  completeHandover,
   confirmHandoverAppointment,
   createHandoverBlocker,
   createHandoverIntake,
@@ -37,6 +40,7 @@ import {
   prepareHandoverCustomerUpdateDelivery,
   qualifyCase,
   scheduleVisit,
+  startHandoverExecution,
   updateAutomationStatus,
   updateDocumentRequest,
   updateHandoverBlocker,
@@ -424,6 +428,99 @@ export async function updateHandoverBlockerAction(_: FormActionState, formData: 
       status: "success"
     };
   } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function startHandoverExecutionAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = startHandoverExecutionInputSchema.safeParse({
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await startHandoverExecution(handoverCaseId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم بدء حالة التنفيذ في يوم التسليم على السجل الحي."
+          : "The handover-day execution state was started on the live record.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن بدء التنفيذ قبل اكتمال الجدولة الداخلية وتصفية جميع العوائق المفتوحة."
+            : "Execution cannot start until the handover is internally scheduled and all open blockers are cleared.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function completeHandoverAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = completeHandoverInputSchema.safeParse({
+    completionSummary: formData.get("completionSummary"),
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await completeHandover(handoverCaseId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم إغلاق يوم التسليم بملخص إتمام مضبوط."
+          : "The handover day was closed with a controlled completion summary.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن إتمام التسليم قبل بدء التنفيذ ومعالجة جميع العوائق المفتوحة."
+            : "Handover completion requires an active execution state with no open blockers.",
+        status: "error"
+      };
+    }
+
     return getActionError(locale, error);
   }
 }

@@ -1,5 +1,6 @@
 import type {
   ApproveHandoverCustomerUpdateInput,
+  CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
   CreateHandoverBlockerInput,
   CreateHandoverIntakeInput,
@@ -14,6 +15,7 @@ import type {
   PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ScheduleVisitInput,
+  StartHandoverExecutionInput,
   UpdateAutomationStatusInput,
   UpdateDocumentRequestInput,
   UpdateHandoverBlockerInput,
@@ -163,6 +165,20 @@ export async function updateHandoverBlocker(
   input: UpdateHandoverBlockerInput
 ) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/blockers/${blockerId}`, {
+    method: "PATCH",
+    payload: input
+  });
+}
+
+export async function startHandoverExecution(handoverCaseId: string, input: StartHandoverExecutionInput) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/execution`, {
+    method: "PATCH",
+    payload: input
+  });
+}
+
+export async function completeHandover(handoverCaseId: string, input: CompleteHandoverInput) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/completion`, {
     method: "PATCH",
     payload: input
   });
