@@ -15,6 +15,8 @@ import {
   getDocumentRequestTypeLabel,
   getFollowUpStatusLabel,
   getHandoverAppointmentStatusLabel,
+  getHandoverArchiveOutcomeLabel,
+  getHandoverArchiveStatusLabel,
   getHandoverBlockerSeverityLabel,
   getHandoverBlockerStatusLabel,
   getHandoverBlockerTypeDetail,
@@ -227,6 +229,37 @@ export function getPersistedHandoverReviewDisplay(locale: SupportedLocale, hando
   };
 }
 
+export function getPersistedHandoverArchiveReviewDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
+  if (!handoverCase.archiveReview) {
+    return null;
+  }
+
+  return {
+    outcome: handoverCase.archiveReview.outcome,
+    outcomeLabel: getHandoverArchiveOutcomeLabel(locale, handoverCase.archiveReview.outcome),
+    reviewId: handoverCase.archiveReview.reviewId,
+    summary: handoverCase.archiveReview.summary,
+    updatedAt: new Date(handoverCase.archiveReview.updatedAt).toLocaleString(locale)
+  };
+}
+
+export function getPersistedHandoverArchiveStatusDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
+  if (!handoverCase.archiveStatus) {
+    return null;
+  }
+
+  const statusTone: "success" | "warning" = handoverCase.archiveStatus.status === "held" ? "warning" : "success";
+
+  return {
+    status: handoverCase.archiveStatus.status,
+    statusId: handoverCase.archiveStatus.statusId,
+    statusLabel: getHandoverArchiveStatusLabel(locale, handoverCase.archiveStatus.status),
+    statusTone,
+    summary: handoverCase.archiveStatus.summary,
+    updatedAt: new Date(handoverCase.archiveStatus.updatedAt).toLocaleString(locale)
+  };
+}
+
 export function getPersistedHandoverPostCompletionFollowUpDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
   if (!handoverCase.postCompletionFollowUp) {
     return null;
@@ -342,6 +375,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "تم إغلاق متابعة ما بعد التسليم بملخص حل واضح على السجل الحي.",
         title: "إغلاق متابعة ما بعد التسليم"
       },
+      handover_archive_review_saved: {
+        detail: "تم حفظ مراجعة الإغلاق الإداري وتحديد ما إذا كان السجل المكتمل جاهزاً للأرشفة أو يحتاج إلى تعليق.",
+        title: "حفظ مراجعة الأرشفة"
+      },
+      handover_archive_status_updated: {
+        detail: "تم تحديث حالة الأرشفة الإدارية على السجل المكتمل من دون تشغيل أي طبقة أرشفة خارجية.",
+        title: "تحديث حالة الأرشفة"
+      },
       handover_review_saved: {
         detail: "تم حفظ مراجعة المدير بعد التسليم وتحديد ما إذا كانت المتابعة اللاحقة مطلوبة.",
         title: "حفظ مراجعة ما بعد التسليم"
@@ -427,6 +468,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       handover_post_completion_follow_up_resolved: {
         detail: "The post-handover follow-up was closed with a clear resolution summary on the live record.",
         title: "Post-handover follow-up resolved"
+      },
+      handover_archive_review_saved: {
+        detail: "The administrative closure review was saved and marked whether the completed record is ready to archive or should stay on hold.",
+        title: "Archive review saved"
+      },
+      handover_archive_status_updated: {
+        detail: "The administrative archive boundary changed on the completed record without triggering any external archiving system.",
+        title: "Archive status updated"
       },
       handover_review_saved: {
         detail: "The manager review was saved after completion and recorded whether aftercare follow-up is required.",
@@ -521,6 +570,14 @@ function describeHandoverAuditEvent(
         detail: "تم إغلاق متابعة ما بعد التسليم بملخص حل واضح.",
         title: "إغلاق متابعة ما بعد التسليم"
       },
+      handover_archive_review_saved: {
+        detail: "تم حفظ مراجعة الإغلاق الإداري وتحديد ما إذا كان السجل المكتمل جاهزاً للأرشفة أو يحتاج إلى تعليق يدوي.",
+        title: "حفظ مراجعة الأرشفة"
+      },
+      handover_archive_status_updated: {
+        detail: "تم تحديث حالة الأرشفة الإدارية على السجل المكتمل داخل حدود التشغيل الحالية فقط.",
+        title: "تحديث حالة الأرشفة"
+      },
       handover_review_saved: {
         detail: "تم حفظ مراجعة المدير بعد التسليم وتحديد حاجة الحالة إلى متابعة لاحقة.",
         title: "حفظ مراجعة ما بعد التسليم"
@@ -590,6 +647,14 @@ function describeHandoverAuditEvent(
       handover_post_completion_follow_up_resolved: {
         detail: "The post-handover follow-up was resolved with a clear resolution summary.",
         title: "Post-handover follow-up resolved"
+      },
+      handover_archive_review_saved: {
+        detail: "The administrative closure review was saved and marked whether this completed handover is ready to archive or should remain on hold.",
+        title: "Archive review saved"
+      },
+      handover_archive_status_updated: {
+        detail: "The archive boundary status changed on the completed handover record inside the current admin closure workflow.",
+        title: "Archive status updated"
       },
       handover_review_saved: {
         detail: "The manager review was recorded after completion and marked whether aftercare follow-up is required.",

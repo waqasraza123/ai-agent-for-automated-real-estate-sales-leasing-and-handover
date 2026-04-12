@@ -16,9 +16,11 @@ import type {
   PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ResolveHandoverPostCompletionFollowUpInput,
+  SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
   ScheduleVisitInput,
   StartHandoverExecutionInput,
+  UpdateHandoverArchiveStatusInput,
   UpdateAutomationStatusInput,
   UpdateDocumentRequestInput,
   UpdateHandoverBlockerInput,
@@ -194,6 +196,13 @@ export async function saveHandoverReview(handoverCaseId: string, input: SaveHand
   });
 }
 
+export async function saveHandoverArchiveReview(handoverCaseId: string, input: SaveHandoverArchiveReviewInput) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/archive-review`, {
+    method: "PATCH",
+    payload: input
+  });
+}
+
 export async function createHandoverPostCompletionFollowUp(
   handoverCaseId: string,
   input: CreateHandoverPostCompletionFollowUpInput
@@ -210,6 +219,13 @@ export async function resolveHandoverPostCompletionFollowUp(
   input: ResolveHandoverPostCompletionFollowUpInput
 ) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/post-completion-follow-up/${followUpId}`, {
+    method: "PATCH",
+    payload: input
+  });
+}
+
+export async function updateHandoverArchiveStatus(handoverCaseId: string, input: UpdateHandoverArchiveStatusInput) {
+  return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/archive-status`, {
     method: "PATCH",
     payload: input
   });

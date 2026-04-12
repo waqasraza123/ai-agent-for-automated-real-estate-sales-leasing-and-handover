@@ -7,6 +7,8 @@ import type {
   CaseStage,
   CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
+  HandoverArchiveOutcome,
+  HandoverArchiveStatus,
   CreateHandoverPostCompletionFollowUpInput,
   CreateHandoverIntakeInput,
   CreateHandoverBlockerInput,
@@ -35,6 +37,8 @@ import type {
   PersistedCaseSummary,
   PersistedDocumentRequest,
   PersistedHandoverAppointment,
+  PersistedHandoverArchiveReview,
+  PersistedHandoverArchiveStatus,
   PersistedHandoverBlocker,
   PersistedHandoverCaseDetail,
   PersistedHandoverCustomerUpdate,
@@ -49,10 +53,12 @@ import type {
   QualifyCaseInput,
   QualificationReadiness,
   ResolveHandoverPostCompletionFollowUpInput,
+  SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
   ScheduleVisitInput,
   StartHandoverExecutionInput,
   SupportedLocale,
+  UpdateHandoverArchiveStatusInput,
   UpdateHandoverMilestoneInput,
   UpdateHandoverBlockerInput,
   UpdateHandoverTaskStatusInput
@@ -251,6 +257,30 @@ const handoverPostCompletionFollowUps = pgTable("handover_post_completion_follow
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
+const handoverArchiveReviews = pgTable("handover_archive_reviews", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  handoverCaseId: uuid("handover_case_id")
+    .notNull()
+    .unique()
+    .references(() => handoverCases.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey(),
+  outcome: text("outcome").notNull(),
+  summary: text("summary").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const handoverArchiveStatuses = pgTable("handover_archive_statuses", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  handoverCaseId: uuid("handover_case_id")
+    .notNull()
+    .unique()
+    .references(() => handoverCases.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey(),
+  status: text("status").notNull(),
+  summary: text("summary").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
 const managerInterventions = pgTable("manager_interventions", {
   caseId: uuid("case_id")
     .notNull()
@@ -324,6 +354,14 @@ export interface LeadCaptureStore {
   createHandoverPostCompletionFollowUp(
     handoverCaseId: string,
     input: CreateHandoverPostCompletionFollowUpInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+      nextHandoverStatus: HandoverCaseStatus;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
+  saveHandoverArchiveReview(
+    handoverCaseId: string,
+    input: SaveHandoverArchiveReviewInput & {
       nextAction: string;
       nextActionDueAt: string;
       nextHandoverStatus: HandoverCaseStatus;
@@ -458,6 +496,14 @@ export interface LeadCaptureStore {
       nextHandoverStatus: HandoverCaseStatus;
     }
   ): Promise<PersistedHandoverCaseDetail | null>;
+  updateHandoverArchiveStatus(
+    handoverCaseId: string,
+    input: UpdateHandoverArchiveStatusInput & {
+      nextAction: string;
+      nextActionDueAt: string;
+      nextHandoverStatus: HandoverCaseStatus;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
   updateHandoverTaskStatus(
     handoverCaseId: string,
     handoverTaskId: string,
@@ -481,6 +527,8 @@ export async function createAlphaLeadCaptureStore(options?: {
       cases,
       documentRequests,
       handoverAppointments,
+      handoverArchiveReviews,
+      handoverArchiveStatuses,
       handoverBlockers,
       handoverCases,
       handoverCustomerUpdates,
@@ -652,6 +700,24 @@ export async function createAlphaLeadCaptureStore(options?: {
       updated_at timestamptz not null default now()
     );
 
+    create table if not exists handover_archive_reviews (
+      id uuid primary key,
+      handover_case_id uuid not null unique references handover_cases(id) on delete cascade,
+      outcome text not null,
+      summary text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists handover_archive_statuses (
+      id uuid primary key,
+      handover_case_id uuid not null unique references handover_cases(id) on delete cascade,
+      status text not null,
+      summary text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
     create table if not exists manager_interventions (
       id uuid primary key,
       case_id uuid not null references cases(id) on delete cascade,
@@ -693,6 +759,8 @@ export async function createAlphaLeadCaptureStore(options?: {
     create index if not exists handover_appointments_case_id_idx on handover_appointments (handover_case_id, scheduled_at asc);
     create index if not exists handover_reviews_case_id_idx on handover_reviews (handover_case_id, updated_at desc);
     create index if not exists handover_post_completion_follow_ups_case_id_idx on handover_post_completion_follow_ups (handover_case_id, due_at asc);
+    create index if not exists handover_archive_reviews_case_id_idx on handover_archive_reviews (handover_case_id, updated_at desc);
+    create index if not exists handover_archive_statuses_case_id_idx on handover_archive_statuses (handover_case_id, updated_at desc);
     create index if not exists audit_events_case_id_idx on audit_events (case_id, created_at asc);
     create index if not exists manager_interventions_case_id_idx on manager_interventions (case_id, created_at desc);
     create index if not exists manager_interventions_open_case_idx on manager_interventions (case_id, status);
@@ -730,7 +798,18 @@ export async function createAlphaLeadCaptureStore(options?: {
       return null;
     }
 
-    const [taskRecords, blockerRecords, milestoneRecords, customerUpdateRecords, appointmentRecords, reviewRecords, postCompletionFollowUpRecords, eventRecords] = await Promise.all([
+    const [
+      taskRecords,
+      blockerRecords,
+      milestoneRecords,
+      customerUpdateRecords,
+      appointmentRecords,
+      reviewRecords,
+      postCompletionFollowUpRecords,
+      archiveReviewRecords,
+      archiveStatusRecords,
+      eventRecords
+    ] = await Promise.all([
       db
         .select({
           createdAt: handoverTasks.createdAt,
@@ -827,6 +906,28 @@ export async function createAlphaLeadCaptureStore(options?: {
         .limit(1),
       db
         .select({
+          createdAt: handoverArchiveReviews.createdAt,
+          outcome: handoverArchiveReviews.outcome,
+          reviewId: handoverArchiveReviews.id,
+          summary: handoverArchiveReviews.summary,
+          updatedAt: handoverArchiveReviews.updatedAt
+        })
+        .from(handoverArchiveReviews)
+        .where(eq(handoverArchiveReviews.handoverCaseId, handoverCaseId))
+        .limit(1),
+      db
+        .select({
+          createdAt: handoverArchiveStatuses.createdAt,
+          status: handoverArchiveStatuses.status,
+          statusId: handoverArchiveStatuses.id,
+          summary: handoverArchiveStatuses.summary,
+          updatedAt: handoverArchiveStatuses.updatedAt
+        })
+        .from(handoverArchiveStatuses)
+        .where(eq(handoverArchiveStatuses.handoverCaseId, handoverCaseId))
+        .limit(1),
+      db
+        .select({
           createdAt: auditEvents.createdAt,
           eventType: auditEvents.eventType,
           payload: auditEvents.payload
@@ -837,6 +938,8 @@ export async function createAlphaLeadCaptureStore(options?: {
     ]);
 
     return {
+      archiveReview: archiveReviewRecords[0] ? hydrateHandoverArchiveReview(archiveReviewRecords[0]) : null,
+      archiveStatus: archiveStatusRecords[0] ? hydrateHandoverArchiveStatus(archiveStatusRecords[0]) : null,
       auditEvents: eventRecords.map((event) => ({
         createdAt: event.createdAt,
         eventType: event.eventType,
@@ -2282,6 +2385,84 @@ export async function createAlphaLeadCaptureStore(options?: {
 
       return getHandoverCaseDetail(handoverCaseId);
     },
+    async saveHandoverArchiveReview(handoverCaseId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+      const existingReview = handoverRecord.archiveReview;
+      const archiveReviewId = existingReview?.reviewId ?? randomUUID();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .insert(handoverArchiveReviews)
+          .values({
+            createdAt: existingReview?.createdAt ?? updatedAt,
+            handoverCaseId,
+            id: archiveReviewId,
+            outcome: input.outcome,
+            summary: input.summary,
+            updatedAt
+          })
+          .onConflictDoUpdate({
+            set: {
+              outcome: input.outcome,
+              summary: input.summary,
+              updatedAt
+            },
+            target: handoverArchiveReviews.handoverCaseId
+          });
+
+        await transaction
+          .update(handoverCases)
+          .set({
+            status: input.nextHandoverStatus,
+            updatedAt
+          })
+          .where(eq(handoverCases.id, handoverCaseId));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_archive_review_saved",
+          id: randomUUID(),
+          payload: {
+            archiveReviewId,
+            handoverCaseId,
+            outcome: input.outcome,
+            summary: input.summary
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
+    },
     async createHandoverPostCompletionFollowUp(handoverCaseId, input) {
       const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
 
@@ -2356,6 +2537,84 @@ export async function createAlphaLeadCaptureStore(options?: {
             followUpId,
             handoverCaseId,
             ownerName,
+            status: input.status,
+            summary: input.summary
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
+    },
+    async updateHandoverArchiveStatus(handoverCaseId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+      const existingStatus = handoverRecord.archiveStatus;
+      const archiveStatusId = existingStatus?.statusId ?? randomUUID();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .insert(handoverArchiveStatuses)
+          .values({
+            createdAt: existingStatus?.createdAt ?? updatedAt,
+            handoverCaseId,
+            id: archiveStatusId,
+            status: input.status,
+            summary: input.summary,
+            updatedAt
+          })
+          .onConflictDoUpdate({
+            set: {
+              status: input.status,
+              summary: input.summary,
+              updatedAt
+            },
+            target: handoverArchiveStatuses.handoverCaseId
+          });
+
+        await transaction
+          .update(handoverCases)
+          .set({
+            status: input.nextHandoverStatus,
+            updatedAt
+          })
+          .where(eq(handoverCases.id, handoverCaseId));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_archive_status_updated",
+          id: randomUUID(),
+          payload: {
+            archiveStatusId,
+            handoverCaseId,
             status: input.status,
             summary: input.summary
           }
@@ -2882,7 +3141,9 @@ function getHandoverCaseNextAction(
   appointment: PersistedHandoverAppointment | null,
   blockers: PersistedHandoverBlocker[] = [],
   review: PersistedHandoverReview | null = null,
-  postCompletionFollowUp: PersistedHandoverPostCompletionFollowUp | null = null
+  postCompletionFollowUp: PersistedHandoverPostCompletionFollowUp | null = null,
+  archiveReview: PersistedHandoverArchiveReview | null = null,
+  archiveStatus: PersistedHandoverArchiveStatus | null = null
 ) {
   const schedulingInviteStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "scheduling_invite")?.status;
   const appointmentConfirmationStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "appointment_confirmation")?.status;
@@ -2904,6 +3165,42 @@ function getHandoverCaseNextAction(
     return locale === "ar"
       ? "فتح حد متابعة ما بعد التسليم وتعيين المالك والموعد النهائي"
       : "Open the post-handover follow-up boundary with an owner and due time";
+  }
+
+  if (status === "completed" && !archiveReview) {
+    return locale === "ar"
+      ? "حفظ مراجعة الإغلاق الإداري وتحديد ما إذا كان السجل جاهزاً للأرشفة أو يحتاج إلى تعليق يدوي"
+      : "Save the archive review and decide whether the completed record is ready to archive or should be held for manual review";
+  }
+
+  if (status === "completed" && archiveReview?.outcome === "hold_for_review" && archiveStatus?.status !== "held") {
+    return locale === "ar"
+      ? "تعليق أرشفة السجل المكتمل حتى تتم مراجعة الإغلاق الإداري يدوياً"
+      : "Place the completed handover on archive hold until the administrative closure review is cleared manually";
+  }
+
+  if (status === "completed" && archiveReview?.outcome === "ready_to_archive" && !archiveStatus) {
+    return locale === "ar"
+      ? "ترقية السجل المكتمل إلى حالة جاهزة للأرشفة بعد اكتمال المراجعة الإدارية"
+      : "Promote the completed handover into a ready-to-archive state after the administrative review is complete";
+  }
+
+  if (status === "completed" && archiveReview?.outcome === "ready_to_archive" && archiveStatus?.status === "held") {
+    return locale === "ar"
+      ? "إزالة تعليق الأرشفة وترقية السجل إلى حالة جاهزة للأرشفة"
+      : "Clear the archive hold and promote the record into a ready-to-archive state";
+  }
+
+  if (status === "completed" && archiveStatus?.status === "ready") {
+    return locale === "ar"
+      ? "أرشفة سجل التسليم المكتمل بعد اكتمال حدود الإغلاق الإداري"
+      : "Archive the completed handover record after the closure boundary is fully ready";
+  }
+
+  if (status === "completed" && archiveStatus?.status === "archived") {
+    return locale === "ar"
+      ? "مراجعة السجل المؤرشف يدوياً فقط إذا ظهرت حاجة تشغيلية لاحقة"
+      : "Review the archived handover record manually only if a later operational issue appears";
   }
 
   if (status === "completed") {
@@ -2999,7 +3296,9 @@ function getHandoverCaseNextActionDueAt(
   appointment: PersistedHandoverAppointment | null,
   blockers: PersistedHandoverBlocker[] = [],
   review: PersistedHandoverReview | null = null,
-  postCompletionFollowUp: PersistedHandoverPostCompletionFollowUp | null = null
+  postCompletionFollowUp: PersistedHandoverPostCompletionFollowUp | null = null,
+  archiveReview: PersistedHandoverArchiveReview | null = null,
+  archiveStatus: PersistedHandoverArchiveStatus | null = null
 ) {
   const blockedTask = tasks.find((task) => task.status === "blocked");
   const blockedMilestone = milestones.find((milestone) => milestone.status === "blocked");
@@ -3019,6 +3318,30 @@ function getHandoverCaseNextActionDueAt(
 
   if (status === "completed" && review?.outcome === "follow_up_required" && !postCompletionFollowUp) {
     return createFutureTimestamp(new Date().toISOString(), 8);
+  }
+
+  if (status === "completed" && !archiveReview) {
+    return createFutureTimestamp(new Date().toISOString(), 8);
+  }
+
+  if (status === "completed" && archiveReview?.outcome === "hold_for_review" && archiveStatus?.status !== "held") {
+    return createFutureTimestamp(new Date().toISOString(), 8);
+  }
+
+  if (status === "completed" && archiveReview?.outcome === "ready_to_archive" && !archiveStatus) {
+    return createFutureTimestamp(new Date().toISOString(), 8);
+  }
+
+  if (status === "completed" && archiveReview?.outcome === "ready_to_archive" && archiveStatus?.status === "held") {
+    return createFutureTimestamp(new Date().toISOString(), 8);
+  }
+
+  if (status === "completed" && archiveStatus?.status === "ready") {
+    return createFutureTimestamp(new Date().toISOString(), 24);
+  }
+
+  if (status === "completed" && archiveStatus?.status === "archived") {
+    return createFutureTimestamp(new Date().toISOString(), 168);
   }
 
   if (status === "completed") {
@@ -3234,6 +3557,38 @@ function hydrateHandoverPostCompletionFollowUp(value: {
   };
 }
 
+function hydrateHandoverArchiveReview(value: {
+  createdAt: string;
+  outcome: string;
+  reviewId: string;
+  summary: string;
+  updatedAt: string;
+}): PersistedHandoverArchiveReview {
+  return {
+    createdAt: value.createdAt,
+    outcome: toHandoverArchiveOutcome(value.outcome),
+    reviewId: value.reviewId,
+    summary: value.summary,
+    updatedAt: value.updatedAt
+  };
+}
+
+function hydrateHandoverArchiveStatus(value: {
+  createdAt: string;
+  status: string;
+  statusId: string;
+  summary: string;
+  updatedAt: string;
+}): PersistedHandoverArchiveStatus {
+  return {
+    createdAt: value.createdAt,
+    status: toHandoverArchiveStatus(value.status),
+    statusId: value.statusId,
+    summary: value.summary,
+    updatedAt: value.updatedAt
+  };
+}
+
 function hydrateLinkedHandoverCase(value: {
   createdAt: string;
   handoverCaseId: string;
@@ -3415,6 +3770,22 @@ function toHandoverReviewOutcome(value: string) {
   }
 
   throw new Error(`unsupported_handover_review_outcome:${value}`);
+}
+
+function toHandoverArchiveOutcome(value: string): HandoverArchiveOutcome {
+  if (value === "ready_to_archive" || value === "hold_for_review") {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_archive_outcome:${value}`);
+}
+
+function toHandoverArchiveStatus(value: string): HandoverArchiveStatus {
+  if (value === "ready" || value === "held" || value === "archived") {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_archive_status:${value}`);
 }
 
 function toHandoverPostCompletionFollowUpStatus(value: string) {

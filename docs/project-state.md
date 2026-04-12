@@ -42,6 +42,7 @@
 - The next persisted Phase 4 execution-readiness boundary is now live locally: scheduled handover blockers and snag tracking with visible owner, severity, due time, and audit history
 - The next persisted Phase 4 execution-day boundary is now live locally: scheduled handover records can move into a real in-progress state and then close through a controlled completion summary without provider callbacks
 - The next persisted Phase 4 aftercare boundary is now live locally: completed handover records can capture a manager review and one explicit post-handover follow-up boundary with owner, due time, and resolution summary
+- The next persisted Phase 4 admin-closure boundary is now live locally: completed handover records can capture an archive review plus manual held, ready-to-archive, and archived statuses without external archive automation
 - Phase 5: hardening and enterprise controls
 
 ## Completed Major Slices
@@ -65,6 +66,7 @@
 - Added the next persisted handover slice with scheduled-boundary blocker logging, snag tracking, blocker updates, linked audit events, and live execution-readiness controls
 - Added the next persisted handover slice with explicit execution start, controlled completion, persisted execution timestamps, completion summaries, linked audit events, and live handover-day controls
 - Added the next persisted handover slice with post-completion manager review, explicit aftercare follow-up tracking, resolution summaries, linked audit events, and live post-handover controls
+- Added the next persisted handover slice with administrative closure review, archive hold or ready decisions, manual archived status, linked audit events, and live archive-boundary controls
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -90,6 +92,8 @@
 - Controlled handover completion can only happen from the in-progress boundary and must capture a completion summary on the persisted record
 - Post-handover review and aftercare follow-up can only start after the handover record is completed
 - Post-handover follow-up is explicitly gated by a saved review outcome that requires follow-up
+- Administrative archive review can only start after the handover record is completed, the manager review exists, and any required aftercare follow-up is resolved
+- Archive status is a manual admin boundary on the completed record with `held`, `ready`, and `archived` states; it does not trigger any external archive system
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - The repository uses a versioned `core.hooksPath` pointing to `.githooks`
 - Normal `git push` runs `scripts/verify-push.sh` via `.githooks/pre-push`
@@ -105,7 +109,7 @@
 - Deeper qualification policy logic and approval boundaries beyond the current structured alpha form
 - Redis or BullMQ-backed durable job orchestration beyond the current local alpha worker
 - Leasing-specific rejection reasons and policy rules beyond the current shared document-request model
-- Real outbound customer communication, provider callbacks, broader post-completion workflows, and fully automated handover execution beyond the current planning, dispatch-ready, blocker, in-progress, controlled-completion, and aftercare boundaries
+- Real outbound customer communication, provider callbacks, external archive systems, broader post-completion workflows, and fully automated handover execution beyond the current planning, dispatch-ready, blocker, in-progress, controlled-completion, aftercare, and admin-closure boundaries
 
 ## Risks / Watchouts
 - Arabic UX can degrade quickly if RTL support is not designed from the foundation
@@ -116,7 +120,7 @@
 - The web shell must not drift into mixed fixture and persisted state without an explicit boundary during Phase 2
 - The local `PGlite` alpha store is a development convenience and must not be mistaken for the long-term production deployment model
 - The current local queue model is intentionally transitional and must not be mistaken for the long-term distributed worker architecture
-- Phase 4 should not be overextended prematurely; the current handover slice is intentionally limited to intake, milestone planning, approval-only customer boundaries, internal appointment confirmation, dispatch-ready preparation, blocker tracking, explicit execution start, controlled completion, and a narrow aftercare boundary, not live provider sending or downstream automation
+- Phase 4 should not be overextended prematurely; the current handover slice is intentionally limited to intake, milestone planning, approval-only customer boundaries, internal appointment confirmation, dispatch-ready preparation, blocker tracking, explicit execution start, controlled completion, aftercare, and a narrow admin-closure boundary, not live provider sending, external archiving, or downstream automation
 
 ## Standard Verification
 - `git status --short`

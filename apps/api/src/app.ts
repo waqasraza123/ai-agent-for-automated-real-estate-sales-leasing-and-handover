@@ -14,9 +14,11 @@ import {
   prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   resolveHandoverPostCompletionFollowUpInputSchema,
+  saveHandoverArchiveReviewInputSchema,
   saveHandoverReviewInputSchema,
   scheduleVisitInputSchema,
   startHandoverExecutionInputSchema,
+  updateHandoverArchiveStatusInputSchema,
   updateAutomationStatusInputSchema,
   updateDocumentRequestInputSchema,
   updateHandoverBlockerInputSchema,
@@ -31,6 +33,7 @@ import {
   createPersistedHandoverBlocker,
   createPersistedHandoverPostCompletionFollowUp,
   resolvePersistedHandoverPostCompletionFollowUp,
+  savePersistedHandoverArchiveReview,
   savePersistedHandoverReview,
   startPersistedHandoverExecution,
   WorkflowRuleError,
@@ -46,6 +49,7 @@ import {
   setPersistedAutomationStatus,
   startPersistedHandoverIntake,
   submitWebsiteLead,
+  updatePersistedHandoverArchiveStatus,
   updatePersistedDocumentRequest,
   updatePersistedHandoverBlocker,
   updatePersistedHandoverMilestone,
@@ -555,6 +559,76 @@ export function buildApiApp(dependencies: {
 
     try {
       const handoverCase = await savePersistedHandoverReview(dependencies.store, request.params.handoverCaseId, result.data);
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch<{
+    Params: {
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/archive-review", async (request, reply) => {
+    const result = saveHandoverArchiveReviewInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await savePersistedHandoverArchiveReview(dependencies.store, request.params.handoverCaseId, result.data);
+
+      if (!handoverCase) {
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(200).send(handoverCase);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch<{
+    Params: {
+      handoverCaseId: string;
+    };
+  }>("/v1/handover-cases/:handoverCaseId/archive-status", async (request, reply) => {
+    const result = updateHandoverArchiveStatusInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const handoverCase = await updatePersistedHandoverArchiveStatus(dependencies.store, request.params.handoverCaseId, result.data);
 
       if (!handoverCase) {
         return reply.status(404).send({

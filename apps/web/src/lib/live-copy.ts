@@ -5,6 +5,8 @@ import type {
   DocumentRequestType,
   FollowUpStatus,
   HandoverAppointmentStatus,
+  HandoverArchiveOutcome,
+  HandoverArchiveStatus,
   HandoverBlockerSeverity,
   HandoverBlockerStatus,
   HandoverBlockerType,
@@ -352,6 +354,84 @@ export function getHandoverPostCompletionFollowUpStatusLabel(locale: SupportedLo
     en: {
       open: "Open",
       resolved: "Resolved"
+    }
+  } as const;
+
+  return labels[locale][status];
+}
+
+export function getHandoverArchiveReviewCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "حفظ مراجعة الأرشفة",
+      holdForReview: "تعليق للمراجعة",
+      outcome: "نتيجة الإغلاق",
+      readyToArchive: "جاهز للأرشفة",
+      summary: "ملخص الإغلاق الإداري",
+      title: "مراجعة الإغلاق الإداري"
+    };
+  }
+
+  return {
+    action: "Save archive review",
+    holdForReview: "Hold for review",
+    outcome: "Closure outcome",
+    readyToArchive: "Ready to archive",
+    summary: "Administrative closure summary",
+    title: "Administrative closure review"
+  };
+}
+
+export function getHandoverArchiveOutcomeLabel(locale: SupportedLocale, outcome: HandoverArchiveOutcome) {
+  const labels = {
+    ar: {
+      hold_for_review: "تعليق للمراجعة",
+      ready_to_archive: "جاهز للأرشفة"
+    },
+    en: {
+      hold_for_review: "Hold for review",
+      ready_to_archive: "Ready to archive"
+    }
+  } as const;
+
+  return labels[locale][outcome];
+}
+
+export function getHandoverArchiveStatusCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "حفظ حالة الأرشفة",
+      archived: "مؤرشف",
+      held: "معلق",
+      ready: "جاهز",
+      status: "حالة الأرشفة",
+      summary: "ملخص حالة الأرشفة",
+      title: "حالة الأرشفة الإدارية"
+    };
+  }
+
+  return {
+    action: "Save archive status",
+    archived: "Archived",
+    held: "Held",
+    ready: "Ready",
+    status: "Archive status",
+    summary: "Archive status summary",
+    title: "Administrative archive status"
+  };
+}
+
+export function getHandoverArchiveStatusLabel(locale: SupportedLocale, status: HandoverArchiveStatus) {
+  const labels = {
+    ar: {
+      archived: "مؤرشف",
+      held: "معلق",
+      ready: "جاهز للأرشفة"
+    },
+    en: {
+      archived: "Archived",
+      held: "Held for review",
+      ready: "Ready to archive"
     }
   } as const;
 

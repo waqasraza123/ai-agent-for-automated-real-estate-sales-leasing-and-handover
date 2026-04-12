@@ -16,10 +16,12 @@ import type {
   PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ResolveHandoverPostCompletionFollowUpInput,
+  SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
   ScheduleVisitInput,
   StartHandoverExecutionInput,
   UpdateAutomationStatusInput,
+  UpdateHandoverArchiveStatusInput,
   UpdateHandoverBlockerInput,
   UpdateDocumentRequestInput,
   UpdateHandoverMilestoneInput,
@@ -475,7 +477,9 @@ export async function savePersistedHandoverReview(
       handoverCase.appointment,
       handoverCase.blockers,
       nextReview,
-      handoverCase.postCompletionFollowUp
+      handoverCase.postCompletionFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
       handoverCase.status,
@@ -485,7 +489,71 @@ export async function savePersistedHandoverReview(
       handoverCase.appointment,
       handoverCase.blockers,
       nextReview,
-      handoverCase.postCompletionFollowUp
+      handoverCase.postCompletionFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
+    ),
+    nextHandoverStatus: handoverCase.status
+  });
+}
+
+export async function savePersistedHandoverArchiveReview(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  input: SaveHandoverArchiveReviewInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  if (handoverCase.status !== "completed") {
+    throw new WorkflowRuleError("handover_archive_review_not_ready");
+  }
+
+  if (!handoverCase.review) {
+    throw new WorkflowRuleError("handover_archive_review_requires_review");
+  }
+
+  if (handoverCase.review.outcome === "follow_up_required" && handoverCase.postCompletionFollowUp?.status !== "resolved") {
+    throw new WorkflowRuleError("handover_archive_review_requires_follow_up_resolution");
+  }
+
+  const nextArchiveReview = {
+    createdAt: handoverCase.archiveReview?.createdAt ?? new Date().toISOString(),
+    outcome: input.outcome,
+    reviewId: handoverCase.archiveReview?.reviewId ?? "pending",
+    summary: input.summary,
+    updatedAt: new Date().toISOString()
+  };
+
+  return store.saveHandoverArchiveReview(handoverCaseId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers,
+      handoverCase.review,
+      handoverCase.postCompletionFollowUp,
+      nextArchiveReview,
+      handoverCase.archiveStatus
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers,
+      handoverCase.review,
+      handoverCase.postCompletionFollowUp,
+      nextArchiveReview,
+      handoverCase.archiveStatus
     ),
     nextHandoverStatus: handoverCase.status
   });
@@ -533,7 +601,9 @@ export async function createPersistedHandoverPostCompletionFollowUp(
       handoverCase.appointment,
       handoverCase.blockers,
       handoverCase.review,
-      nextFollowUp
+      nextFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
       handoverCase.status,
@@ -543,7 +613,9 @@ export async function createPersistedHandoverPostCompletionFollowUp(
       handoverCase.appointment,
       handoverCase.blockers,
       handoverCase.review,
-      nextFollowUp
+      nextFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
     ),
     nextHandoverStatus: handoverCase.status
   });
@@ -592,7 +664,9 @@ export async function resolvePersistedHandoverPostCompletionFollowUp(
       handoverCase.appointment,
       handoverCase.blockers,
       handoverCase.review,
-      nextFollowUp
+      nextFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
     ),
     nextActionDueAt: getHandoverCaseNextActionDueAt(
       handoverCase.status,
@@ -602,7 +676,79 @@ export async function resolvePersistedHandoverPostCompletionFollowUp(
       handoverCase.appointment,
       handoverCase.blockers,
       handoverCase.review,
-      nextFollowUp
+      nextFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
+    ),
+    nextHandoverStatus: handoverCase.status
+  });
+}
+
+export async function updatePersistedHandoverArchiveStatus(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  input: UpdateHandoverArchiveStatusInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  if (handoverCase.status !== "completed") {
+    throw new WorkflowRuleError("handover_archive_status_not_ready");
+  }
+
+  if (!handoverCase.archiveReview) {
+    throw new WorkflowRuleError("handover_archive_status_requires_review");
+  }
+
+  if (input.status === "held" && handoverCase.archiveReview.outcome !== "hold_for_review") {
+    throw new WorkflowRuleError("handover_archive_status_outcome_mismatch");
+  }
+
+  if (input.status === "ready" && handoverCase.archiveReview.outcome !== "ready_to_archive") {
+    throw new WorkflowRuleError("handover_archive_status_outcome_mismatch");
+  }
+
+  if (input.status === "archived" && handoverCase.archiveStatus?.status !== "ready") {
+    throw new WorkflowRuleError("handover_archive_status_requires_ready");
+  }
+
+  const nextArchiveStatus = {
+    createdAt: handoverCase.archiveStatus?.createdAt ?? new Date().toISOString(),
+    status: input.status,
+    statusId: handoverCase.archiveStatus?.statusId ?? "pending",
+    summary: input.summary,
+    updatedAt: new Date().toISOString()
+  };
+
+  return store.updateHandoverArchiveStatus(handoverCaseId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers,
+      handoverCase.review,
+      handoverCase.postCompletionFollowUp,
+      handoverCase.archiveReview,
+      nextArchiveStatus
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      handoverCase.customerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers,
+      handoverCase.review,
+      handoverCase.postCompletionFollowUp,
+      handoverCase.archiveReview,
+      nextArchiveStatus
     ),
     nextHandoverStatus: handoverCase.status
   });

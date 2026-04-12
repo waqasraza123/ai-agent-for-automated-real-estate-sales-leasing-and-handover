@@ -17,10 +17,12 @@ import {
   prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   resolveHandoverPostCompletionFollowUpInputSchema,
+  saveHandoverArchiveReviewInputSchema,
   scheduleVisitInputSchema,
   saveHandoverReviewInputSchema,
   startHandoverExecutionInputSchema,
   supportedLocaleSchema,
+  updateHandoverArchiveStatusInputSchema,
   updateAutomationStatusInputSchema,
   updateDocumentRequestInputSchema,
   updateHandoverBlockerInputSchema,
@@ -44,9 +46,11 @@ import {
   prepareHandoverCustomerUpdateDelivery,
   qualifyCase,
   resolveHandoverPostCompletionFollowUp,
+  saveHandoverArchiveReview,
   scheduleVisit,
   saveHandoverReview,
   startHandoverExecution,
+  updateHandoverArchiveStatus,
   updateAutomationStatus,
   updateDocumentRequest,
   updateHandoverBlocker,
@@ -578,6 +582,53 @@ export async function saveHandoverReviewAction(_: FormActionState, formData: For
   }
 }
 
+export async function saveHandoverArchiveReviewAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = saveHandoverArchiveReviewInputSchema.safeParse({
+    outcome: formData.get("outcome"),
+    summary: formData.get("summary")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await saveHandoverArchiveReview(handoverCaseId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم حفظ مراجعة الإغلاق الإداري على سجل التسليم المكتمل."
+          : "The administrative closure review was saved on the completed handover record.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن حفظ مراجعة الأرشفة قبل اكتمال التسليم وحفظ المراجعة الأساسية وإغلاق أي متابعة مطلوبة."
+            : "The archive review requires a completed handover, a saved manager review, and any required post-handover follow-up to be resolved first.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
 export async function createHandoverPostCompletionFollowUpAction(
   _: FormActionState,
   formData: FormData
@@ -674,6 +725,53 @@ export async function resolveHandoverPostCompletionFollowUpAction(
           locale === "ar"
             ? "لا يمكن إغلاق المتابعة قبل وجود متابعة مفتوحة على السجل المكتمل."
             : "The follow-up cannot be resolved until an open post-handover follow-up exists on the completed record.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function updateHandoverArchiveStatusAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = updateHandoverArchiveStatusInputSchema.safeParse({
+    status: formData.get("status"),
+    summary: formData.get("summary")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await updateHandoverArchiveStatus(handoverCaseId, result.data);
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم تحديث حالة الأرشفة الإدارية على السجل المكتمل."
+          : "The archive boundary status was updated on the completed record.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "تحديث حالة الأرشفة يعتمد على نتيجة مراجعة الإغلاق وتسلسل جاهز ثم مؤرشف."
+            : "Archive status changes depend on the closure-review outcome and the required ready-then-archived sequence.",
         status: "error"
       };
     }

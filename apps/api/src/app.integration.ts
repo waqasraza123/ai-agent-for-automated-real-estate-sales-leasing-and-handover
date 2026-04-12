@@ -569,6 +569,78 @@ describe("lead capture api", () => {
     expect(resolveFollowUpResponse.json().postCompletionFollowUp.status).toBe("resolved");
     expect(resolveFollowUpResponse.json().postCompletionFollowUp.resolutionSummary).toContain("Access cards");
 
+    const archiveReviewResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        outcome: "hold_for_review",
+        summary: "Administrative closure should stay on hold until the aftercare resolution is double-checked by the manager."
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/archive-review`
+    });
+
+    expect(archiveReviewResponse.statusCode).toBe(200);
+    expect(archiveReviewResponse.json().archiveReview.outcome).toBe("hold_for_review");
+
+    const invalidArchiveReadyResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "ready",
+        summary: "Attempt to promote the record to archive-ready while the closure review still requires a hold."
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/archive-status`
+    });
+
+    expect(invalidArchiveReadyResponse.statusCode).toBe(409);
+    expect(invalidArchiveReadyResponse.json().error).toBe("handover_archive_status_outcome_mismatch");
+
+    const archiveHeldResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "held",
+        summary: "Administrative closure remains on hold until the manager signs off the completed record."
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/archive-status`
+    });
+
+    expect(archiveHeldResponse.statusCode).toBe(200);
+    expect(archiveHeldResponse.json().archiveStatus.status).toBe("held");
+
+    const archiveReviewReadyResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        outcome: "ready_to_archive",
+        summary: "The completed record passed the final admin closure review and can move into archive readiness."
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/archive-review`
+    });
+
+    expect(archiveReviewReadyResponse.statusCode).toBe(200);
+    expect(archiveReviewReadyResponse.json().archiveReview.outcome).toBe("ready_to_archive");
+
+    const archiveReadyResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "ready",
+        summary: "Administrative closure is complete and the handover record is ready to archive."
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/archive-status`
+    });
+
+    expect(archiveReadyResponse.statusCode).toBe(200);
+    expect(archiveReadyResponse.json().archiveStatus.status).toBe("ready");
+
+    const archivedResponse = await app.inject({
+      method: "PATCH",
+      payload: {
+        status: "archived",
+        summary: "The completed handover record was archived after the ready-to-archive boundary was confirmed."
+      },
+      url: `/v1/handover-cases/${handoverCaseId}/archive-status`
+    });
+
+    expect(archivedResponse.statusCode).toBe(200);
+    expect(archivedResponse.json().archiveStatus.status).toBe("archived");
+
     const refreshedCaseResponse = await app.inject({
       method: "GET",
       url: `/v1/cases/${createdCase.caseId}`
@@ -576,6 +648,7 @@ describe("lead capture api", () => {
 
     expect(refreshedCaseResponse.statusCode).toBe(200);
     expect(refreshedCaseResponse.json().handoverCase.status).toBe("completed");
+    expect(refreshedCaseResponse.json().handoverCase.handoverCaseId).toBe(handoverCaseId);
   }, 50000);
 
   it("rejects invalid payloads and invalid handover promotion attempts", async () => {

@@ -6,6 +6,8 @@ import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { HandoverAppointmentConfirmationForm } from "@/components/handover-appointment-confirmation-form";
 import { HandoverAppointmentForm } from "@/components/handover-appointment-form";
+import { HandoverArchiveReviewForm } from "@/components/handover-archive-review-form";
+import { HandoverArchiveStatusForm } from "@/components/handover-archive-status-form";
 import { HandoverBlockerForm } from "@/components/handover-blocker-form";
 import { HandoverBlockerStatusForm } from "@/components/handover-blocker-status-form";
 import { HandoverCompletionForm } from "@/components/handover-completion-form";
@@ -25,6 +27,8 @@ import { TimelinePanel } from "@/components/timeline-panel";
 import {
   buildCaseReferenceCode,
   getPersistedHandoverAppointmentDisplay,
+  getPersistedHandoverArchiveReviewDisplay,
+  getPersistedHandoverArchiveStatusDisplay,
   getPersistedHandoverBlockerDisplay,
   getPersistedHandoverCustomerUpdateDisplay,
   getPersistedHandoverMilestoneDisplay,
@@ -54,8 +58,22 @@ export default async function HandoverPage(props: PageProps) {
     const customerUpdateItems = getPersistedHandoverCustomerUpdateDisplay(locale, persistedHandoverCase);
     const reviewItem = getPersistedHandoverReviewDisplay(locale, persistedHandoverCase);
     const postCompletionFollowUpItem = getPersistedHandoverPostCompletionFollowUpDisplay(locale, persistedHandoverCase);
+    const archiveReviewItem = getPersistedHandoverArchiveReviewDisplay(locale, persistedHandoverCase);
+    const archiveStatusItem = getPersistedHandoverArchiveStatusDisplay(locale, persistedHandoverCase);
     const appointmentHoldMilestone = milestoneItems.find((milestone) => milestone.type === "handover_appointment_hold");
     const appointmentConfirmationUpdate = customerUpdateItems.find((customerUpdate) => customerUpdate.type === "appointment_confirmation");
+    const canManageArchiveBoundary =
+      persistedHandoverCase.status === "completed" &&
+      Boolean(reviewItem) &&
+      (reviewItem?.outcome !== "follow_up_required" || postCompletionFollowUpItem?.status === "resolved");
+    const archiveStatusOptions =
+      archiveReviewItem?.outcome === "hold_for_review"
+        ? (["held"] as const)
+        : archiveStatusItem?.status === "ready"
+          ? (["ready", "archived"] as const)
+          : archiveStatusItem?.status === "archived"
+            ? (["archived"] as const)
+            : (["ready"] as const);
 
     return (
       <div className="page-stack">
@@ -301,6 +319,87 @@ export default async function HandoverPage(props: PageProps) {
                   {locale === "ar"
                     ? "تظهر متابعة ما بعد التسليم بعد حفظ مراجعة تطلب المتابعة على سجل مكتمل."
                     : "Post-handover follow-up opens after a saved review that requires follow-up on a completed record."}
+                </p>
+              )}
+            </div>
+          </Panel>
+        </div>
+
+        <div className="two-column-grid">
+          <Panel title={locale === "ar" ? "مراجعة الإغلاق الإداري" : "Administrative closure review"}>
+            <div className="page-stack">
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "بعد اكتمال السجل وإغلاق أي متابعة مطلوبة، احفظ قرار الإغلاق الإداري لتحديد ما إذا كان السجل جاهزاً للأرشفة أو يحتاج إلى تعليق يدوي."
+                  : "Once the handover is complete and any required aftercare is resolved, save the administrative closure decision to mark whether the record is ready to archive or should remain on hold."}
+              </p>
+              {archiveReviewItem ? (
+                <div className="detail-grid">
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "النتيجة الحالية" : "Current outcome"}</p>
+                    <p>{archiveReviewItem.outcomeLabel}</p>
+                  </div>
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
+                    <p>{archiveReviewItem.updatedAt}</p>
+                  </div>
+                </div>
+              ) : null}
+              {canManageArchiveBoundary ? (
+                <HandoverArchiveReviewForm
+                  handoverCaseId={persistedHandoverCase.handoverCaseId}
+                  locale={locale}
+                  outcome={archiveReviewItem?.outcome ?? "ready_to_archive"}
+                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                  summary={archiveReviewItem?.summary ?? ""}
+                />
+              ) : (
+                <p className="panel-summary">
+                  {locale === "ar"
+                    ? "تظهر مراجعة الأرشفة بعد اكتمال السجل الأساسي وحفظ مراجعة المدير وإغلاق أي متابعة مطلوبة."
+                    : "The archive review opens after completion, a saved manager review, and any required post-handover follow-up resolution."}
+                </p>
+              )}
+            </div>
+          </Panel>
+
+          <Panel title={locale === "ar" ? "حالة الأرشفة الإدارية" : "Administrative archive status"}>
+            <div className="page-stack">
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "هذه الحدود لا تشغل أي نظام أرشفة خارجي، لكنها تجعل قرار الإغلاق الإداري مرئياً: تعليق، جاهز للأرشفة، ثم مؤرشف."
+                  : "This boundary does not trigger any external archiving system. It simply makes administrative closure visible as held, ready to archive, and then archived."}
+              </p>
+              {archiveStatusItem ? (
+                <div className="detail-grid">
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "الحالة الحالية" : "Current status"}</p>
+                    <StatusBadge tone={archiveStatusItem.statusTone}>{archiveStatusItem.statusLabel}</StatusBadge>
+                  </div>
+                  <div>
+                    <p className="detail-label">{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
+                    <p>{archiveStatusItem.updatedAt}</p>
+                  </div>
+                  <div className="field-span-full">
+                    <p className="detail-label">{locale === "ar" ? "الملخص الحالي" : "Current summary"}</p>
+                    <p>{archiveStatusItem.summary}</p>
+                  </div>
+                </div>
+              ) : null}
+              {canManageArchiveBoundary && archiveReviewItem ? (
+                <HandoverArchiveStatusForm
+                  handoverCaseId={persistedHandoverCase.handoverCaseId}
+                  locale={locale}
+                  returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
+                  status={archiveStatusItem?.status ?? archiveStatusOptions[0]}
+                  statusOptions={[...archiveStatusOptions]}
+                  summary={archiveStatusItem?.summary ?? archiveReviewItem.summary}
+                />
+              ) : (
+                <p className="panel-summary">
+                  {locale === "ar"
+                    ? "تظهر حالة الأرشفة بعد حفظ مراجعة الإغلاق الإداري على السجل المكتمل."
+                    : "Archive status becomes available after the administrative closure review is saved on the completed record."}
                 </p>
               )}
             </div>
