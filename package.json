@@ -5,9 +5,10 @@
   "packageManager": "pnpm@10.11.1",
   "scripts": {
     "build": "turbo run build",
-    "clean": "rm -rf .turbo node_modules apps/web/.next apps/api/.data apps/api/dist coverage playwright-report test-results",
+    "clean": "rm -rf .turbo node_modules apps/web/.next apps/api/.data apps/api/dist apps/worker/dist coverage playwright-report test-results",
     "dev": "pnpm --filter @real-estate-ai/web dev",
     "dev:api": "pnpm --filter @real-estate-ai/api dev",
+    "dev:worker": "pnpm --filter @real-estate-ai/worker dev",
     "dev:web": "pnpm --filter @real-estate-ai/web dev",
     "lint": "eslint .",
     "setup:githooks": "git config core.hooksPath .githooks && chmod +x .githooks/pre-push scripts/verify-push.sh scripts/safe-push.sh",

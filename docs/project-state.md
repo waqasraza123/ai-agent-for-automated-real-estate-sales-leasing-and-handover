@@ -8,13 +8,14 @@
 - Product positioning is now defined as a premium bilingual operating layer for sales, leasing, and handover operations
 
 ## Current Architecture
-- Implemented architecture now includes a TypeScript monorepo foundation with `apps/web` and `apps/api`
+- Implemented architecture now includes a TypeScript monorepo foundation with `apps/web`, `apps/api`, and `apps/worker`
 - Shared packages implemented are `domain`, `i18n`, `ui`, `testing`, `contracts`, `database`, and `workflows`
 - Root tooling now includes `pnpm` workspaces, `turbo`, TypeScript base config, ESLint, Vitest, Playwright, and a versioned pre-push safety system
 - The web application is now a hybrid Next.js App Router shell: premium seeded Phase 1 surfaces remain available, while the lead intake, lead detail, scheduling, documents, and manager routes can use persisted alpha data from `apps/api`
-- The API application is a Fastify service with schema-validated website lead intake, qualification, visit scheduling, document status mutation, and manager-readable case list and case detail endpoints
-- The current persisted alpha store uses Drizzle over local `PGlite` for safe Phase 2 development without introducing remote infrastructure
-- `apps/worker`, `integrations`, `analytics`, and `config` remain planned and unimplemented
+- The API application is a Fastify service with schema-validated website lead intake, qualification, visit scheduling, follow-up-plan mutation, automation control, document state mutation, and manager-readable case list and case detail endpoints
+- The worker application is a narrow background follow-up processor that polls the local alpha queue, opens overdue manager interventions, and respects per-case automation pause or resume state
+- The current persisted alpha store uses Drizzle over local `PGlite` for safe Phase 2 and early Phase 3 development without introducing remote infrastructure
+- `integrations`, `analytics`, and `config` remain planned and unimplemented
 - Durable memory is kept in `docs/project-state.md`
 - Local working memory is kept in `docs/_local/current-session.md` and must remain uncommitted
 
@@ -32,7 +33,7 @@
 - Phase 2: functional alpha covering lead capture to qualification to visit scheduling to follow-up to manager review
 - Core Phase 2 is now live locally through the website lead -> qualification -> visit scheduling -> manager review path
 - Phase 3: leasing and document workflows
-- The first Phase 3 slice is now live locally through persisted document request tracking and manager-visible document state changes
+- Early Phase 3 is now live locally through persisted document request tracking, queue-backed follow-up interventions, automation pause or resume controls, and manager follow-up reset actions
 - Phase 4: handover command center
 - Phase 5: hardening and enterprise controls
 
@@ -49,6 +50,7 @@
 - Added `apps/api` plus shared `contracts`, `database`, and `workflows` packages with integration-tested lead intake and case retrieval endpoints
 - Extended the persisted alpha slice across the web app with live website lead submission, persisted lead detail routes, qualification updates, visit scheduling, and manager review
 - Added the first persisted document workflow slice with seeded document requirements, status updates, audit events, and live document-center rendering
+- Added `apps/worker` plus queue-backed overdue follow-up processing, persisted manager interventions, automation pause or resume controls, and manager follow-up reset actions
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -64,6 +66,7 @@
 - Phase 1A intentionally uses seeded local fixtures instead of real persistence, live AI execution, or external providers
 - The first persisted Phase 2 slice uses local `PGlite` with Drizzle for safe local development while keeping PostgreSQL as the production persistence target
 - Website lead intake is the first persistence-backed workflow boundary before qualification, scheduling, or follow-up automation are introduced
+- The first background-automation slice uses a local `PGlite` queue model in `apps/worker` before Redis or BullMQ are introduced
 - The web app intentionally falls back to seeded demo data when `apps/api` is unavailable so the premium shell remains buildable and demo-safe
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - The repository uses a versioned `core.hooksPath` pointing to `.githooks`
@@ -71,7 +74,6 @@
 - `pnpm safe-push` is the preferred AI-facing push command
 
 ## Deferred / Not Yet Implemented
-- Worker services and durable background job orchestration
 - Authentication and authorization
 - External integrations
 - Dashboards and analytics
@@ -79,7 +81,7 @@
 - Real provider integrations
 - Real AI execution and automation enforcement
 - Deeper qualification policy logic and approval boundaries beyond the current structured alpha form
-- Follow-up automation, SLA workers, and explicit manager intervention actions beyond current due-state visibility
+- Redis or BullMQ-backed durable job orchestration beyond the current local alpha worker
 - Leasing-specific rejection reasons and policy rules beyond the current shared document-request model
 - Production-capable handover creation and milestone workflows from persisted upstream cases
 
@@ -91,6 +93,7 @@
 - AI trust will fail quickly if escalation, approval, and inspection paths are not explicit
 - The web shell must not drift into mixed fixture and persisted state without an explicit boundary during Phase 2
 - The local `PGlite` alpha store is a development convenience and must not be mistaken for the long-term production deployment model
+- The current local queue model is intentionally transitional and must not be mistaken for the long-term distributed worker architecture
 - Phase 4 should not be forced prematurely; persisted handover needs a clean upstream trigger from a more mature deal lifecycle rather than a fake shortcut
 
 ## Standard Verification

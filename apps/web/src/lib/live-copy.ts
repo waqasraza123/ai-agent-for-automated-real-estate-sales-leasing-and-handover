@@ -1,11 +1,49 @@
 import type {
+  AutomationStatus,
   CaseStage,
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
+  ManagerInterventionSeverity,
+  ManagerInterventionType,
   QualificationReadiness,
   SupportedLocale
 } from "@real-estate-ai/contracts";
+
+export function getAutomationStatusCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "تحديث حالة الأتمتة",
+      active: "تشغيل الأتمتة",
+      paused: "إيقاف الأتمتة",
+      summary: "أوقف أو استأنف إنشاء تنبيهات المتابعة للحالة الحالية.",
+      title: "التحكم في الأتمتة"
+    };
+  }
+
+  return {
+    action: "Update automation",
+    active: "Resume automation",
+    paused: "Pause automation",
+    summary: "Pause or resume follow-up intervention generation for the current case.",
+    title: "Automation control"
+  };
+}
+
+export function getAutomationStatusLabel(locale: SupportedLocale, status: AutomationStatus) {
+  const labels = {
+    ar: {
+      active: "نشطة",
+      paused: "متوقفة"
+    },
+    en: {
+      active: "Active",
+      paused: "Paused"
+    }
+  } as const;
+
+  return labels[locale][status];
+}
 
 export function getCaseStageLabel(locale: SupportedLocale, stage: CaseStage) {
   const labels = {
@@ -79,6 +117,28 @@ export function getDocumentRequestTypeLabel(locale: SupportedLocale, type: Docum
   return labels[locale][type];
 }
 
+export function getFollowUpManagerCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "حفظ خطة المتابعة",
+      nextAction: "الخطوة التالية",
+      nextActionDueAt: "موعد الخطوة التالية",
+      ownerName: "المالك الحالي",
+      summary: "تحديث الخطوة التالية وموعدها وإسنادها لإزالة التدخل المفتوح وإعادة جدولة المتابعة.",
+      title: "تدخل المدير"
+    };
+  }
+
+  return {
+    action: "Save follow-up plan",
+    nextAction: "Next action",
+    nextActionDueAt: "Next action due",
+    ownerName: "Current owner",
+    summary: "Update the next step, due time, and ownership to clear the open intervention and re-arm follow-up.",
+    title: "Manager intervention"
+  };
+}
+
 export function getFollowUpStatusLabel(locale: SupportedLocale, status: FollowUpStatus) {
   const labels = {
     ar: {
@@ -92,6 +152,42 @@ export function getFollowUpStatusLabel(locale: SupportedLocale, status: FollowUp
   } as const;
 
   return labels[locale][status];
+}
+
+export function getInterventionCountLabel(locale: SupportedLocale, count: number) {
+  if (locale === "ar") {
+    return count === 1 ? "تدخل مفتوح واحد" : `${count} تدخلات مفتوحة`;
+  }
+
+  return count === 1 ? "1 open intervention" : `${count} open interventions`;
+}
+
+export function getInterventionSeverityLabel(locale: SupportedLocale, severity: ManagerInterventionSeverity) {
+  const labels = {
+    ar: {
+      critical: "حرج",
+      warning: "يتطلب متابعة"
+    },
+    en: {
+      critical: "Critical",
+      warning: "Needs review"
+    }
+  } as const;
+
+  return labels[locale][severity];
+}
+
+export function getInterventionSummary(locale: SupportedLocale, type: ManagerInterventionType) {
+  const summaries = {
+    ar: {
+      follow_up_overdue: "تجاوزت الخطوة التالية موعدها المحدد وتحتاج إلى تدخل المدير."
+    },
+    en: {
+      follow_up_overdue: "The next action is overdue and now requires manager intervention."
+    }
+  } as const;
+
+  return summaries[locale][type];
 }
 
 export function getIntakeCopy(locale: SupportedLocale) {

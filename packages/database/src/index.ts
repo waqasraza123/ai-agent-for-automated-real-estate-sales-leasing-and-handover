@@ -2,26 +2,33 @@ import { randomUUID } from "node:crypto";
 
 import { PGlite } from "@electric-sql/pglite";
 import type {
+  AutomationStatus,
   CaseStage,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
+  ManageCaseFollowUpInput,
+  ManagerInterventionSeverity,
+  ManagerInterventionStatus,
+  ManagerInterventionType,
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedDocumentRequest,
+  PersistedManagerIntervention,
   QualifyCaseInput,
   QualificationReadiness,
   ScheduleVisitInput,
   SupportedLocale
 } from "@real-estate-ai/contracts";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const defaultOwnerName = "Revenue Ops Queue";
 const defaultDocumentTypes: DocumentRequestType[] = ["government_id", "proof_of_funds", "employment_letter"];
+const followUpWatchJobType = "follow_up_watch";
 
 const leads = pgTable("leads", {
   budget: text("budget"),
@@ -40,6 +47,7 @@ const leads = pgTable("leads", {
 });
 
 const cases = pgTable("cases", {
+  automationStatus: text("automation_status").notNull(),
   createdAt: timestamp("created_at", {
     mode: "string",
     withTimezone: true
@@ -122,6 +130,55 @@ const documentRequests = pgTable("document_requests", {
   }).defaultNow().notNull()
 });
 
+const managerInterventions = pgTable("manager_interventions", {
+  caseId: uuid("case_id")
+    .notNull()
+    .references(() => cases.id, {
+      onDelete: "cascade"
+    }),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true
+  }).defaultNow().notNull(),
+  id: uuid("id").primaryKey(),
+  resolutionNote: text("resolution_note"),
+  resolvedAt: timestamp("resolved_at", {
+    mode: "string",
+    withTimezone: true
+  }),
+  severity: text("severity").notNull(),
+  status: text("status").notNull(),
+  summary: text("summary").notNull(),
+  type: text("type").notNull(),
+  updatedAt: timestamp("updated_at", {
+    mode: "string",
+    withTimezone: true
+  }).defaultNow().notNull()
+});
+
+const automationJobs = pgTable("automation_jobs", {
+  caseId: uuid("case_id")
+    .notNull()
+    .references(() => cases.id, {
+      onDelete: "cascade"
+    }),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true
+  }).defaultNow().notNull(),
+  id: uuid("id").primaryKey(),
+  jobType: text("job_type").notNull(),
+  runAfter: timestamp("run_after", {
+    mode: "string",
+    withTimezone: true
+  }).notNull(),
+  status: text("status").notNull(),
+  updatedAt: timestamp("updated_at", {
+    mode: "string",
+    withTimezone: true
+  }).defaultNow().notNull()
+});
+
 const auditEvents = pgTable("audit_events", {
   caseId: uuid("case_id")
     .notNull()
@@ -136,6 +193,12 @@ const auditEvents = pgTable("audit_events", {
   id: uuid("id").primaryKey(),
   payload: jsonb("payload").$type<Record<string, unknown>>().notNull()
 });
+
+export interface FollowUpCycleResult {
+  openedInterventions: number;
+  processedJobs: number;
+  touchedCaseIds: string[];
+}
 
 export interface LeadCaptureStore {
   applyQualification(
@@ -152,11 +215,22 @@ export interface LeadCaptureStore {
   }): Promise<CreateWebsiteLeadResult>;
   getCaseDetail(caseId: string): Promise<PersistedCaseDetail | null>;
   listCases(): Promise<PersistedCaseSummary[]>;
+  manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail | null>;
+  runDueFollowUpCycle(input: {
+    limit: number;
+    runAt: string;
+  }): Promise<FollowUpCycleResult>;
   scheduleVisit(
     caseId: string,
     input: ScheduleVisitInput & {
       nextAction: string;
       nextActionDueAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
+  setAutomationStatus(
+    caseId: string,
+    input: {
+      status: AutomationStatus;
     }
   ): Promise<PersistedCaseDetail | null>;
   updateDocumentRequestStatus(
@@ -178,9 +252,11 @@ export async function createAlphaLeadCaptureStore(options?: {
   const db = drizzle(client, {
     schema: {
       auditEvents,
+      automationJobs,
       cases,
       documentRequests,
       leads,
+      managerInterventions,
       qualificationSnapshots,
       visits
     }
@@ -207,9 +283,12 @@ export async function createAlphaLeadCaptureStore(options?: {
       owner_name text not null,
       current_next_action text not null,
       next_action_due_at timestamptz not null,
+      automation_status text not null default 'active',
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
+
+    alter table cases add column if not exists automation_status text not null default 'active';
 
     create table if not exists qualification_snapshots (
       id uuid primary key,
@@ -239,6 +318,29 @@ export async function createAlphaLeadCaptureStore(options?: {
       updated_at timestamptz not null default now()
     );
 
+    create table if not exists manager_interventions (
+      id uuid primary key,
+      case_id uuid not null references cases(id) on delete cascade,
+      type text not null,
+      severity text not null,
+      status text not null,
+      summary text not null,
+      resolution_note text,
+      resolved_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists automation_jobs (
+      id uuid primary key,
+      case_id uuid not null references cases(id) on delete cascade,
+      job_type text not null,
+      run_after timestamptz not null,
+      status text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
     create table if not exists audit_events (
       id uuid primary key,
       case_id uuid not null references cases(id) on delete cascade,
@@ -251,11 +353,15 @@ export async function createAlphaLeadCaptureStore(options?: {
     create index if not exists visits_case_id_idx on visits (case_id, scheduled_at desc);
     create index if not exists document_requests_case_id_idx on document_requests (case_id, created_at asc);
     create index if not exists audit_events_case_id_idx on audit_events (case_id, created_at asc);
+    create index if not exists manager_interventions_case_id_idx on manager_interventions (case_id, created_at desc);
+    create index if not exists manager_interventions_open_case_idx on manager_interventions (case_id, status);
+    create index if not exists automation_jobs_due_idx on automation_jobs (status, run_after asc);
   `);
 
   const getPersistedCaseDetail = async (caseId: string): Promise<PersistedCaseDetail | null> => {
     const persistedCase = await db
       .select({
+        automationStatus: cases.automationStatus,
         budget: leads.budget,
         caseId: cases.id,
         createdAt: cases.createdAt,
@@ -283,7 +389,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       return null;
     }
 
-    const [caseAuditEvents, qualificationRecord, currentVisit, persistedDocumentRequests] = await Promise.all([
+    const [caseAuditEvents, qualificationRecord, currentVisit, persistedDocumentRequests, persistedInterventions] = await Promise.all([
       db
         .select({
           createdAt: auditEvents.createdAt,
@@ -292,7 +398,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         })
         .from(auditEvents)
         .where(eq(auditEvents.caseId, caseId))
-        .orderBy(auditEvents.createdAt),
+        .orderBy(asc(auditEvents.createdAt)),
       db
         .select({
           budgetBand: qualificationSnapshots.budgetBand,
@@ -325,8 +431,25 @@ export async function createAlphaLeadCaptureStore(options?: {
         })
         .from(documentRequests)
         .where(eq(documentRequests.caseId, caseId))
-        .orderBy(documentRequests.createdAt)
+        .orderBy(asc(documentRequests.createdAt)),
+      db
+        .select({
+          createdAt: managerInterventions.createdAt,
+          interventionId: managerInterventions.id,
+          resolutionNote: managerInterventions.resolutionNote,
+          resolvedAt: managerInterventions.resolvedAt,
+          severity: managerInterventions.severity,
+          status: managerInterventions.status,
+          summary: managerInterventions.summary,
+          type: managerInterventions.type
+        })
+        .from(managerInterventions)
+        .where(eq(managerInterventions.caseId, caseId))
+        .orderBy(desc(managerInterventions.createdAt))
     ]);
+
+    const hydratedInterventions = persistedInterventions.map((intervention) => hydrateManagerIntervention(intervention));
+    const openInterventionsCount = hydratedInterventions.filter((intervention) => intervention.status === "open").length;
 
     return {
       auditEvents: caseAuditEvents.map((event) => ({
@@ -334,6 +457,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         eventType: event.eventType,
         payload: event.payload
       })),
+      automationStatus: toAutomationStatus(caseRecord.automationStatus),
       budget: caseRecord.budget,
       caseId: caseRecord.caseId,
       createdAt: caseRecord.createdAt,
@@ -355,9 +479,11 @@ export async function createAlphaLeadCaptureStore(options?: {
       })),
       email: caseRecord.email,
       followUpStatus: toFollowUpStatus(caseRecord.nextActionDueAt),
+      managerInterventions: hydratedInterventions,
       message: caseRecord.message,
       nextAction: caseRecord.nextAction,
       nextActionDueAt: caseRecord.nextActionDueAt,
+      openInterventionsCount,
       ownerName: caseRecord.ownerName,
       phone: caseRecord.phone,
       preferredLocale: toSupportedLocale(caseRecord.preferredLocale),
@@ -375,6 +501,83 @@ export async function createAlphaLeadCaptureStore(options?: {
       stage: toCaseStage(caseRecord.stage),
       updatedAt: caseRecord.updatedAt
     };
+  };
+
+  const listOpenInterventionCounts = async (caseIds: string[]) => {
+    if (caseIds.length === 0) {
+      return new Map<string, number>();
+    }
+
+    const records = await db
+      .select({
+        caseId: managerInterventions.caseId
+      })
+      .from(managerInterventions)
+      .where(and(inArray(managerInterventions.caseId, caseIds), eq(managerInterventions.status, "open")));
+
+    return records.reduce((counts, record) => {
+      counts.set(record.caseId, (counts.get(record.caseId) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>());
+  };
+
+  const resolveOpenInterventions = async (
+    transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    input: {
+      caseId: string;
+      resolutionNote: string;
+      resolvedAt: string;
+    }
+  ) => {
+    await transaction
+      .update(managerInterventions)
+      .set({
+        resolutionNote: input.resolutionNote,
+        resolvedAt: input.resolvedAt,
+        status: "resolved",
+        updatedAt: input.resolvedAt
+      })
+      .where(
+        and(
+          eq(managerInterventions.caseId, input.caseId),
+          eq(managerInterventions.status, "open"),
+          eq(managerInterventions.type, "follow_up_overdue")
+        )
+      );
+  };
+
+  const syncFollowUpJob = async (
+    transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    input: {
+      automationStatus: AutomationStatus;
+      caseId: string;
+      runAfter: string;
+      updatedAt: string;
+    }
+  ) => {
+    await transaction
+      .update(automationJobs)
+      .set({
+        status: "cancelled",
+        updatedAt: input.updatedAt
+      })
+      .where(
+        and(eq(automationJobs.caseId, input.caseId), eq(automationJobs.jobType, followUpWatchJobType), eq(automationJobs.status, "queued"))
+      );
+
+    if (input.automationStatus === "paused") {
+      return;
+    }
+
+    await transaction.insert(automationJobs).values({
+      caseId: input.caseId,
+      createdAt: input.updatedAt,
+      id: randomUUID(),
+      jobType: followUpWatchJobType,
+      runAfter: input.runAfter,
+      status: "queued",
+      updatedAt: input.updatedAt
+    });
   };
 
   return {
@@ -435,6 +638,13 @@ export async function createAlphaLeadCaptureStore(options?: {
             readiness: input.readiness
           }
         });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
       });
 
       return getPersistedCaseDetail(caseId);
@@ -463,6 +673,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         });
 
         await transaction.insert(cases).values({
+          automationStatus: "active",
           createdAt,
           currentNextAction: input.nextAction,
           id: createdCaseId,
@@ -496,10 +707,18 @@ export async function createAlphaLeadCaptureStore(options?: {
             updatedAt: createdAt
           }))
         );
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: "active",
+          caseId: createdCaseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt: createdAt
+        });
       });
 
       const persistedCase = await db
         .select({
+          automationStatus: cases.automationStatus,
           caseId: cases.id,
           createdAt: cases.createdAt,
           customerName: leads.customerName,
@@ -525,6 +744,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       }
 
       return {
+        automationStatus: toAutomationStatus(createdCase.automationStatus),
         caseId: createdCase.caseId,
         createdAt: createdCase.createdAt,
         customerName: createdCase.customerName,
@@ -532,6 +752,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         leadId: createdCase.leadId,
         nextAction: createdCase.nextAction,
         nextActionDueAt: createdCase.nextActionDueAt,
+        openInterventionsCount: 0,
         ownerName: createdCase.ownerName,
         preferredLocale: toSupportedLocale(createdCase.preferredLocale),
         projectInterest: createdCase.projectInterest,
@@ -546,6 +767,7 @@ export async function createAlphaLeadCaptureStore(options?: {
     async listCases() {
       const persistedCases = await db
         .select({
+          automationStatus: cases.automationStatus,
           caseId: cases.id,
           createdAt: cases.createdAt,
           customerName: leads.customerName,
@@ -562,13 +784,17 @@ export async function createAlphaLeadCaptureStore(options?: {
         .innerJoin(leads, eq(cases.leadId, leads.id))
         .orderBy(desc(cases.createdAt));
 
+      const openInterventionCounts = await listOpenInterventionCounts(persistedCases.map((caseRecord) => caseRecord.caseId));
+
       return persistedCases.map((caseRecord) => ({
+        automationStatus: toAutomationStatus(caseRecord.automationStatus),
         caseId: caseRecord.caseId,
         createdAt: caseRecord.createdAt,
         customerName: caseRecord.customerName,
         followUpStatus: toFollowUpStatus(caseRecord.nextActionDueAt),
         nextAction: caseRecord.nextAction,
         nextActionDueAt: caseRecord.nextActionDueAt,
+        openInterventionsCount: openInterventionCounts.get(caseRecord.caseId) ?? 0,
         ownerName: caseRecord.ownerName,
         preferredLocale: toSupportedLocale(caseRecord.preferredLocale),
         projectInterest: caseRecord.projectInterest,
@@ -576,6 +802,195 @@ export async function createAlphaLeadCaptureStore(options?: {
         stage: toCaseStage(caseRecord.stage),
         updatedAt: caseRecord.updatedAt
       }));
+    },
+    async manageCaseFollowUp(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+      const nextOwnerName = input.ownerName ?? caseRecord.ownerName;
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            ownerName: nextOwnerName,
+            updatedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await resolveOpenInterventions(transaction, {
+          caseId,
+          resolutionNote: "manager_follow_up_reset",
+          resolvedAt: updatedAt
+        });
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: updatedAt,
+          eventType: "manager_follow_up_updated",
+          id: randomUUID(),
+          payload: {
+            nextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            ownerName: nextOwnerName
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async runDueFollowUpCycle(input) {
+      const dueJobs = await db
+        .select({
+          caseId: automationJobs.caseId,
+          jobId: automationJobs.id,
+          runAfter: automationJobs.runAfter
+        })
+        .from(automationJobs)
+        .where(and(eq(automationJobs.jobType, followUpWatchJobType), eq(automationJobs.status, "queued")))
+        .orderBy(asc(automationJobs.runAfter))
+        .limit(input.limit);
+
+      const dueTimestamp = new Date(input.runAt).getTime();
+      let processedJobs = 0;
+      let openedInterventions = 0;
+      const touchedCaseIds = new Set<string>();
+
+      for (const job of dueJobs) {
+        if (new Date(job.runAfter).getTime() > dueTimestamp) {
+          continue;
+        }
+
+        processedJobs += 1;
+
+        const cycleOutcome = await db.transaction(async (transaction) => {
+          const [caseRecord] = await transaction
+            .select({
+              automationStatus: cases.automationStatus,
+              caseId: cases.id,
+              nextActionDueAt: cases.nextActionDueAt,
+              ownerName: cases.ownerName,
+              preferredLocale: leads.preferredLocale
+            })
+            .from(cases)
+            .innerJoin(leads, eq(cases.leadId, leads.id))
+            .where(eq(cases.id, job.caseId))
+            .limit(1);
+
+          await transaction
+            .update(automationJobs)
+            .set({
+              status: "completed",
+              updatedAt: input.runAt
+            })
+            .where(eq(automationJobs.id, job.jobId));
+
+          if (!caseRecord) {
+            return {
+              caseId: job.caseId,
+              openedIntervention: false
+            };
+          }
+
+          const automationStatus = toAutomationStatus(caseRecord.automationStatus);
+
+          if (automationStatus === "paused") {
+            return {
+              caseId: caseRecord.caseId,
+              openedIntervention: false
+            };
+          }
+
+          if (new Date(caseRecord.nextActionDueAt).getTime() > dueTimestamp) {
+            return {
+              caseId: caseRecord.caseId,
+              openedIntervention: false
+            };
+          }
+
+          const openIntervention = await transaction
+            .select({
+              interventionId: managerInterventions.id
+            })
+            .from(managerInterventions)
+            .where(
+              and(
+                eq(managerInterventions.caseId, caseRecord.caseId),
+                eq(managerInterventions.status, "open"),
+                eq(managerInterventions.type, "follow_up_overdue")
+              )
+            )
+            .limit(1);
+
+          if (openIntervention[0]) {
+            return {
+              caseId: caseRecord.caseId,
+              openedIntervention: false
+            };
+          }
+
+          const overdueHours = Math.max(0, (dueTimestamp - new Date(caseRecord.nextActionDueAt).getTime()) / (60 * 60 * 1000));
+          const severity = overdueHours >= 12 ? "critical" : "warning";
+          const createdAt = input.runAt;
+
+          await transaction.insert(managerInterventions).values({
+            caseId: caseRecord.caseId,
+            createdAt,
+            id: randomUUID(),
+            resolutionNote: null,
+            resolvedAt: null,
+            severity,
+            status: "open",
+            summary: buildFollowUpInterventionSummary(),
+            type: "follow_up_overdue",
+            updatedAt: createdAt
+          });
+
+          await transaction.insert(auditEvents).values({
+            caseId: caseRecord.caseId,
+            createdAt,
+            eventType: "follow_up_intervention_opened",
+            id: randomUUID(),
+            payload: {
+              nextActionDueAt: caseRecord.nextActionDueAt,
+              overdueHours: Number(overdueHours.toFixed(2)),
+              ownerName: caseRecord.ownerName,
+              preferredLocale: caseRecord.preferredLocale,
+              severity
+            }
+          });
+
+          return {
+            caseId: caseRecord.caseId,
+            openedIntervention: true
+          };
+        });
+
+        touchedCaseIds.add(cycleOutcome.caseId);
+
+        if (cycleOutcome.openedIntervention) {
+          openedInterventions += 1;
+        }
+      }
+
+      return {
+        openedInterventions,
+        processedJobs,
+        touchedCaseIds: Array.from(touchedCaseIds)
+      };
     },
     async scheduleVisit(caseId, input) {
       const caseRecord = await getPersistedCaseDetail(caseId);
@@ -617,6 +1032,52 @@ export async function createAlphaLeadCaptureStore(options?: {
             scheduledAt: input.scheduledAt
           }
         });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt: createdAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async setAutomationStatus(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+      const nextStatus = input.status;
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(cases)
+          .set({
+            automationStatus: nextStatus,
+            updatedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: updatedAt,
+          eventType: nextStatus === "paused" ? "automation_paused" : "automation_resumed",
+          id: randomUUID(),
+          payload: {
+            status: nextStatus
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: nextStatus,
+          caseId,
+          runAfter: caseRecord.nextActionDueAt,
+          updatedAt
+        });
       });
 
       return getPersistedCaseDetail(caseId);
@@ -631,6 +1092,12 @@ export async function createAlphaLeadCaptureStore(options?: {
         .limit(1);
 
       if (!documentRequest[0]) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
         return null;
       }
 
@@ -666,11 +1133,52 @@ export async function createAlphaLeadCaptureStore(options?: {
             status: input.status
           }
         });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
       });
 
       return getPersistedCaseDetail(caseId);
     }
   };
+}
+
+function buildFollowUpInterventionSummary() {
+  return "Manager follow-up is required because the next action is overdue.";
+}
+
+function hydrateManagerIntervention(value: {
+  createdAt: string;
+  interventionId: string;
+  resolutionNote: string | null;
+  resolvedAt: string | null;
+  severity: string;
+  status: string;
+  summary: string;
+  type: string;
+}): PersistedManagerIntervention {
+  return {
+    createdAt: value.createdAt,
+    interventionId: value.interventionId,
+    resolutionNote: value.resolutionNote,
+    resolvedAt: value.resolvedAt,
+    severity: toManagerInterventionSeverity(value.severity),
+    status: toManagerInterventionStatus(value.status),
+    summary: value.summary,
+    type: toManagerInterventionType(value.type)
+  };
+}
+
+function toAutomationStatus(value: string): AutomationStatus {
+  if (value === "active" || value === "paused") {
+    return value;
+  }
+
+  throw new Error(`unsupported_automation_status:${value}`);
 }
 
 function toCaseStage(value: string): CaseStage {
@@ -707,6 +1215,30 @@ function toLeadSource(value: string): "website" {
   }
 
   return value;
+}
+
+function toManagerInterventionSeverity(value: string): ManagerInterventionSeverity {
+  if (value === "warning" || value === "critical") {
+    return value;
+  }
+
+  throw new Error(`unsupported_manager_intervention_severity:${value}`);
+}
+
+function toManagerInterventionStatus(value: string): ManagerInterventionStatus {
+  if (value === "open" || value === "resolved") {
+    return value;
+  }
+
+  throw new Error(`unsupported_manager_intervention_status:${value}`);
+}
+
+function toManagerInterventionType(value: string): ManagerInterventionType {
+  if (value === "follow_up_overdue") {
+    return value;
+  }
+
+  throw new Error(`unsupported_manager_intervention_type:${value}`);
 }
 
 function toQualificationReadiness(value: string): QualificationReadiness {

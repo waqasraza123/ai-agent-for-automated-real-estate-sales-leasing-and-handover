@@ -5,14 +5,63 @@ import { redirect } from "next/navigation";
 
 import {
   createWebsiteLeadInputSchema,
+  manageCaseFollowUpInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
   supportedLocaleSchema,
+  updateAutomationStatusInputSchema,
   updateDocumentRequestInputSchema
 } from "@real-estate-ai/contracts";
 
 import { initialFormActionState, type FormActionState } from "@/lib/form-action-state";
-import { WebApiError, createWebsiteLead, qualifyCase, scheduleVisit, updateDocumentRequest } from "@/lib/live-api";
+import {
+  WebApiError,
+  createWebsiteLead,
+  manageCaseFollowUp,
+  qualifyCase,
+  scheduleVisit,
+  updateAutomationStatus,
+  updateDocumentRequest
+} from "@/lib/live-api";
+
+export async function saveManagerFollowUpAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const caseId = formData.get("caseId");
+  const returnPath = formData.get("returnPath");
+  const nextActionDueAt = formData.get("nextActionDueAt");
+
+  if (typeof caseId !== "string" || typeof returnPath !== "string" || typeof nextActionDueAt !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = manageCaseFollowUpInputSchema.safeParse({
+    nextAction: formData.get("nextAction"),
+    nextActionDueAt: toIsoDateTimeOrEmpty(nextActionDueAt),
+    ownerName: normalizeOptionalString(formData.get("ownerName"))
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    await manageCaseFollowUp(caseId, result.data);
+    revalidatePaths(locale, returnPath, caseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم تحديث خطة المتابعة وإزالة التدخل المفتوح."
+          : "The follow-up plan was updated and the open intervention was cleared.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
 
 export async function saveQualificationAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
@@ -39,9 +88,7 @@ export async function saveQualificationAction(_: FormActionState, formData: Form
 
   try {
     await qualifyCase(caseId, result.data);
-    revalidatePath(returnPath);
-    revalidatePath(`/${locale}/leads`);
-    revalidatePath(`/${locale}/manager`);
+    revalidatePaths(locale, returnPath, caseId);
 
     return {
       message: locale === "ar" ? "تم حفظ التأهيل وتحديث الحالة." : "Qualification saved and the case has been updated.",
@@ -76,9 +123,7 @@ export async function scheduleVisitAction(_: FormActionState, formData: FormData
 
   try {
     await scheduleVisit(caseId, result.data);
-    revalidatePath(returnPath);
-    revalidatePath(`/${locale}/leads`);
-    revalidatePath(`/${locale}/manager`);
+    revalidatePaths(locale, returnPath, caseId);
 
     return {
       message: locale === "ar" ? "تم حفظ موعد الزيارة." : "The visit was scheduled successfully.",
@@ -119,6 +164,46 @@ export async function submitWebsiteLeadAction(_: FormActionState, formData: Form
   }
 }
 
+export async function updateAutomationStatusAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const caseId = formData.get("caseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof caseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = updateAutomationStatusInputSchema.safeParse({
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    await updateAutomationStatus(caseId, result.data);
+    revalidatePaths(locale, returnPath, caseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? result.data.status === "paused"
+            ? "تم إيقاف الأتمتة لهذه الحالة."
+            : "تمت إعادة تشغيل الأتمتة لهذه الحالة."
+          : result.data.status === "paused"
+            ? "Automation was paused for this case."
+            : "Automation was resumed for this case.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
 export async function updateDocumentStatusAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
   const caseId = formData.get("caseId");
@@ -142,9 +227,7 @@ export async function updateDocumentStatusAction(_: FormActionState, formData: F
 
   try {
     await updateDocumentRequest(caseId, documentRequestId, result.data);
-    revalidatePath(returnPath);
-    revalidatePath(`/${locale}/leads`);
-    revalidatePath(`/${locale}/manager`);
+    revalidatePaths(locale, returnPath, caseId);
 
     return {
       message: locale === "ar" ? "تم تحديث حالة المستند." : "The document state was updated.",
@@ -160,8 +243,8 @@ function getActionError(locale: "en" | "ar", error: unknown): FormActionState {
     return {
       message:
         locale === "ar"
-          ? "خدمة الواجهة الحية غير متاحة حالياً. شغّل apps/api ثم أعد المحاولة."
-          : "The live alpha API is not available right now. Start apps/api and try again.",
+          ? "خدمة الواجهة الحية غير متاحة حالياً. شغّل apps/api وapps/worker ثم أعد المحاولة."
+          : "The live alpha services are not available right now. Start apps/api and apps/worker, then try again.",
       status: "error"
     };
   }
@@ -193,6 +276,13 @@ function getValidationMessage(locale: "en" | "ar") {
 
 function normalizeOptionalString(value: FormDataEntryValue | null) {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function revalidatePaths(locale: "en" | "ar", returnPath: string, caseId: string) {
+  revalidatePath(returnPath);
+  revalidatePath(`/${locale}/leads`);
+  revalidatePath(`/${locale}/leads/${caseId}`);
+  revalidatePath(`/${locale}/manager`);
 }
 
 function toIsoDateTimeOrEmpty(value: string) {

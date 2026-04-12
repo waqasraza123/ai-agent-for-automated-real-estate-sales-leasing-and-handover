@@ -96,6 +96,18 @@ importers:
         specifier: ^19.1.0
         version: 19.2.5(react@19.2.5)
 
+  apps/worker:
+    dependencies:
+      '@real-estate-ai/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@real-estate-ai/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
+
   packages/contracts:
     dependencies:
       zod:

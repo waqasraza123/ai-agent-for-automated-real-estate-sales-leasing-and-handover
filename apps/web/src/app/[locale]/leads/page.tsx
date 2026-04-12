@@ -9,9 +9,11 @@ import {
   buildCaseReferenceCode,
   formatCaseLastChange,
   formatDueAt,
+  getPersistedAutomationLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel
 } from "@/lib/persisted-case-presenters";
+import { getInterventionCountLabel } from "@/lib/live-copy";
 import { tryListPersistedCases } from "@/lib/live-api";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +71,12 @@ export default async function LeadsPage(props: PageProps) {
                     <td data-column-label={columnLabels.nextAction}>
                       <div className="stack-tight">
                         <span>{caseItem.nextAction}</span>
+                        <div className="status-row-wrap">
+                          <StatusBadge>{getPersistedAutomationLabel(locale, caseItem.automationStatus)}</StatusBadge>
+                          {caseItem.openInterventionsCount > 0 ? (
+                            <StatusBadge tone="warning">{getInterventionCountLabel(locale, caseItem.openInterventionsCount)}</StatusBadge>
+                          ) : null}
+                        </div>
                         <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>
                           {getPersistedFollowUpLabel(locale, caseItem)}
                         </StatusBadge>

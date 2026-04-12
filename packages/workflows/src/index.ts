@@ -1,13 +1,15 @@
 import type {
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  ManageCaseFollowUpInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
   QualifyCaseInput,
   ScheduleVisitInput,
+  UpdateAutomationStatusInput,
   UpdateDocumentRequestInput
 } from "@real-estate-ai/contracts";
-import { deriveDocumentWorkflowNextAction, type LeadCaptureStore } from "@real-estate-ai/database";
+import { deriveDocumentWorkflowNextAction, type FollowUpCycleResult, type LeadCaptureStore } from "@real-estate-ai/database";
 
 export async function getPersistedCaseDetail(store: LeadCaptureStore, caseId: string): Promise<PersistedCaseDetail | null> {
   return store.getCaseDetail(caseId);
@@ -15,6 +17,14 @@ export async function getPersistedCaseDetail(store: LeadCaptureStore, caseId: st
 
 export async function listPersistedCases(store: LeadCaptureStore): Promise<PersistedCaseSummary[]> {
   return store.listCases();
+}
+
+export async function managePersistedCaseFollowUp(
+  store: LeadCaptureStore,
+  caseId: string,
+  input: ManageCaseFollowUpInput
+): Promise<PersistedCaseDetail | null> {
+  return store.manageCaseFollowUp(caseId, input);
 }
 
 export async function qualifyPersistedCase(
@@ -36,6 +46,19 @@ export async function qualifyPersistedCase(
   });
 }
 
+export async function runPersistedFollowUpCycle(
+  store: LeadCaptureStore,
+  input?: {
+    limit?: number;
+    runAt?: string;
+  }
+): Promise<FollowUpCycleResult> {
+  return store.runDueFollowUpCycle({
+    limit: input?.limit ?? 25,
+    runAt: input?.runAt ?? new Date().toISOString()
+  });
+}
+
 export async function schedulePersistedVisit(
   store: LeadCaptureStore,
   caseId: string,
@@ -54,6 +77,16 @@ export async function schedulePersistedVisit(
         ? "إرسال تذكير الزيارة والتأكد من الحضور"
         : "Send the visit reminder and confirm attendance",
     nextActionDueAt: input.scheduledAt
+  });
+}
+
+export async function setPersistedAutomationStatus(
+  store: LeadCaptureStore,
+  caseId: string,
+  input: UpdateAutomationStatusInput
+): Promise<PersistedCaseDetail | null> {
+  return store.setAutomationStatus(caseId, {
+    status: input.status
   });
 }
 

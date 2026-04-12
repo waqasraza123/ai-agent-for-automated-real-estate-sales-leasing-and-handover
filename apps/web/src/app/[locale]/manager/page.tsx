@@ -9,9 +9,11 @@ import { StatefulStack } from "@/components/stateful-stack";
 import {
   buildCaseReferenceCode,
   formatCaseLastChange,
+  getPersistedAutomationLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel
 } from "@/lib/persisted-case-presenters";
+import { getInterventionCountLabel } from "@/lib/live-copy";
 import { tryListPersistedCases } from "@/lib/live-api";
 
 export const dynamic = "force-dynamic";
@@ -24,14 +26,16 @@ export default async function ManagerPage(props: PageProps) {
   const { locale } = await props.params;
   const messages = getMessages(locale);
   const persistedCases = await tryListPersistedCases();
-  const attentionCases = persistedCases.filter((caseItem) => caseItem.followUpStatus === "attention");
+  const attentionCases = persistedCases.filter(
+    (caseItem) => caseItem.followUpStatus === "attention" || caseItem.openInterventionsCount > 0
+  );
 
   return (
     <div className="page-stack">
       <ScreenIntro badge={messages.app.shellNote} summary={messages.manager.summary} title={messages.manager.title} />
 
       <div className="two-column-grid">
-        <Panel title={messages.manager.title}>
+        <Panel title={locale === "ar" ? "حالات تحتاج تدخل المدير" : "Cases that need manager action"}>
           {attentionCases.length > 0 ? (
             <StatefulStack
               emptySummary={messages.states.emptyAlertsSummary}
@@ -40,11 +44,28 @@ export default async function ManagerPage(props: PageProps) {
               renderItem={(caseItem) => (
                 <article key={caseItem.caseId} className="alert-row alert-row-high">
                   <div className="row-between">
-                    <h3>{caseItem.customerName}</h3>
-                    <StatusBadge tone="critical">{getPersistedFollowUpLabel(locale, caseItem)}</StatusBadge>
+                    <div className="stack-tight">
+                      <h3>{caseItem.customerName}</h3>
+                      <p className="case-link-meta">{buildCaseReferenceCode(caseItem.caseId)}</p>
+                    </div>
+                    <div className="status-row-wrap">
+                      <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "warning"}>
+                        {getPersistedFollowUpLabel(locale, caseItem)}
+                      </StatusBadge>
+                      {caseItem.openInterventionsCount > 0 ? (
+                        <StatusBadge tone="warning">{getInterventionCountLabel(locale, caseItem.openInterventionsCount)}</StatusBadge>
+                      ) : null}
+                    </div>
                   </div>
                   <p>{caseItem.nextAction}</p>
                   <p className="case-link-meta">{formatCaseLastChange(caseItem, locale)}</p>
+                  <div className="status-row-wrap">
+                    <StatusBadge>{getPersistedAutomationLabel(locale, caseItem.automationStatus)}</StatusBadge>
+                    <StatusBadge>{getPersistedCaseStageLabel(locale, caseItem.stage)}</StatusBadge>
+                  </div>
+                  <Link className="inline-link" href={`/${locale}/leads/${caseItem.caseId}`}>
+                    {locale === "ar" ? "فتح الحالة" : "Open case"}
+                  </Link>
                 </article>
               )}
             />
@@ -83,6 +104,10 @@ export default async function ManagerPage(props: PageProps) {
                     <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>
                       {getPersistedFollowUpLabel(locale, caseItem)}
                     </StatusBadge>
+                    <StatusBadge>{getPersistedAutomationLabel(locale, caseItem.automationStatus)}</StatusBadge>
+                    {caseItem.openInterventionsCount > 0 ? (
+                      <StatusBadge tone="warning">{getInterventionCountLabel(locale, caseItem.openInterventionsCount)}</StatusBadge>
+                    ) : null}
                     <StatusBadge>{getPersistedCaseStageLabel(locale, caseItem.stage)}</StatusBadge>
                   </div>
                 </Link>

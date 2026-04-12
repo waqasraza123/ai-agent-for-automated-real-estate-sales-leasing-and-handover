@@ -4,21 +4,27 @@ import { getDemoCaseById, getLocalizedText, type SupportedLocale } from "@real-e
 import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
+import { AutomationStatusForm } from "@/components/automation-status-form";
 import { CaseRouteTabs } from "@/components/case-route-tabs";
+import { ManagerFollowUpForm } from "@/components/manager-follow-up-form";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { QualificationForm } from "@/components/qualification-form";
 import { ScreenIntro } from "@/components/screen-intro";
+import { StatefulStack } from "@/components/stateful-stack";
 import { TimelinePanel } from "@/components/timeline-panel";
 import {
   buildCaseReferenceCode,
   buildPersistedTimeline,
   formatCaseLastChange,
   formatDueAt,
+  getPersistedAutomationLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
+  getPersistedInterventionDisplay,
   getPersistedQualificationSummary,
   getPersistedSourceLabel
 } from "@/lib/persisted-case-presenters";
+import { getAutomationStatusCopy, getFollowUpManagerCopy, getInterventionCountLabel } from "@/lib/live-copy";
 import { tryGetPersistedCaseDetail } from "@/lib/live-api";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +40,9 @@ export default async function LeadProfilePage(props: PageProps) {
 
   if (persistedCase) {
     const qualificationSummary = getPersistedQualificationSummary(locale, persistedCase);
+    const interventionItems = getPersistedInterventionDisplay(locale, persistedCase);
+    const automationCopy = getAutomationStatusCopy(locale);
+    const followUpManagerCopy = getFollowUpManagerCopy(locale);
 
     return (
       <div className="page-stack">
@@ -68,9 +77,18 @@ export default async function LeadProfilePage(props: PageProps) {
                 <p>{getPersistedSourceLabel(locale)}</p>
               </div>
             </div>
+            <div className="status-row-wrap">
+              <StatusBadge tone={persistedCase.followUpStatus === "attention" ? "critical" : "success"}>
+                {getPersistedFollowUpLabel(locale, persistedCase)}
+              </StatusBadge>
+              <StatusBadge>{getPersistedAutomationLabel(locale, persistedCase.automationStatus)}</StatusBadge>
+              {persistedCase.openInterventionsCount > 0 ? (
+                <StatusBadge tone="warning">{getInterventionCountLabel(locale, persistedCase.openInterventionsCount)}</StatusBadge>
+              ) : null}
+            </div>
             <div className="case-callout">
               <p>{persistedCase.budget ?? persistedCase.projectInterest}</p>
-              <p>{getPersistedFollowUpLabel(locale, persistedCase)}</p>
+              <p>{persistedCase.projectInterest}</p>
             </div>
           </Panel>
 
@@ -93,6 +111,84 @@ export default async function LeadProfilePage(props: PageProps) {
                 <dd>{persistedCase.preferredLocale === "ar" ? "العربية" : "English"}</dd>
               </div>
             </dl>
+          </Panel>
+        </div>
+
+        <div className="two-column-grid">
+          <Panel title={followUpManagerCopy.title}>
+            <p className="panel-summary">{followUpManagerCopy.summary}</p>
+            <ManagerFollowUpForm
+              caseId={persistedCase.caseId}
+              locale={locale}
+              nextAction={persistedCase.nextAction}
+              nextActionDueAt={persistedCase.nextActionDueAt}
+              ownerName={persistedCase.ownerName}
+              returnPath={`/${locale}/leads/${persistedCase.caseId}`}
+            />
+          </Panel>
+
+          <Panel title={automationCopy.title}>
+            <p className="panel-summary">{automationCopy.summary}</p>
+            <AutomationStatusForm
+              caseId={persistedCase.caseId}
+              locale={locale}
+              returnPath={`/${locale}/leads/${persistedCase.caseId}`}
+              status={persistedCase.automationStatus}
+            />
+          </Panel>
+        </div>
+
+        <div className="two-column-grid">
+          <Panel
+            title={
+              locale === "ar"
+                ? persistedCase.openInterventionsCount > 0
+                  ? "التدخلات المفتوحة"
+                  : "لا توجد تدخلات مفتوحة"
+                : persistedCase.openInterventionsCount > 0
+                  ? "Open interventions"
+                  : "No open interventions"
+            }
+          >
+            <StatefulStack
+              emptySummary={
+                locale === "ar"
+                  ? "تعمل المتابعة الحالية دون تدخل إداري مفتوح."
+                  : "The current follow-up plan is running without an open manager intervention."
+              }
+              emptyTitle={locale === "ar" ? "لا توجد عناصر مفتوحة" : "Nothing open right now"}
+              items={interventionItems.filter((intervention) => intervention.status === "open")}
+              renderItem={(intervention) => (
+                <article key={intervention.interventionId} className="intervention-row">
+                  <div className="row-between">
+                    <h3>{intervention.summary}</h3>
+                    <StatusBadge tone={intervention.severityTone}>{intervention.severityLabel}</StatusBadge>
+                  </div>
+                  <p className="case-link-meta">{intervention.createdAt}</p>
+                </article>
+              )}
+            />
+          </Panel>
+
+          <Panel title={locale === "ar" ? "سجل التدخلات المحلولة" : "Resolved intervention history"}>
+            <StatefulStack
+              emptySummary={
+                locale === "ar"
+                  ? "لم يتم تسجيل تدخلات محلولة لهذه الحالة بعد."
+                  : "No resolved intervention history has been recorded for this case yet."
+              }
+              emptyTitle={locale === "ar" ? "لا يوجد سجل محلول" : "No resolved history yet"}
+              items={interventionItems.filter((intervention) => intervention.status === "resolved")}
+              renderItem={(intervention) => (
+                <article key={intervention.interventionId} className="intervention-row intervention-row-resolved">
+                  <div className="row-between">
+                    <h3>{intervention.summary}</h3>
+                    <StatusBadge>{intervention.severityLabel}</StatusBadge>
+                  </div>
+                  <p className="case-link-meta">{intervention.resolvedAt ?? intervention.createdAt}</p>
+                </article>
+              )}
+            />
           </Panel>
         </div>
 

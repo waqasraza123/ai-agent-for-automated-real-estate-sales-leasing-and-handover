@@ -1,12 +1,20 @@
-import type { PersistedCaseDetail, PersistedCaseSummary, PersistedDocumentRequest, SupportedLocale } from "@real-estate-ai/contracts";
+import type {
+  PersistedCaseDetail,
+  PersistedCaseSummary,
+  PersistedDocumentRequest,
+  SupportedLocale
+} from "@real-estate-ai/contracts";
 import type { ConversationMessage, JourneyEvent } from "@real-estate-ai/domain";
 
 import {
+  getAutomationStatusLabel,
   getCaseStageLabel,
   getDocumentRequestDetail,
   getDocumentRequestStatusLabel,
   getDocumentRequestTypeLabel,
   getFollowUpStatusLabel,
+  getInterventionSeverityLabel,
+  getInterventionSummary,
   getQualificationReadinessLabel,
   getSourceLabel
 } from "./live-copy";
@@ -65,6 +73,10 @@ export function formatDueAt(value: PersistedCaseDetail | PersistedCaseSummary, l
   return new Date(value.nextActionDueAt).toLocaleString(locale);
 }
 
+export function getPersistedAutomationLabel(locale: SupportedLocale, automationStatus: PersistedCaseDetail["automationStatus"]) {
+  return getAutomationStatusLabel(locale, automationStatus);
+}
+
 export function getPersistedCaseStageLabel(locale: SupportedLocale, caseStage: PersistedCaseDetail["stage"] | PersistedCaseSummary["stage"]) {
   return getCaseStageLabel(locale, caseStage);
 }
@@ -75,9 +87,23 @@ export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail:
     documentRequestId: documentRequest.documentRequestId,
     label: getDocumentRequestTypeLabel(locale, documentRequest.type),
     statusLabel: getDocumentRequestStatusLabel(locale, documentRequest.status),
-    statusTone: getStatusTone(documentRequest.status),
+    statusTone: getDocumentTone(documentRequest.status),
     updatedAt: new Date(documentRequest.updatedAt).toLocaleString(locale),
     value: documentRequest.status
+  }));
+}
+
+export function getPersistedInterventionDisplay(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
+  return caseDetail.managerInterventions.map((intervention) => ({
+    createdAt: new Date(intervention.createdAt).toLocaleString(locale),
+    interventionId: intervention.interventionId,
+    resolutionNote: intervention.resolutionNote,
+    resolvedAt: intervention.resolvedAt ? new Date(intervention.resolvedAt).toLocaleString(locale) : null,
+    severityLabel: getInterventionSeverityLabel(locale, intervention.severity),
+    severityTone: getInterventionTone(intervention.severity),
+    status: intervention.status,
+    summary: getInterventionSummary(locale, intervention.type),
+    type: intervention.type
   }));
 }
 
@@ -106,6 +132,14 @@ export function getPersistedFollowUpLabel(locale: SupportedLocale, caseSummary: 
 function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, locale: SupportedLocale, variant: "detail" | "title") {
   const descriptions = {
     ar: {
+      automation_paused: {
+        detail: "تم إيقاف أتمتة المتابعة لهذه الحالة مع إبقاء السجل محفوظاً.",
+        title: "إيقاف الأتمتة"
+      },
+      automation_resumed: {
+        detail: "تمت إعادة تشغيل أتمتة المتابعة وجدولة التحقق التالي.",
+        title: "استئناف الأتمتة"
+      },
       case_qualified: {
         detail: "تم حفظ بيانات التأهيل وربطها بالحالة.",
         title: "تحديث التأهيل"
@@ -113,6 +147,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       document_request_updated: {
         detail: "تم تحديث حالة أحد المستندات المطلوبة في هذه الحالة.",
         title: "تحديث المستندات"
+      },
+      follow_up_intervention_opened: {
+        detail: "تجاوزت المتابعة موعدها وجرى فتح تدخل إداري واضح لهذه الحالة.",
+        title: "تدخل إداري جديد"
+      },
+      manager_follow_up_updated: {
+        detail: "تم تحديث الخطة التالية للحالة وإزالة التدخل المفتوح.",
+        title: "خطة متابعة جديدة"
       },
       visit_scheduled: {
         detail: "تم ربط الحالة بموعد زيارة فعلي مع الموقع المحدد.",
@@ -124,6 +166,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       }
     },
     en: {
+      automation_paused: {
+        detail: "Follow-up automation was paused for this case while preserving the timeline.",
+        title: "Automation paused"
+      },
+      automation_resumed: {
+        detail: "Follow-up automation was resumed and the next check was queued again.",
+        title: "Automation resumed"
+      },
       case_qualified: {
         detail: "Qualification fields were captured and attached to the persisted case.",
         title: "Qualification updated"
@@ -131,6 +181,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       document_request_updated: {
         detail: "One of the required document requests changed state for this case.",
         title: "Document status updated"
+      },
+      follow_up_intervention_opened: {
+        detail: "The next action became overdue and a visible manager intervention was opened.",
+        title: "Manager intervention opened"
+      },
+      manager_follow_up_updated: {
+        detail: "The follow-up plan was updated and the open intervention was cleared.",
+        title: "Follow-up plan updated"
       },
       visit_scheduled: {
         detail: "The case now has a scheduled visit with a saved location and time.",
@@ -158,7 +216,7 @@ function formatTimestamp(value: string) {
   });
 }
 
-function getStatusTone(status: PersistedDocumentRequest["status"]): "success" | "critical" | "warning" {
+function getDocumentTone(status: PersistedDocumentRequest["status"]): "success" | "critical" | "warning" {
   if (status === "accepted") {
     return "success";
   }
@@ -168,4 +226,8 @@ function getStatusTone(status: PersistedDocumentRequest["status"]): "success" | 
   }
 
   return "warning";
+}
+
+function getInterventionTone(severity: PersistedCaseDetail["managerInterventions"][number]["severity"]): "critical" | "warning" {
+  return severity === "critical" ? "critical" : "warning";
 }

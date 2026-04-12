@@ -45,6 +45,7 @@ describe("lead capture api", () => {
     expect(createdCase.source).toBe("website");
     expect(createdCase.ownerName).toBe("Revenue Ops Queue");
     expect(createdCase.followUpStatus).toBe("on_track");
+    expect(createdCase.automationStatus).toBe("active");
 
     const detailResponse = await app.inject({
       method: "GET",
@@ -53,9 +54,10 @@ describe("lead capture api", () => {
 
     expect(detailResponse.statusCode).toBe(200);
     expect(detailResponse.json().documentRequests).toHaveLength(3);
+    expect(detailResponse.json().managerInterventions).toHaveLength(0);
   });
 
-  it("qualifies a case, schedules a visit, and updates document workflow state", async () => {
+  it("qualifies a case, schedules a visit, updates documents, and accepts manager follow-up controls", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
@@ -112,6 +114,31 @@ describe("lead capture api", () => {
     expect(documentResponse.json().stage).toBe("documents_in_progress");
     expect(documentResponse.json().documentRequests[0]?.status).toBe("under_review");
 
+    const followUpResponse = await app.inject({
+      method: "POST",
+      payload: {
+        nextAction: "Manager follow-up confirmed for tomorrow morning.",
+        nextActionDueAt: "2026-04-16T08:30:00.000Z",
+        ownerName: "Leasing Desk Alpha"
+      },
+      url: `/v1/cases/${createdCase.caseId}/follow-up-plan`
+    });
+
+    expect(followUpResponse.statusCode).toBe(200);
+    expect(followUpResponse.json().ownerName).toBe("Leasing Desk Alpha");
+    expect(followUpResponse.json().nextAction).toBe("Manager follow-up confirmed for tomorrow morning.");
+
+    const pauseResponse = await app.inject({
+      method: "POST",
+      payload: {
+        status: "paused"
+      },
+      url: `/v1/cases/${createdCase.caseId}/automation`
+    });
+
+    expect(pauseResponse.statusCode).toBe(200);
+    expect(pauseResponse.json().automationStatus).toBe("paused");
+
     const listResponse = await app.inject({
       method: "GET",
       url: "/v1/cases"
@@ -120,6 +147,7 @@ describe("lead capture api", () => {
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json().cases).toHaveLength(1);
     expect(listResponse.json().cases[0]?.stage).toBe("documents_in_progress");
+    expect(listResponse.json().cases[0]?.automationStatus).toBe("paused");
   });
 
   it("rejects invalid payloads for mutation endpoints", async () => {
@@ -146,5 +174,15 @@ describe("lead capture api", () => {
     });
 
     expect(missingCaseResponse.statusCode).toBe(404);
+
+    const invalidAutomationResponse = await app.inject({
+      method: "POST",
+      payload: {
+        status: "stopped"
+      },
+      url: "/v1/cases/00000000-0000-0000-0000-000000000000/automation"
+    });
+
+    expect(invalidAutomationResponse.statusCode).toBe(400);
   });
 });

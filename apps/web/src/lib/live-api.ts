@@ -1,10 +1,12 @@
 import type {
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  ManageCaseFollowUpInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
   QualifyCaseInput,
   ScheduleVisitInput,
+  UpdateAutomationStatusInput,
   UpdateDocumentRequestInput
 } from "@real-estate-ai/contracts";
 
@@ -50,6 +52,13 @@ export async function listPersistedCasesFromApi() {
   return payload.cases;
 }
 
+export async function manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/follow-up-plan`, {
+    method: "POST",
+    payload: input
+  });
+}
+
 export async function qualifyCase(caseId: string, input: QualifyCaseInput) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/qualification`, {
     method: "POST",
@@ -82,6 +91,13 @@ export async function tryListPersistedCases() {
   } catch {
     return [];
   }
+}
+
+export async function updateAutomationStatus(caseId: string, input: UpdateAutomationStatusInput) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/automation`, {
+    method: "POST",
+    payload: input
+  });
 }
 
 export async function updateDocumentRequest(caseId: string, documentRequestId: string, input: UpdateDocumentRequestInput) {

@@ -7,6 +7,10 @@ export const followUpStatusSchema = z.enum(["on_track", "attention"]);
 export const qualificationReadinessSchema = z.enum(["watch", "medium", "high"]);
 export const documentRequestTypeSchema = z.enum(["government_id", "proof_of_funds", "employment_letter"]);
 export const documentRequestStatusSchema = z.enum(["requested", "under_review", "accepted", "rejected"]);
+export const automationStatusSchema = z.enum(["active", "paused"]);
+export const managerInterventionTypeSchema = z.enum(["follow_up_overdue"]);
+export const managerInterventionSeveritySchema = z.enum(["warning", "critical"]);
+export const managerInterventionStatusSchema = z.enum(["open", "resolved"]);
 
 export const createWebsiteLeadInputSchema = z.object({
   budget: z.string().trim().min(2).max(120).optional(),
@@ -34,6 +38,16 @@ export const updateDocumentRequestInputSchema = z.object({
   status: documentRequestStatusSchema
 });
 
+export const manageCaseFollowUpInputSchema = z.object({
+  nextAction: z.string().trim().min(4).max(200),
+  nextActionDueAt: z.iso.datetime(),
+  ownerName: z.string().trim().min(2).max(120).optional()
+});
+
+export const updateAutomationStatusInputSchema = z.object({
+  status: automationStatusSchema
+});
+
 export const persistedQualificationSnapshotSchema = z.object({
   budgetBand: z.string(),
   intentSummary: z.string(),
@@ -57,13 +71,26 @@ export const persistedDocumentRequestSchema = z.object({
   updatedAt: z.iso.datetime()
 });
 
+export const persistedManagerInterventionSchema = z.object({
+  createdAt: z.iso.datetime(),
+  interventionId: z.uuid(),
+  resolutionNote: z.string().nullable(),
+  resolvedAt: z.iso.datetime().nullable(),
+  severity: managerInterventionSeveritySchema,
+  status: managerInterventionStatusSchema,
+  summary: z.string(),
+  type: managerInterventionTypeSchema
+});
+
 export const persistedCaseSummarySchema = z.object({
+  automationStatus: automationStatusSchema,
   caseId: z.uuid(),
   createdAt: z.iso.datetime(),
   customerName: z.string(),
   followUpStatus: followUpStatusSchema,
   nextAction: z.string(),
   nextActionDueAt: z.iso.datetime(),
+  openInterventionsCount: z.number().int().min(0),
   ownerName: z.string(),
   preferredLocale: supportedLocaleSchema,
   projectInterest: z.string(),
@@ -84,6 +111,7 @@ export const persistedCaseDetailSchema = persistedCaseSummarySchema.extend({
   currentVisit: persistedVisitSchema.nullable(),
   documentRequests: z.array(persistedDocumentRequestSchema),
   email: z.email(),
+  managerInterventions: z.array(persistedManagerInterventionSchema),
   message: z.string(),
   phone: z.string().nullable(),
   qualificationSnapshot: persistedQualificationSnapshotSchema.nullable()
@@ -93,19 +121,26 @@ export const createWebsiteLeadResultSchema = persistedCaseSummarySchema.extend({
   leadId: z.uuid()
 });
 
+export type AutomationStatus = z.infer<typeof automationStatusSchema>;
 export type CaseStage = z.infer<typeof caseStageSchema>;
 export type CreateWebsiteLeadInput = z.infer<typeof createWebsiteLeadInputSchema>;
 export type CreateWebsiteLeadResult = z.infer<typeof createWebsiteLeadResultSchema>;
 export type DocumentRequestStatus = z.infer<typeof documentRequestStatusSchema>;
 export type DocumentRequestType = z.infer<typeof documentRequestTypeSchema>;
 export type FollowUpStatus = z.infer<typeof followUpStatusSchema>;
+export type ManageCaseFollowUpInput = z.infer<typeof manageCaseFollowUpInputSchema>;
+export type ManagerInterventionSeverity = z.infer<typeof managerInterventionSeveritySchema>;
+export type ManagerInterventionStatus = z.infer<typeof managerInterventionStatusSchema>;
+export type ManagerInterventionType = z.infer<typeof managerInterventionTypeSchema>;
 export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
 export type PersistedDocumentRequest = z.infer<typeof persistedDocumentRequestSchema>;
+export type PersistedManagerIntervention = z.infer<typeof persistedManagerInterventionSchema>;
 export type PersistedQualificationSnapshot = z.infer<typeof persistedQualificationSnapshotSchema>;
 export type PersistedVisit = z.infer<typeof persistedVisitSchema>;
 export type QualificationReadiness = z.infer<typeof qualificationReadinessSchema>;
 export type QualifyCaseInput = z.infer<typeof qualifyCaseInputSchema>;
 export type ScheduleVisitInput = z.infer<typeof scheduleVisitInputSchema>;
 export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
+export type UpdateAutomationStatusInput = z.infer<typeof updateAutomationStatusInputSchema>;
 export type UpdateDocumentRequestInput = z.infer<typeof updateDocumentRequestInputSchema>;

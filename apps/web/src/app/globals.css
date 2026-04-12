@@ -516,6 +516,21 @@ textarea {
   gap: 0.8rem;
 }
 
+.status-row-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.inline-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 0.9rem;
+  color: var(--ocean);
+  font-weight: 600;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -786,6 +801,22 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.intervention-row {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(232, 184, 111, 0.24);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+}
+
+.intervention-row-resolved {
+  border-color: rgba(190, 212, 255, 0.14);
+}
+
+.intervention-row h3,
+.intervention-row p {
+  margin: 0;
 }
 
 .document-row-actions {

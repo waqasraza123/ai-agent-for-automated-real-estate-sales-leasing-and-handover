@@ -2,16 +2,20 @@ import Fastify from "fastify";
 
 import {
   createWebsiteLeadInputSchema,
+  manageCaseFollowUpInputSchema,
   qualifyCaseInputSchema,
   scheduleVisitInputSchema,
+  updateAutomationStatusInputSchema,
   updateDocumentRequestInputSchema
 } from "@real-estate-ai/contracts";
 import type { LeadCaptureStore } from "@real-estate-ai/database";
 import {
   getPersistedCaseDetail,
   listPersistedCases,
+  managePersistedCaseFollowUp,
   qualifyPersistedCase,
   schedulePersistedVisit,
+  setPersistedAutomationStatus,
   submitWebsiteLead,
   updatePersistedDocumentRequest
 } from "@real-estate-ai/workflows";
@@ -104,6 +108,56 @@ export function buildApiApp(dependencies: {
     }
 
     const caseDetail = await schedulePersistedVisit(dependencies.store, request.params.caseId, result.data);
+
+    if (!caseDetail) {
+      return reply.status(404).send({
+        error: "case_not_found"
+      });
+    }
+
+    return reply.status(200).send(caseDetail);
+  });
+
+  app.post<{
+    Params: {
+      caseId: string;
+    };
+  }>("/v1/cases/:caseId/follow-up-plan", async (request, reply) => {
+    const result = manageCaseFollowUpInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const caseDetail = await managePersistedCaseFollowUp(dependencies.store, request.params.caseId, result.data);
+
+    if (!caseDetail) {
+      return reply.status(404).send({
+        error: "case_not_found"
+      });
+    }
+
+    return reply.status(200).send(caseDetail);
+  });
+
+  app.post<{
+    Params: {
+      caseId: string;
+    };
+  }>("/v1/cases/:caseId/automation", async (request, reply) => {
+    const result = updateAutomationStatusInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const caseDetail = await setPersistedAutomationStatus(dependencies.store, request.params.caseId, result.data);
 
     if (!caseDetail) {
       return reply.status(404).send({
