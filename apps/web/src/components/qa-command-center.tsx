@@ -96,6 +96,8 @@ export function QaCommandCenter(props: {
                   </div>
                   <div className="case-link-aside">
                     <StatusBadge tone={qaReview.statusTone}>{qaReview.statusLabel}</StatusBadge>
+                    <StatusBadge>{qaReview.triggerSourceLabel}</StatusBadge>
+                    {qaReview.policySignalLabels[0] ? <StatusBadge>{qaReview.policySignalLabels[0]}</StatusBadge> : null}
                     <StatusBadge>{caseItem.ownerName}</StatusBadge>
                   </div>
                 </Link>

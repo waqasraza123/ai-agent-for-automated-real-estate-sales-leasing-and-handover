@@ -24,7 +24,8 @@ import {
   getPersistedAutomationLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
-  getPersistedHandoverWorkspaceDisplay
+  getPersistedHandoverWorkspaceDisplay,
+  getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
 
 export function HandoverManagerCommandCenter(props: {
@@ -620,6 +621,7 @@ export function RevenueManagerCommandCenter(props: {
             items={revenueAttentionCases}
             renderItem={(caseItem) => {
               const handoverDisplay = getPersistedHandoverWorkspaceDisplay(props.locale, caseItem);
+              const qaReviewDisplay = getPersistedQaReviewDisplay(props.locale, caseItem);
 
               return (
                 <article key={caseItem.caseId} className="alert-row alert-row-high">
@@ -635,6 +637,7 @@ export function RevenueManagerCommandCenter(props: {
                       {caseItem.openInterventionsCount > 0 ? (
                         <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
                       ) : null}
+                      {qaReviewDisplay ? <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge> : null}
                       {handoverDisplay ? <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge> : null}
                     </div>
                   </div>
@@ -667,6 +670,7 @@ export function RevenueManagerCommandCenter(props: {
             items={props.persistedCases}
             renderItem={(caseItem) => {
               const handoverDisplay = getPersistedHandoverWorkspaceDisplay(props.locale, caseItem);
+              const qaReviewDisplay = getPersistedQaReviewDisplay(props.locale, caseItem);
 
               return (
                 <Link key={caseItem.caseId} className="case-link-card" href={`/${props.locale}/leads/${caseItem.caseId}`}>
@@ -683,6 +687,7 @@ export function RevenueManagerCommandCenter(props: {
                     {caseItem.openInterventionsCount > 0 ? (
                       <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
                     ) : null}
+                    {qaReviewDisplay ? <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge> : null}
                     {handoverDisplay ? <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge> : null}
                     <StatusBadge>{getPersistedCaseStageLabel(props.locale, caseItem.stage)}</StatusBadge>
                   </div>

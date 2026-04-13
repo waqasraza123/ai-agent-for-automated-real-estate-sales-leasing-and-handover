@@ -1,7 +1,9 @@
 import type {
   AutomationStatus,
   CaseStage,
+  CaseQaPolicySignal,
   CaseQaReviewStatus,
+  CaseQaReviewTriggerSource,
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
@@ -77,6 +79,40 @@ export function getCaseQaReviewStatusLabel(locale: SupportedLocale, status: Case
   } as const;
 
   return labels[locale][status];
+}
+
+export function getCaseQaReviewTriggerSourceLabel(locale: SupportedLocale, triggerSource: CaseQaReviewTriggerSource) {
+  const labels = {
+    ar: {
+      manual_request: "طلب يدوي",
+      policy_rule: "إشارة سياسة تلقائية"
+    },
+    en: {
+      manual_request: "Manual request",
+      policy_rule: "Automatic policy trigger"
+    }
+  } as const;
+
+  return labels[locale][triggerSource];
+}
+
+export function getCaseQaPolicySignalLabel(locale: SupportedLocale, signal: CaseQaPolicySignal) {
+  const labels = {
+    ar: {
+      discrimination_risk: "مخاطر تمييز أو عدالة",
+      exception_request: "طلب استثناء",
+      frustrated_customer_language: "تصعيد أو انزعاج عميل",
+      legal_escalation_risk: "تصعيد قانوني أو تنظيمي"
+    },
+    en: {
+      discrimination_risk: "Discrimination risk",
+      exception_request: "Exception request",
+      frustrated_customer_language: "Frustrated customer",
+      legal_escalation_risk: "Legal escalation"
+    }
+  } as const;
+
+  return labels[locale][signal];
 }
 
 export function getCaseStageLabel(locale: SupportedLocale, stage: CaseStage) {

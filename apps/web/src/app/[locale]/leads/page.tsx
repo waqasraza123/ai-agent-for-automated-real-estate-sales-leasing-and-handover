@@ -14,7 +14,8 @@ import {
   getPersistedAutomationLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
-  getPersistedHandoverWorkspaceDisplay
+  getPersistedHandoverWorkspaceDisplay,
+  getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
 import { getInterventionCountLabel } from "@/lib/live-copy";
 import { tryListPersistedCases } from "@/lib/live-api";
@@ -90,6 +91,7 @@ export default async function LeadsPage(props: PageProps) {
                 {persistedCases.map((caseItem) => (
                   (() => {
                     const handoverDisplay = getPersistedHandoverWorkspaceDisplay(locale, caseItem);
+                    const qaReviewDisplay = getPersistedQaReviewDisplay(locale, caseItem);
 
                     return (
                       <tr key={caseItem.caseId}>
@@ -128,6 +130,7 @@ export default async function LeadsPage(props: PageProps) {
                               {caseItem.openInterventionsCount > 0 ? (
                                 <StatusBadge tone="warning">{getInterventionCountLabel(locale, caseItem.openInterventionsCount)}</StatusBadge>
                               ) : null}
+                              {qaReviewDisplay ? <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge> : null}
                             </div>
                             <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>
                               {getPersistedFollowUpLabel(locale, caseItem)}

@@ -9,8 +9,10 @@ import type { ConversationMessage, JourneyEvent } from "@real-estate-ai/domain";
 
 import {
   getAutomationStatusLabel,
+  getCaseQaPolicySignalLabel,
   getCaseStageLabel,
   getCaseQaReviewStatusLabel,
+  getCaseQaReviewTriggerSourceLabel,
   getDocumentRequestDetail,
   getDocumentRequestStatusLabel,
   getDocumentRequestTypeLabel,
@@ -46,6 +48,27 @@ export function buildCaseReferenceCode(caseId: string) {
 }
 
 export function buildPersistedConversation(caseDetail: PersistedCaseDetail): ConversationMessage[] {
+  const automationState =
+    caseDetail.currentQaReview?.status === "pending_review"
+      ? caseDetail.currentQaReview.triggerSource === "policy_rule"
+        ? {
+            ar: "مطلوب تدخل بشري بسبب إشارة سياسة تلقائية",
+            en: "Human takeover required after an automatic policy trigger"
+          }
+        : {
+            ar: "المحادثة بانتظار مراجعة جودة بشرية",
+            en: "Conversation is waiting for human QA review"
+          }
+      : caseDetail.currentQaReview?.status === "follow_up_required"
+        ? {
+            ar: "حددت الجودة أن هذه الحالة تحتاج متابعة بشرية",
+            en: "QA marked this case as needing human follow-up"
+          }
+        : {
+            ar: "تم توليدها من حالة حية محفوظة",
+            en: "Generated from the persisted alpha workflow"
+          };
+
   return [
     {
       body: {
@@ -63,10 +86,7 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
       },
       id: `${caseDetail.caseId}-workflow`,
       sender: "automation",
-      state: {
-        ar: "تم توليدها من حالة حية محفوظة",
-        en: "Generated from the persisted alpha workflow"
-      },
+      state: automationState,
       timestamp: formatTimestamp(caseDetail.updatedAt)
     }
   ];
@@ -321,6 +341,8 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
         : ("critical" as const);
 
   return {
+    policySignalLabels: caseDetail.currentQaReview.policySignals.map((signal) => getCaseQaPolicySignalLabel(locale, signal)),
+    policySignals: caseDetail.currentQaReview.policySignals,
     qaReviewId: caseDetail.currentQaReview.qaReviewId,
     requestedByName: caseDetail.currentQaReview.requestedByName,
     reviewSummary: caseDetail.currentQaReview.reviewSummary,
@@ -330,6 +352,9 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
     status: caseDetail.currentQaReview.status,
     statusLabel: getCaseQaReviewStatusLabel(locale, caseDetail.currentQaReview.status),
     statusTone,
+    triggerEvidence: caseDetail.currentQaReview.triggerEvidence,
+    triggerSource: caseDetail.currentQaReview.triggerSource,
+    triggerSourceLabel: getCaseQaReviewTriggerSourceLabel(locale, caseDetail.currentQaReview.triggerSource),
     updatedAt: new Date(caseDetail.currentQaReview.updatedAt).toLocaleString(locale)
   };
 }
@@ -337,6 +362,8 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
 export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.qaReviews.map((qaReview) => ({
     createdAt: new Date(qaReview.createdAt).toLocaleString(locale),
+    policySignalLabels: qaReview.policySignals.map((signal) => getCaseQaPolicySignalLabel(locale, signal)),
+    policySignals: qaReview.policySignals,
     qaReviewId: qaReview.qaReviewId,
     requestedByName: qaReview.requestedByName,
     reviewSummary: qaReview.reviewSummary,
@@ -351,6 +378,9 @@ export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail:
         : qaReview.status === "follow_up_required"
           ? ("warning" as const)
           : ("critical" as const),
+    triggerEvidence: qaReview.triggerEvidence,
+    triggerSource: qaReview.triggerSource,
+    triggerSourceLabel: getCaseQaReviewTriggerSourceLabel(locale, qaReview.triggerSource),
     updatedAt: new Date(qaReview.updatedAt).toLocaleString(locale)
   }));
 }
@@ -543,6 +573,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "تم إرسال الحالة إلى طابور الجودة مع سبب عينة واضح لمراجعة السلامة أو التفسير أو جودة الرد.",
         title: "فتح مراجعة جودة"
       },
+      qa_review_policy_opened: {
+        detail: "تم فتح مراجعة جودة تلقائية لأن الرسالة الواردة طابقت إشارة سياسة تتطلب تدخلاً بشرياً.",
+        title: "فتح مراجعة جودة تلقائية"
+      },
       qa_review_resolved: {
         detail: "تم حفظ قرار مراجعة الجودة وإبقاء النتيجة ظاهرة في سجل الحالة.",
         title: "إغلاق مراجعة الجودة"
@@ -652,6 +686,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       qa_review_requested: {
         detail: "The case was sent to the QA queue with an explicit sample reason for safety, interpretation, or response-quality review.",
         title: "QA review requested"
+      },
+      qa_review_policy_opened: {
+        detail: "An automatic QA review was opened because the inbound message matched a human-review policy signal.",
+        title: "Automatic QA review opened"
       },
       qa_review_resolved: {
         detail: "The QA decision was saved and kept visible on the live case record.",

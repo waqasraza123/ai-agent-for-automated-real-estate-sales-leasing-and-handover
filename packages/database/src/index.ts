@@ -5,7 +5,9 @@ import type {
   ApproveHandoverCustomerUpdateInput,
   AutomationStatus,
   CaseStage,
+  CaseQaPolicySignal,
   CaseQaReviewStatus,
+  CaseQaReviewTriggerSource,
   CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
   HandoverClosureState,
@@ -72,6 +74,8 @@ import type {
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
+import { buildAutomaticQaSampleSummary, detectQaPolicyMatches, type QaPolicySignal } from "./qa-policy";
 
 const defaultOwnerName = "Revenue Ops Queue";
 const defaultDocumentTypes: DocumentRequestType[] = ["government_id", "proof_of_funds", "employment_letter"];
@@ -308,12 +312,15 @@ const caseQaReviews = pgTable("case_qa_reviews", {
     .references(() => cases.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   id: uuid("id").primaryKey(),
+  policySignals: jsonb("policy_signals").$type<QaPolicySignal[]>().notNull(),
   requestedByName: text("requested_by_name").notNull(),
   reviewSummary: text("review_summary"),
   reviewedAt: timestamp("reviewed_at", { mode: "string", withTimezone: true }),
   reviewerName: text("reviewer_name"),
   sampleSummary: text("sample_summary").notNull(),
   status: text("status").notNull(),
+  triggerEvidence: jsonb("trigger_evidence").$type<string[]>().notNull(),
+  triggerSource: text("trigger_source").notNull(),
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
@@ -761,12 +768,19 @@ export async function createAlphaLeadCaptureStore(options?: {
       requested_by_name text not null,
       sample_summary text not null,
       status text not null,
+      trigger_source text not null default 'manual_request',
+      policy_signals jsonb not null default '[]'::jsonb,
+      trigger_evidence jsonb not null default '[]'::jsonb,
       reviewer_name text,
       review_summary text,
       reviewed_at timestamptz,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
+
+    alter table case_qa_reviews add column if not exists trigger_source text not null default 'manual_request';
+    alter table case_qa_reviews add column if not exists policy_signals jsonb not null default '[]'::jsonb;
+    alter table case_qa_reviews add column if not exists trigger_evidence jsonb not null default '[]'::jsonb;
 
     create table if not exists automation_jobs (
       id uuid primary key,
@@ -1133,6 +1147,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       .select({
         caseId: caseQaReviews.caseId,
         createdAt: caseQaReviews.createdAt,
+        policySignals: caseQaReviews.policySignals,
         qaReviewId: caseQaReviews.id,
         requestedByName: caseQaReviews.requestedByName,
         reviewSummary: caseQaReviews.reviewSummary,
@@ -1140,6 +1155,8 @@ export async function createAlphaLeadCaptureStore(options?: {
         reviewerName: caseQaReviews.reviewerName,
         sampleSummary: caseQaReviews.sampleSummary,
         status: caseQaReviews.status,
+        triggerEvidence: caseQaReviews.triggerEvidence,
+        triggerSource: caseQaReviews.triggerSource,
         updatedAt: caseQaReviews.updatedAt
       })
       .from(caseQaReviews)
@@ -1257,6 +1274,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         db
           .select({
             createdAt: caseQaReviews.createdAt,
+            policySignals: caseQaReviews.policySignals,
             qaReviewId: caseQaReviews.id,
             requestedByName: caseQaReviews.requestedByName,
             reviewSummary: caseQaReviews.reviewSummary,
@@ -1264,6 +1282,8 @@ export async function createAlphaLeadCaptureStore(options?: {
             reviewerName: caseQaReviews.reviewerName,
             sampleSummary: caseQaReviews.sampleSummary,
             status: caseQaReviews.status,
+            triggerEvidence: caseQaReviews.triggerEvidence,
+            triggerSource: caseQaReviews.triggerSource,
             updatedAt: caseQaReviews.updatedAt
           })
           .from(caseQaReviews)
@@ -1419,6 +1439,36 @@ export async function createAlphaLeadCaptureStore(options?: {
     });
   };
 
+  const createQaReviewRecord = async (
+    transaction: AlphaTransaction,
+    input: {
+      caseId: string;
+      createdAt: string;
+      policySignals: QaPolicySignal[];
+      qaReviewId: string;
+      requestedByName: string;
+      sampleSummary: string;
+      triggerEvidence: string[];
+      triggerSource: CaseQaReviewTriggerSource;
+    }
+  ) => {
+    await transaction.insert(caseQaReviews).values({
+      caseId: input.caseId,
+      createdAt: input.createdAt,
+      id: input.qaReviewId,
+      policySignals: input.policySignals,
+      requestedByName: input.requestedByName,
+      reviewSummary: null,
+      reviewedAt: null,
+      reviewerName: null,
+      sampleSummary: input.sampleSummary,
+      status: "pending_review",
+      triggerEvidence: input.triggerEvidence,
+      triggerSource: input.triggerSource,
+      updatedAt: input.createdAt
+    });
+  };
+
   return {
     async applyQualification(caseId, input) {
       const caseRecord = await getPersistedCaseDetail(caseId);
@@ -1493,6 +1543,8 @@ export async function createAlphaLeadCaptureStore(options?: {
       const createdLeadId = randomUUID();
       const createdCaseId = randomUUID();
       const createdAt = new Date().toISOString();
+      const automaticQaMatches = detectQaPolicyMatches(input.message);
+      const automaticQaReviewId = automaticQaMatches.length > 0 ? randomUUID() : null;
 
       await db.transaction(async (transaction) => {
         await transaction.insert(leads).values({
@@ -1544,6 +1596,32 @@ export async function createAlphaLeadCaptureStore(options?: {
           }))
         );
 
+        if (automaticQaReviewId) {
+          await createQaReviewRecord(transaction, {
+            caseId: createdCaseId,
+            createdAt,
+            policySignals: automaticQaMatches.map((match) => match.signal),
+            qaReviewId: automaticQaReviewId,
+            requestedByName: "QA Policy Engine",
+            sampleSummary: buildAutomaticQaSampleSummary(input.preferredLocale, automaticQaMatches.map((match) => match.signal)),
+            triggerEvidence: automaticQaMatches.map((match) => match.evidence),
+            triggerSource: "policy_rule"
+          });
+
+          await transaction.insert(auditEvents).values({
+            caseId: createdCaseId,
+            createdAt,
+            eventType: "qa_review_policy_opened",
+            id: randomUUID(),
+            payload: {
+              policySignals: automaticQaMatches.map((match) => match.signal),
+              qaReviewId: automaticQaReviewId,
+              triggerEvidence: automaticQaMatches.map((match) => match.evidence),
+              triggerSource: "policy_rule"
+            }
+          });
+        }
+
         await syncFollowUpJob(transaction, {
           automationStatus: "active",
           caseId: createdCaseId,
@@ -1579,11 +1657,17 @@ export async function createAlphaLeadCaptureStore(options?: {
         throw new Error("failed_to_persist_website_lead_case");
       }
 
+      const currentQaReview = automaticQaReviewId
+        ? (
+            await listCurrentQaReviews([createdCaseId])
+          ).get(createdCaseId) ?? null
+        : null;
+
       return {
         automationStatus: toAutomationStatus(createdCase.automationStatus),
         caseId: createdCase.caseId,
         createdAt: createdCase.createdAt,
-        currentQaReview: null,
+        currentQaReview,
         customerName: createdCase.customerName,
         followUpStatus: toFollowUpStatus(createdCase.nextActionDueAt),
         handoverCase: null,
@@ -1617,17 +1701,15 @@ export async function createAlphaLeadCaptureStore(options?: {
       const qaReviewId = randomUUID();
 
       await db.transaction(async (transaction) => {
-        await transaction.insert(caseQaReviews).values({
+        await createQaReviewRecord(transaction, {
           caseId,
           createdAt,
-          id: qaReviewId,
+          policySignals: [],
+          qaReviewId,
           requestedByName: input.requestedByName ?? caseRecord.ownerName,
-          reviewSummary: null,
-          reviewedAt: null,
-          reviewerName: null,
           sampleSummary: input.sampleSummary,
-          status: "pending_review",
-          updatedAt: createdAt
+          triggerEvidence: [],
+          triggerSource: "manual_request"
         });
 
         await transaction.insert(auditEvents).values({
@@ -1637,8 +1719,11 @@ export async function createAlphaLeadCaptureStore(options?: {
           id: randomUUID(),
           payload: {
             qaReviewId,
+            policySignals: [],
             requestedByName: input.requestedByName ?? caseRecord.ownerName,
-            sampleSummary: input.sampleSummary
+            sampleSummary: input.sampleSummary,
+            triggerEvidence: [],
+            triggerSource: "manual_request"
           }
         });
       });
@@ -1649,6 +1734,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       const currentQaReview = await db
         .select({
           createdAt: caseQaReviews.createdAt,
+          policySignals: caseQaReviews.policySignals,
           qaReviewId: caseQaReviews.id,
           requestedByName: caseQaReviews.requestedByName,
           reviewSummary: caseQaReviews.reviewSummary,
@@ -1656,6 +1742,8 @@ export async function createAlphaLeadCaptureStore(options?: {
           reviewerName: caseQaReviews.reviewerName,
           sampleSummary: caseQaReviews.sampleSummary,
           status: caseQaReviews.status,
+          triggerEvidence: caseQaReviews.triggerEvidence,
+          triggerSource: caseQaReviews.triggerSource,
           updatedAt: caseQaReviews.updatedAt
         })
         .from(caseQaReviews)
@@ -4036,6 +4124,7 @@ function hydrateManagerIntervention(value: {
 
 function hydrateCaseQaReview(value: {
   createdAt: string;
+  policySignals: QaPolicySignal[] | null;
   qaReviewId: string;
   requestedByName: string;
   reviewSummary: string | null;
@@ -4043,10 +4132,13 @@ function hydrateCaseQaReview(value: {
   reviewerName: string | null;
   sampleSummary: string;
   status: string;
+  triggerEvidence: string[] | null;
+  triggerSource: string;
   updatedAt: string;
 }): PersistedCaseQaReview {
   return {
     createdAt: value.createdAt,
+    policySignals: (value.policySignals ?? []).map((signal) => toCaseQaPolicySignal(signal)),
     qaReviewId: value.qaReviewId,
     requestedByName: value.requestedByName,
     reviewSummary: value.reviewSummary,
@@ -4054,6 +4146,8 @@ function hydrateCaseQaReview(value: {
     reviewerName: value.reviewerName,
     sampleSummary: value.sampleSummary,
     status: toCaseQaReviewStatus(value.status),
+    triggerEvidence: value.triggerEvidence ?? [],
+    triggerSource: toCaseQaReviewTriggerSource(value.triggerSource),
     updatedAt: value.updatedAt
   };
 }
@@ -4080,6 +4174,27 @@ function toCaseQaReviewStatus(value: string): CaseQaReviewStatus {
   }
 
   throw new Error(`unsupported_case_qa_review_status:${value}`);
+}
+
+function toCaseQaReviewTriggerSource(value: string): CaseQaReviewTriggerSource {
+  if (value === "manual_request" || value === "policy_rule") {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_qa_review_trigger_source:${value}`);
+}
+
+function toCaseQaPolicySignal(value: string): CaseQaPolicySignal {
+  if (
+    value === "exception_request" ||
+    value === "frustrated_customer_language" ||
+    value === "discrimination_risk" ||
+    value === "legal_escalation_risk"
+  ) {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_qa_policy_signal:${value}`);
 }
 
 function toDocumentRequestStatus(value: string): DocumentRequestStatus {

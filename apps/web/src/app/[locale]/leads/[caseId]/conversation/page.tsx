@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 import { getDemoCaseById, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { Panel } from "@real-estate-ai/ui";
+import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
 import { MessageThread } from "@/components/message-thread";
@@ -12,7 +12,7 @@ import { ScreenIntro } from "@/components/screen-intro";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
 import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
-import { buildCaseReferenceCode, buildPersistedConversation } from "@/lib/persisted-case-presenters";
+import { buildCaseReferenceCode, buildPersistedConversation, getPersistedQaReviewDisplay } from "@/lib/persisted-case-presenters";
 import { tryGetPersistedCaseDetail } from "@/lib/live-api";
 
 export const dynamic = "force-dynamic";
@@ -50,10 +50,27 @@ export default async function ConversationPage(props: PageProps) {
   const persistedCase = await tryGetPersistedCaseDetail(caseId);
 
   if (persistedCase) {
+    const qaReviewDisplay = getPersistedQaReviewDisplay(locale, persistedCase);
+
     return (
       <div className="page-stack">
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.conversation.summary} title={messages.conversation.title} />
         <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
+
+        {qaReviewDisplay ? (
+          <Panel title={locale === "ar" ? "حالة التحكم البشري" : "Human takeover state"}>
+            <div className="page-stack">
+              <div className="status-row-wrap">
+                <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge>
+                <StatusBadge>{qaReviewDisplay.triggerSourceLabel}</StatusBadge>
+                {qaReviewDisplay.policySignalLabels.map((label) => (
+                  <StatusBadge key={label}>{label}</StatusBadge>
+                ))}
+              </div>
+              <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
+            </div>
+          </Panel>
+        ) : null}
 
         <Panel title={persistedCase.customerName}>
           <MessageThread locale={locale} messages={buildPersistedConversation(persistedCase)} />

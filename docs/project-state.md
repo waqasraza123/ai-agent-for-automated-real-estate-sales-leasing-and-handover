@@ -52,6 +52,7 @@
 - The next persisted Phase 5 session boundary is now live locally: the web shell issues signed local operator sessions, handover detail routes require a trusted session plus workspace access, and manager plus handover entry surfaces are now guarded by shared workspace rules
 - The next persisted Phase 5 trust-hardening boundary is now live locally: the API now accepts only signed operator sessions, the integration harness has fully migrated off raw role headers, and invalid or legacy session attempts are rejected at the boundary
 - The next persisted Phase 5 manager-routing boundary is now live locally: the blended manager command center is now split into dedicated revenue and handover routes, while the shared `/manager` entry redirects single-surface roles and acts as a chooser only when both command surfaces are valid
+- The next persisted Phase 5 QA-policy boundary is now live locally: inbound website lead messages are automatically sampled into QA review when policy signals match, with localized summaries and persisted trigger evidence visible in queue and case detail surfaces
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -84,6 +85,7 @@
 - Added the next persisted Phase 5 trust-hardening slice with signed-session-only API enforcement, integration coverage for invalid and legacy session rejection, and full harness migration off the raw role header fallback
 - Added the next persisted Phase 5 manager-routing slice with shared manager workspace helpers, dedicated revenue and handover command-center routes, a role-aware `/manager` gateway, expanded manager-route smoke coverage, and manager-path revalidation across server actions
 - Added the next persisted Phase 5 QA-governance slice with a first-class `qa_reviewer` role, dedicated `/qa` workspace routes, persisted case-linked QA sampling and review records, localized QA forms and queue views, and role-aware integration plus smoke coverage
+- Added the next persisted Phase 5 QA-policy slice with automatic intake-time QA trigger detection, localized policy-sample summaries, persisted trigger evidence and signal metadata, queue and case-detail visibility for manual vs policy-triggered reviews, and integration coverage for automatic review creation
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -126,6 +128,7 @@
 - The local role model now includes a dedicated `qa_reviewer` role and `qa` workspace for explicit human inspection beyond manager routes
 - QA sampling is now a case-linked persisted boundary with append-friendly review history, while queue surfaces and case detail use the latest review as the active QA state
 - QA review requests are limited to managerial roles plus `admin`, while QA review resolution is limited to `qa_reviewer` and `admin`
+- Automatic QA sampling now runs during website lead intake when the inbound message matches local policy heuristics, and the persisted review keeps explicit trigger source, signal list, and matched-evidence context
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - Playwright smoke verification now runs against a production Next server because the dev-server path was intermittently unstable on the handover route in this environment
 - The repository uses a versioned `core.hooksPath` pointing to `.githooks`
@@ -141,7 +144,7 @@
 - Real provider integrations
 - Real AI execution and automation enforcement
 - Deeper qualification policy logic and approval boundaries beyond the current structured alpha form
-- Automatic QA sampling rules, policy packs, and message-level draft approval gates beyond the current case-linked review boundary
+- Broader QA policy packs and message-level draft approval gates beyond the current intake-triggered automatic case sampling boundary
 - Redis or BullMQ-backed durable job orchestration beyond the current local alpha worker
 - Leasing-specific rejection reasons and policy rules beyond the current shared document-request model
 - Real outbound customer communication, provider callbacks, external archive systems, broader post-completion workflows, and fully automated handover execution beyond the current planning, dispatch-ready, blocker, in-progress, controlled-completion, aftercare, and admin-closure boundaries

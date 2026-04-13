@@ -55,6 +55,7 @@ describe("lead capture api", () => {
     expect(createdCase.ownerName).toBe("Revenue Ops Queue");
     expect(createdCase.followUpStatus).toBe("on_track");
     expect(createdCase.automationStatus).toBe("active");
+    expect(createdCase.currentQaReview).toBeNull();
     expect(createdCase.handoverCase).toBeNull();
     expect(createdCase.handoverClosure).toBeNull();
 
@@ -69,13 +70,63 @@ describe("lead capture api", () => {
     expect(detailResponse.json().handoverCase).toBeNull();
   });
 
+  it("automatically opens a QA review when the inbound message matches policy triggers", async () => {
+    const response = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Noura Aziz",
+        email: "noura@example.com",
+        message:
+          "I am frustrated and need a special approval on the deposit terms. If this keeps happening, my lawyer will step in.",
+        preferredLocale: "en",
+        projectInterest: "Harbor Gate"
+      },
+      url: "/v1/website-leads"
+    });
+
+    expect(response.statusCode).toBe(201);
+
+    const createdCase = response.json();
+
+    expect(createdCase.currentQaReview.status).toBe("pending_review");
+    expect(createdCase.currentQaReview.triggerSource).toBe("policy_rule");
+    expect(createdCase.currentQaReview.policySignals).toEqual([
+      "exception_request",
+      "frustrated_customer_language",
+      "legal_escalation_risk"
+    ]);
+    expect(createdCase.currentQaReview.triggerEvidence).toEqual(["special approval", "frustrated", "lawyer"]);
+
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${createdCase.caseId}`
+    });
+
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json().qaReviews).toHaveLength(1);
+    expect(detailResponse.json().auditEvents.some((event: { eventType: string }) => event.eventType === "qa_review_policy_opened")).toBe(true);
+
+    const duplicateManualRequestResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        requestedByName: "Revenue Ops",
+        sampleSummary: "Attempt to add a manual QA request while the automatic policy review is already pending."
+      },
+      url: `/v1/cases/${createdCase.caseId}/qa-review`
+    });
+
+    expect(duplicateManualRequestResponse.statusCode).toBe(409);
+    expect(duplicateManualRequestResponse.json().error).toBe("qa_review_already_pending");
+  });
+
   it("opens and resolves a QA review boundary with role-aware controls", async () => {
     const createResponse = await app.inject({
       method: "POST",
       payload: {
         customerName: "Layla Saeed",
         email: "layla@example.com",
-        message: "I want an exception on the deposit terms and need someone senior to review the latest reply draft.",
+        message: "Please review the latest reply draft before we send the next update to this customer.",
         preferredLocale: "en",
         projectInterest: "Canal Heights"
       },

@@ -109,10 +109,20 @@ export default async function QaCaseDetailPage(props: PageProps) {
           {currentQaReview ? (
             <div className="page-stack">
               <p>{currentQaReview.sampleSummary}</p>
+              <div className="status-row-wrap">
+                <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
+                {currentQaReview.policySignalLabels.map((label) => (
+                  <StatusBadge key={label}>{label}</StatusBadge>
+                ))}
+              </div>
               <dl className="detail-list">
                 <div>
                   <dt>{locale === "ar" ? "الجهة الطالبة" : "Requested by"}</dt>
                   <dd>{currentQaReview.requestedByName}</dd>
+                </div>
+                <div>
+                  <dt>{locale === "ar" ? "الأدلة المطابقة" : "Matched evidence"}</dt>
+                  <dd>{currentQaReview.triggerEvidence.length > 0 ? currentQaReview.triggerEvidence.join(", ") : "—"}</dd>
                 </div>
                 <div>
                   <dt>{locale === "ar" ? "آخر تحديث" : "Last updated"}</dt>
@@ -155,6 +165,12 @@ export default async function QaCaseDetailPage(props: PageProps) {
             ) : (
               <div className="page-stack">
                 <StatusBadge tone={currentQaReview.statusTone}>{currentQaReview.statusLabel}</StatusBadge>
+                <div className="status-row-wrap">
+                  <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
+                  {currentQaReview.policySignalLabels.map((label) => (
+                    <StatusBadge key={label}>{label}</StatusBadge>
+                  ))}
+                </div>
                 <p>{currentQaReview.reviewSummary ?? currentQaReview.sampleSummary}</p>
                 <p className="case-link-meta">{currentQaReview.reviewedAt ?? currentQaReview.updatedAt}</p>
               </div>
@@ -183,6 +199,12 @@ export default async function QaCaseDetailPage(props: PageProps) {
               <div className="row-between">
                 <h3>{qaReview.sampleSummary}</h3>
                 <StatusBadge tone={qaReview.statusTone}>{qaReview.statusLabel}</StatusBadge>
+              </div>
+              <div className="status-row-wrap">
+                <StatusBadge>{qaReview.triggerSourceLabel}</StatusBadge>
+                {qaReview.policySignalLabels.map((label) => (
+                  <StatusBadge key={label}>{label}</StatusBadge>
+                ))}
               </div>
               <p>{qaReview.reviewSummary ?? "—"}</p>
               <p className="case-link-meta">

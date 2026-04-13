@@ -34,6 +34,13 @@ export const managerInterventionTypeSchema = z.enum(["follow_up_overdue"]);
 export const managerInterventionSeveritySchema = z.enum(["warning", "critical"]);
 export const managerInterventionStatusSchema = z.enum(["open", "resolved"]);
 export const caseQaReviewStatusSchema = z.enum(["pending_review", "approved", "follow_up_required"]);
+export const caseQaReviewTriggerSourceSchema = z.enum(["manual_request", "policy_rule"]);
+export const caseQaPolicySignalSchema = z.enum([
+  "exception_request",
+  "frustrated_customer_language",
+  "discrimination_risk",
+  "legal_escalation_risk"
+]);
 export const handoverCaseStatusSchema = z.enum([
   "pending_readiness",
   "internal_tasks_open",
@@ -249,6 +256,7 @@ export const persistedManagerInterventionSchema = z.object({
 
 export const persistedCaseQaReviewSchema = z.object({
   createdAt: z.iso.datetime(),
+  policySignals: z.array(caseQaPolicySignalSchema),
   qaReviewId: z.uuid(),
   requestedByName: z.string(),
   reviewSummary: z.string().nullable(),
@@ -256,6 +264,8 @@ export const persistedCaseQaReviewSchema = z.object({
   reviewerName: z.string().nullable(),
   sampleSummary: z.string(),
   status: caseQaReviewStatusSchema,
+  triggerEvidence: z.array(z.string()),
+  triggerSource: caseQaReviewTriggerSourceSchema,
   updatedAt: z.iso.datetime()
 });
 
@@ -431,6 +441,8 @@ export type ApproveHandoverCustomerUpdateInput = z.infer<typeof approveHandoverC
 export type AutomationStatus = z.infer<typeof automationStatusSchema>;
 export type CaseStage = z.infer<typeof caseStageSchema>;
 export type CaseQaReviewStatus = z.infer<typeof caseQaReviewStatusSchema>;
+export type CaseQaPolicySignal = z.infer<typeof caseQaPolicySignalSchema>;
+export type CaseQaReviewTriggerSource = z.infer<typeof caseQaReviewTriggerSourceSchema>;
 export type CompleteHandoverInput = z.infer<typeof completeHandoverInputSchema>;
 export type ConfirmHandoverAppointmentInput = z.infer<typeof confirmHandoverAppointmentInputSchema>;
 export type HandoverClosureState = z.infer<typeof handoverClosureStateSchema>;

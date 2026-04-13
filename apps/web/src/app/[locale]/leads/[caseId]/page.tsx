@@ -206,7 +206,16 @@ export default async function LeadProfilePage(props: PageProps) {
                   <h3>{qaReviewDisplay.sampleSummary}</h3>
                   <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge>
                 </div>
+                <div className="status-row-wrap">
+                  <StatusBadge>{qaReviewDisplay.triggerSourceLabel}</StatusBadge>
+                  {qaReviewDisplay.policySignalLabels.map((label) => (
+                    <StatusBadge key={label}>{label}</StatusBadge>
+                  ))}
+                </div>
                 <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
+                {qaReviewDisplay.triggerEvidence.length > 0 ? (
+                  <p className="case-link-meta">{qaReviewDisplay.triggerEvidence.join(", ")}</p>
+                ) : null}
                 <p className="case-link-meta">
                   {qaReviewDisplay.reviewerName ?? qaReviewDisplay.requestedByName}
                   {" · "}
