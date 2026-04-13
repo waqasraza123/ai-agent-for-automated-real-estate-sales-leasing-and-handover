@@ -26,6 +26,7 @@ import type {
   SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
   ScheduleVisitInput,
+  SendCaseReplyInput,
   StartHandoverExecutionInput,
   UpdateAutomationStatusInput,
   UpdateHandoverArchiveStatusInput,
@@ -158,6 +159,52 @@ export async function resolvePersistedCaseQaReview(
   }
 
   return store.resolveCaseQaReview(caseId, qaReviewId, input);
+}
+
+export async function sendPersistedCaseReply(
+  store: LeadCaptureStore,
+  caseId: string,
+  input: SendCaseReplyInput
+): Promise<PersistedCaseDetail | null> {
+  const caseDetail = await store.getCaseDetail(caseId);
+
+  if (!caseDetail) {
+    return null;
+  }
+
+  const currentQaReview = caseDetail.currentQaReview;
+
+  if (currentQaReview?.status === "pending_review" || currentQaReview?.status === "follow_up_required") {
+    throw new WorkflowRuleError("qa_review_reply_send_blocked");
+  }
+
+  const sentApprovedDraftQaReviewIds = new Set(
+    caseDetail.auditEvents
+      .filter((event) => event.eventType === "case_reply_sent")
+      .map((event) => {
+        const approvedDraftQaReviewId = event.payload?.approvedDraftQaReviewId;
+
+        return typeof approvedDraftQaReviewId === "string" ? approvedDraftQaReviewId : null;
+      })
+      .filter((qaReviewId): qaReviewId is string => qaReviewId !== null)
+  );
+
+  const approvedDraftQaReviewId =
+    currentQaReview?.subjectType === "prepared_reply_draft" &&
+    currentQaReview.status === "approved" &&
+    currentQaReview.draftMessage &&
+    !sentApprovedDraftQaReviewIds.has(currentQaReview.qaReviewId)
+      ? currentQaReview.qaReviewId
+      : null;
+
+  if (approvedDraftQaReviewId && input.message.trim() !== currentQaReview?.draftMessage?.trim()) {
+    throw new WorkflowRuleError("qa_approved_reply_draft_mismatch");
+  }
+
+  return store.sendCaseReply(caseId, {
+    ...input,
+    approvedDraftQaReviewId
+  });
 }
 
 export async function qualifyPersistedCase(

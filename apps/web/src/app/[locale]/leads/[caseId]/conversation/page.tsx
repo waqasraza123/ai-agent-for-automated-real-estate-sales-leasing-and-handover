@@ -8,12 +8,13 @@ import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
+import { CaseManualReplyForm } from "@/components/case-manual-reply-form";
 import { CaseReplyDraftQaRequestForm } from "@/components/case-reply-draft-qa-request-form";
 import { MessageThread } from "@/components/message-thread";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { ScreenIntro } from "@/components/screen-intro";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
-import { getCaseReplyDraftQaRequestCopy } from "@/lib/live-copy";
+import { getCaseManualReplyCopy, getCaseReplyDraftQaRequestCopy } from "@/lib/live-copy";
 import { getOperatorPermissionGuardNote } from "@/lib/operator-role";
 import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
@@ -57,15 +58,20 @@ export default async function ConversationPage(props: PageProps) {
   if (persistedCase) {
     const qaReviewDisplay = getPersistedQaReviewDisplay(locale, persistedCase);
     const canManageQaSampling = canOperatorRolePerform("manage_qa_sampling", currentOperatorRole);
+    const canSendReplies = canOperatorRolePerform("send_case_replies", currentOperatorRole);
     const canAccessQaWorkspace = canOperatorRoleAccessWorkspace("qa", currentOperatorRole);
+    const canSendHumanReply = canSendReplies && persistedCase.automationHoldReason === null;
+    const manualReplyCopy = getCaseManualReplyCopy(locale);
     const replyDraftCopy = getCaseReplyDraftQaRequestCopy(locale);
     const qaSamplingGuardNote = getOperatorPermissionGuardNote(locale, "manage_qa_sampling");
+    const sendReplyGuardNote = getOperatorPermissionGuardNote(locale, "send_case_replies");
     const currentReplyDraft =
       qaReviewDisplay?.subjectType === "prepared_reply_draft"
         ? {
             draftMessage: qaReviewDisplay.draftMessage,
             reviewSummary: qaReviewDisplay.reviewSummary,
             sampleSummary: qaReviewDisplay.sampleSummary,
+            status: qaReviewDisplay.status,
             statusLabel: qaReviewDisplay.statusLabel,
             statusTone: qaReviewDisplay.statusTone,
             subjectTypeLabel: qaReviewDisplay.subjectTypeLabel,
@@ -74,6 +80,21 @@ export default async function ConversationPage(props: PageProps) {
             updatedAt: qaReviewDisplay.updatedAt
           }
         : null;
+    const approvedReplyDraftAlreadySent =
+      qaReviewDisplay?.subjectType === "prepared_reply_draft" &&
+      qaReviewDisplay.status === "approved" &&
+      persistedCase.auditEvents.some(
+        (event) =>
+          event.eventType === "case_reply_sent" &&
+          typeof event.payload?.approvedDraftQaReviewId === "string" &&
+          event.payload.approvedDraftQaReviewId === qaReviewDisplay.qaReviewId
+      );
+    const hasApprovedReplyDraft = currentReplyDraft?.status === "approved" && !approvedReplyDraftAlreadySent;
+    const replySendDisabledLabel = !canSendReplies
+      ? sendReplyGuardNote
+      : locale === "ar"
+        ? "لا يمكن حفظ الرد بينما مراجعة الجودة الحالية ما زالت مفتوحة أو تطلب متابعة."
+        : "A human reply cannot be saved while the current QA review is still open or requires follow-up.";
 
     return (
       <div className="page-stack">
@@ -98,6 +119,21 @@ export default async function ConversationPage(props: PageProps) {
         ) : null}
 
         <div className="two-column-grid">
+          <Panel title={manualReplyCopy.title}>
+            <p className="panel-summary">{manualReplyCopy.summary}</p>
+            {!canSendReplies ? <p className="field-note">{sendReplyGuardNote}</p> : null}
+            <CaseManualReplyForm
+              canSend={canSendHumanReply}
+              caseId={persistedCase.caseId}
+              defaultMessage={hasApprovedReplyDraft ? currentReplyDraft?.draftMessage : null}
+              defaultSentByName={persistedCase.ownerName}
+              disabledLabel={replySendDisabledLabel}
+              locale={locale}
+              returnPath={`/${locale}/leads/${persistedCase.caseId}/conversation`}
+              showApprovedDraftNote={hasApprovedReplyDraft}
+            />
+          </Panel>
+
           <Panel title={replyDraftCopy.title}>
             <p className="panel-summary">{replyDraftCopy.summary}</p>
             <p className="field-note">{qaSamplingGuardNote}</p>

@@ -28,6 +28,7 @@ import type {
   SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
   ScheduleVisitInput,
+  SendCaseReplyInput,
   StartHandoverExecutionInput,
   OperatorRole,
   UpdateHandoverArchiveStatusInput,
@@ -134,6 +135,14 @@ export async function prepareCaseReplyDraftQaReview(
   operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/reply-draft/qa-review`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function sendCaseReply(caseId: string, input: SendCaseReplyInput, operatorRole?: OperatorRole) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/replies`, {
     headers: await getOperatorSessionHeaders(operatorRole),
     method: "POST",
     payload: input

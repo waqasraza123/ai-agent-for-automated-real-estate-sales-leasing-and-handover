@@ -106,7 +106,22 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
     }
   ];
 
-  if (caseDetail.currentQaReview?.subjectType === "prepared_reply_draft" && caseDetail.currentQaReview.draftMessage) {
+  const sentApprovedDraftQaReviewIds = new Set(
+    caseDetail.auditEvents
+      .filter((event) => event.eventType === "case_reply_sent")
+      .map((event) => {
+        const approvedDraftQaReviewId = event.payload?.approvedDraftQaReviewId;
+
+        return typeof approvedDraftQaReviewId === "string" ? approvedDraftQaReviewId : null;
+      })
+      .filter((qaReviewId): qaReviewId is string => qaReviewId !== null)
+  );
+
+  if (
+    caseDetail.currentQaReview?.subjectType === "prepared_reply_draft" &&
+    caseDetail.currentQaReview.draftMessage &&
+    !sentApprovedDraftQaReviewIds.has(caseDetail.currentQaReview.qaReviewId)
+  ) {
     conversation.push({
       body: {
         ar: caseDetail.currentQaReview.draftMessage,
@@ -116,6 +131,36 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
       sender: "manager",
       state: getPreparedReplyDraftState(caseDetail),
       timestamp: formatTimestamp(caseDetail.currentQaReview.updatedAt)
+    });
+  }
+
+  for (const event of caseDetail.auditEvents.filter((auditEvent) => auditEvent.eventType === "case_reply_sent")) {
+    const message = event.payload?.message;
+
+    if (typeof message !== "string") {
+      continue;
+    }
+
+    const approvedDraftQaReviewId = event.payload?.approvedDraftQaReviewId;
+
+    conversation.push({
+      body: {
+        ar: message,
+        en: message
+      },
+      id: `${caseDetail.caseId}-${event.createdAt}-reply`,
+      sender: "manager",
+      state:
+        typeof approvedDraftQaReviewId === "string"
+          ? {
+              ar: "رد بشري أرسل بعد اعتماد الجودة",
+              en: "Human reply sent after QA approval"
+            }
+          : {
+              ar: "رد بشري محفوظ",
+              en: "Human reply saved"
+            },
+      timestamp: formatTimestamp(event.createdAt)
     });
   }
 
@@ -142,14 +187,14 @@ export function buildPersistedHandoverTimeline(handoverCase: PersistedHandoverCa
 export function buildPersistedTimeline(caseDetail: PersistedCaseDetail): JourneyEvent[] {
   return caseDetail.auditEvents.map((event, index) => ({
     detail: {
-      ar: describeAuditEvent(caseDetail, event.eventType, "ar", "detail"),
-      en: describeAuditEvent(caseDetail, event.eventType, "en", "detail")
+      ar: describeAuditEvent(caseDetail, event, "ar", "detail"),
+      en: describeAuditEvent(caseDetail, event, "en", "detail")
     },
     id: `${caseDetail.caseId}-${index}`,
     timestamp: formatTimestamp(event.createdAt),
     title: {
-      ar: describeAuditEvent(caseDetail, event.eventType, "ar", "title"),
-      en: describeAuditEvent(caseDetail, event.eventType, "en", "title")
+      ar: describeAuditEvent(caseDetail, event, "ar", "title"),
+      en: describeAuditEvent(caseDetail, event, "en", "title")
     }
   }));
 }
@@ -647,7 +692,13 @@ export function getPersistedHandoverWorkspaceSurface(caseSummary: PersistedCaseD
   return "planning" as const;
 }
 
-function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, locale: SupportedLocale, variant: "detail" | "title") {
+function describeAuditEvent(
+  caseDetail: PersistedCaseDetail,
+  event: PersistedCaseDetail["auditEvents"][number],
+  locale: SupportedLocale,
+  variant: "detail" | "title"
+) {
+  const eventType = event.eventType;
   const descriptions = {
     ar: {
       automation_paused: {
@@ -657,6 +708,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       automation_resumed: {
         detail: "تمت إعادة تشغيل أتمتة المتابعة وجدولة التحقق التالي.",
         title: "استئناف الأتمتة"
+      },
+      case_reply_sent: {
+        detail: "تم حفظ رد بشري حي على الحالة بعد اكتمال حد الجودة الحالي.",
+        title: "حفظ رد بشري"
       },
       case_qualified: {
         detail: "تم حفظ بيانات التأهيل وربطها بالحالة.",
@@ -771,6 +826,10 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
       automation_resumed: {
         detail: "Follow-up automation was resumed and the next check was queued again.",
         title: "Automation resumed"
+      },
+      case_reply_sent: {
+        detail: "A live human reply was recorded on the case after the current QA boundary cleared.",
+        title: "Human reply saved"
       },
       case_qualified: {
         detail: "Qualification fields were captured and attached to the persisted case.",

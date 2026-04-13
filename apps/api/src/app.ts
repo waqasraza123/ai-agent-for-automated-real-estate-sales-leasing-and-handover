@@ -13,6 +13,7 @@ import {
   requestCaseQaReviewInputSchema,
   resolveCaseQaReviewInputSchema,
   resolveHandoverCustomerUpdateQaReviewInputSchema,
+  sendCaseReplyInputSchema,
   updateHandoverArchiveStatusInputSchema,
   updateAutomationStatusInputSchema,
   updateDocumentRequestInputSchema,
@@ -42,6 +43,7 @@ import {
   resolvePersistedHandoverPostCompletionFollowUp,
   requestPersistedCaseQaReview,
   resolvePersistedHandoverCustomerUpdateQaReview,
+  sendPersistedCaseReply,
   savePersistedHandoverArchiveReview,
   savePersistedHandoverReview,
   startPersistedHandoverExecution,
@@ -162,6 +164,47 @@ export function buildApiApp(dependencies: {
 
     try {
       const caseDetail = await preparePersistedCaseReplyDraftQaReview(dependencies.store, request.params.caseId, result.data);
+
+      if (!caseDetail) {
+        return reply.status(404).send({
+          error: "case_not_found"
+        });
+      }
+
+      return reply.status(200).send(caseDetail);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.post<{
+    Params: {
+      caseId: string;
+    };
+  }>("/v1/cases/:caseId/replies", async (request, reply) => {
+    const permission = "send_case_replies";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = sendCaseReplyInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const caseDetail = await sendPersistedCaseReply(dependencies.store, request.params.caseId, result.data);
 
       if (!caseDetail) {
         return reply.status(404).send({

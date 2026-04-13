@@ -382,6 +382,208 @@ describe("lead capture api", () => {
     ).toBe(true);
   });
 
+  it("records a human reply after QA approves the prepared draft and consumes that draft boundary", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Hadiya Noor",
+        email: "hadiya@example.com",
+        message: "Please confirm the reservation process and next payment step.",
+        preferredLocale: "en",
+        projectInterest: "Canal Heights"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const createdCase = createResponse.json();
+    const approvedDraftMessage = "The reservation process is confirmed, and I will send the exact next payment step today.";
+
+    const draftRequestResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        draftMessage: approvedDraftMessage,
+        requestedByName: "Revenue Ops"
+      },
+      url: `/v1/cases/${createdCase.caseId}/reply-draft/qa-review`
+    });
+
+    expect(draftRequestResponse.statusCode).toBe(200);
+
+    const qaReviewId = draftRequestResponse.json().currentQaReview.qaReviewId;
+
+    const approveResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "The draft is compliant for the next human response.",
+        reviewerName: "QA Desk",
+        status: "approved"
+      },
+      url: `/v1/cases/${createdCase.caseId}/qa-review/${qaReviewId}`
+    });
+
+    expect(approveResponse.statusCode).toBe(200);
+
+    const unauthorizedSendResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "POST",
+      payload: {
+        message: approvedDraftMessage,
+        sentByName: "QA Desk"
+      },
+      url: `/v1/cases/${createdCase.caseId}/replies`
+    });
+
+    expect(unauthorizedSendResponse.statusCode).toBe(403);
+
+    const sendResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        message: approvedDraftMessage,
+        sentByName: "Amina Rahman"
+      },
+      url: `/v1/cases/${createdCase.caseId}/replies`
+    });
+
+    expect(sendResponse.statusCode).toBe(200);
+
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${createdCase.caseId}`
+    });
+
+    expect(detailResponse.statusCode).toBe(200);
+    expect(
+      detailResponse
+        .json()
+        .auditEvents.some(
+          (event: {
+            eventType: string;
+            payload?: { approvedDraftQaReviewId?: string | null; message?: string; sentByName?: string | null };
+          }) =>
+            event.eventType === "case_reply_sent" &&
+            event.payload?.approvedDraftQaReviewId === qaReviewId &&
+            event.payload?.message === approvedDraftMessage &&
+            event.payload?.sentByName === "Amina Rahman"
+        )
+    ).toBe(true);
+
+    const secondReplyResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        message: "Following up with the promised banking details and final booking checklist.",
+        sentByName: "Amina Rahman"
+      },
+      url: `/v1/cases/${createdCase.caseId}/replies`
+    });
+
+    expect(secondReplyResponse.statusCode).toBe(200);
+  });
+
+  it("blocks a human reply while QA is still open and rejects edits to an approved draft", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Layla Abbas",
+        email: "layla@example.com",
+        message: "Please confirm the next standard reservation step for this unit.",
+        preferredLocale: "en",
+        projectInterest: "Harbor Gate"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const createdCase = createResponse.json();
+
+    const manualQaRequestResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        requestedByName: "Revenue Ops",
+        sampleSummary: "Review the next outbound response before a human replies to the customer."
+      },
+      url: `/v1/cases/${createdCase.caseId}/qa-review`
+    });
+
+    expect(manualQaRequestResponse.statusCode).toBe(200);
+
+    const blockedWhilePendingResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        message: "We are still reviewing the escalation internally and will return with a compliant answer.",
+        sentByName: "Revenue Ops"
+      },
+      url: `/v1/cases/${createdCase.caseId}/replies`
+    });
+
+    expect(blockedWhilePendingResponse.statusCode).toBe(409);
+    expect(blockedWhilePendingResponse.json()).toEqual({
+      error: "qa_review_reply_send_blocked"
+    });
+
+    const pendingQaReviewId = manualQaRequestResponse.json().currentQaReview.qaReviewId;
+
+    const clearPendingResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "The case can continue into a controlled reply-draft review.",
+        reviewerName: "QA Desk",
+        status: "approved"
+      },
+      url: `/v1/cases/${createdCase.caseId}/qa-review/${pendingQaReviewId}`
+    });
+
+    expect(clearPendingResponse.statusCode).toBe(200);
+
+    const approveMessage = "We reviewed the request and can continue with the standard reservation path.";
+    const draftRequestResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        draftMessage: approveMessage,
+        requestedByName: "Revenue Ops"
+      },
+      url: `/v1/cases/${createdCase.caseId}/reply-draft/qa-review`
+    });
+
+    expect(draftRequestResponse.statusCode).toBe(200);
+
+    const qaReviewId = draftRequestResponse.json().currentQaReview.qaReviewId;
+
+    const approveResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "This reply is compliant for the next human response.",
+        reviewerName: "QA Desk",
+        status: "approved"
+      },
+      url: `/v1/cases/${createdCase.caseId}/qa-review/${qaReviewId}`
+    });
+
+    expect(approveResponse.statusCode).toBe(200);
+
+    const mismatchedSendResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        message: `${approveMessage} We can also guarantee the pricing exception today.`,
+        sentByName: "Revenue Ops"
+      },
+      url: `/v1/cases/${createdCase.caseId}/replies`
+    });
+
+    expect(mismatchedSendResponse.statusCode).toBe(409);
+    expect(mismatchedSendResponse.json()).toEqual({
+      error: "qa_approved_reply_draft_mismatch"
+    });
+  });
+
   it("promotes a document-complete case into controlled handover execution and completion", async () => {
     const createResponse = await app.inject({
       method: "POST",

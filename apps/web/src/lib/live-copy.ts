@@ -316,6 +316,29 @@ export function getCaseReplyDraftQaRequestCopy(locale: SupportedLocale) {
   };
 }
 
+export function getCaseManualReplyCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "حفظ الرد البشري",
+      approvedDraftNote: "إذا كانت مسودة الرد الحالية معتمدة من الجودة، يجب إرسال النص المعتمد كما هو أو فتح مراجعة جديدة قبل تعديله.",
+      message: "نص الرد المرسل",
+      sentByName: "أرسل بواسطة",
+      summary: "سجل الرد البشري الفعلي على الحالة بعد اكتمال حدود الجودة، مع إبقاء الأثر ظاهراً في المحادثة والخط الزمني.",
+      title: "إرسال رد بشري"
+    };
+  }
+
+  return {
+    action: "Save human reply",
+    approvedDraftNote:
+      "If the current reply draft is QA-approved, send the approved text exactly as-is or open a new review before editing it.",
+    message: "Sent reply text",
+    sentByName: "Sent by",
+    summary: "Record the real human reply on the case after governance clears, while keeping the outcome visible in the conversation and timeline.",
+    title: "Send human reply"
+  };
+}
+
 export function getQaReviewResolutionCopy(locale: SupportedLocale) {
   if (locale === "ar") {
     return {

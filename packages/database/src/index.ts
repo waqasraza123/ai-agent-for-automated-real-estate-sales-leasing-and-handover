@@ -78,6 +78,7 @@ import type {
   SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
   ScheduleVisitInput,
+  SendCaseReplyInput,
   StartHandoverExecutionInput,
   SupportedLocale,
   UpdateHandoverArchiveStatusInput,
@@ -402,6 +403,12 @@ export interface LeadCaptureStore {
   prepareCaseReplyDraftQaReview(caseId: string, input: PrepareCaseReplyDraftQaReviewInput): Promise<PersistedCaseDetail | null>;
   requestCaseQaReview(caseId: string, input: RequestCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   resolveCaseQaReview(caseId: string, qaReviewId: string, input: ResolveCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
+  sendCaseReply(
+    caseId: string,
+    input: SendCaseReplyInput & {
+      approvedDraftQaReviewId: string | null;
+    }
+  ): Promise<PersistedCaseDetail | null>;
   getCaseDetail(caseId: string): Promise<PersistedCaseDetail | null>;
   listGovernanceEvents(input: ListGovernanceEventsQuery): Promise<PersistedGovernanceEventList>;
   getGovernanceSummary(): Promise<PersistedGovernanceSummary>;
@@ -2355,6 +2362,38 @@ export async function createAlphaLeadCaptureStore(options?: {
           caseId,
           runAfter: caseRecord.nextActionDueAt,
           updatedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async sendCaseReply(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const createdAt = new Date().toISOString();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(cases)
+          .set({
+            updatedAt: createdAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt,
+          eventType: "case_reply_sent",
+          id: randomUUID(),
+          payload: {
+            approvedDraftQaReviewId: input.approvedDraftQaReviewId,
+            message: input.message,
+            sentByName: input.sentByName ?? caseRecord.ownerName
+          }
         });
       });
 

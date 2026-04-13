@@ -26,6 +26,7 @@ import {
   resolveHandoverPostCompletionFollowUpInputSchema,
   saveHandoverArchiveReviewInputSchema,
   scheduleVisitInputSchema,
+  sendCaseReplyInputSchema,
   saveHandoverReviewInputSchema,
   startHandoverExecutionInputSchema,
   supportedLocaleSchema,
@@ -65,6 +66,7 @@ import {
   resolveHandoverPostCompletionFollowUp,
   saveHandoverArchiveReview,
   scheduleVisit,
+  sendCaseReply,
   saveHandoverReview,
   startHandoverExecution,
   updateHandoverArchiveStatus,
@@ -317,6 +319,70 @@ export async function resolveCaseQaReviewAction(_: FormActionState, formData: Fo
             : "This QA review can no longer be resolved because it is not pending anymore.",
         status: "error"
       };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function sendCaseReplyAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const caseId = formData.get("caseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof caseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = sendCaseReplyInputSchema.safeParse({
+    message: formData.get("message"),
+    sentByName: normalizeOptionalString(formData.get("sentByName"))
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedCase = await sendCaseReply(caseId, result.data, await getOperatorRole());
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم حفظ الرد البشري على السجل الحي للحالة."
+          : "The human reply was saved on the live case record.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      const errorCode =
+        typeof error.body === "object" && error.body !== null && "error" in error.body && typeof error.body.error === "string"
+          ? error.body.error
+          : null;
+
+      if (errorCode === "qa_review_reply_send_blocked") {
+        return {
+          message:
+            locale === "ar"
+              ? "لا يمكن إرسال رد بشري بينما مراجعة الجودة الحالية ما زالت مفتوحة أو تطلب متابعة."
+              : "A human reply cannot be sent while the current QA review is still open or requires follow-up.",
+          status: "error"
+        };
+      }
+
+      if (errorCode === "qa_approved_reply_draft_mismatch") {
+        return {
+          message:
+            locale === "ar"
+              ? "الرد المعتمد من الجودة لا يمكن تعديله مباشرة. أرسل النص المعتمد كما هو أو افتح مراجعة جودة جديدة."
+              : "The QA-approved reply draft cannot be edited inline. Send the approved text exactly as-is or open a new QA review.",
+          status: "error"
+        };
+      }
     }
 
     return getActionError(locale, error);

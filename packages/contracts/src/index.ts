@@ -4,6 +4,7 @@ export const supportedLocaleSchema = z.enum(["en", "ar"]);
 export const operatorRoleSchema = z.enum(["sales_manager", "handover_coordinator", "handover_manager", "qa_reviewer", "admin"]);
 export const operatorWorkspaceSchema = z.enum(["sales", "handover", "manager_revenue", "manager_handover", "qa"]);
 export const operatorPermissionSchema = z.enum([
+  "send_case_replies",
   "manage_case_follow_up",
   "manage_case_automation",
   "manage_handover_intake",
@@ -141,6 +142,11 @@ export const requestCaseQaReviewInputSchema = z.object({
 export const prepareCaseReplyDraftQaReviewInputSchema = z.object({
   draftMessage: z.string().trim().min(10).max(2000),
   requestedByName: z.string().trim().min(2).max(120).optional()
+});
+
+export const sendCaseReplyInputSchema = z.object({
+  message: z.string().trim().min(10).max(2000),
+  sentByName: z.string().trim().min(2).max(120).optional()
 });
 
 export const resolveCaseQaReviewInputSchema = z.object({
@@ -689,6 +695,7 @@ export type ResolveHandoverCustomerUpdateQaReviewInput = z.infer<typeof resolveH
 export type SaveHandoverArchiveReviewInput = z.infer<typeof saveHandoverArchiveReviewInputSchema>;
 export type SaveHandoverReviewInput = z.infer<typeof saveHandoverReviewInputSchema>;
 export type ScheduleVisitInput = z.infer<typeof scheduleVisitInputSchema>;
+export type SendCaseReplyInput = z.infer<typeof sendCaseReplyInputSchema>;
 export type StartHandoverExecutionInput = z.infer<typeof startHandoverExecutionInputSchema>;
 export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
 export type UpdateHandoverMilestoneInput = z.infer<typeof updateHandoverMilestoneInputSchema>;
@@ -714,6 +721,7 @@ const operatorWorkspaceAccess = {
 } as const satisfies Record<OperatorRole, readonly OperatorWorkspace[]>;
 
 const operatorPermissionRequirements = {
+  send_case_replies: ["sales_manager", "handover_manager", "admin"],
   manage_case_automation: ["sales_manager", "handover_manager", "admin"],
   manage_case_follow_up: ["sales_manager", "handover_manager", "admin"],
   manage_handover_intake: ["handover_manager", "admin"],
