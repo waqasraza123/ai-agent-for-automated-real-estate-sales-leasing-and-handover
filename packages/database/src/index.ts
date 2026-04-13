@@ -7,6 +7,7 @@ import type {
   CaseStage,
   CaseQaPolicySignal,
   CaseQaReviewStatus,
+  CaseQaReviewSubjectType,
   CaseQaReviewTriggerSource,
   CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
@@ -60,6 +61,7 @@ import type {
   PersistedLinkedHandoverCase,
   PersistedManagerIntervention,
   PlanHandoverAppointmentInput,
+  PrepareCaseReplyDraftQaReviewInput,
   PrepareHandoverCustomerUpdateDeliveryInput,
   QualifyCaseInput,
   QualificationReadiness,
@@ -83,7 +85,9 @@ import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import {
   buildAutomaticQaSampleSummary,
+  buildCaseReplyDraftQaSampleSummary,
   buildHandoverCustomerUpdateQaSampleSummary,
+  detectCaseReplyDraftQaPolicyMatches,
   detectHandoverCustomerUpdateQaPolicyMatches,
   detectQaPolicyMatches,
   type HandoverCustomerUpdateQaPolicyMatch,
@@ -331,6 +335,7 @@ const caseQaReviews = pgTable("case_qa_reviews", {
     .notNull()
     .references(() => cases.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  draftMessage: text("draft_message"),
   id: uuid("id").primaryKey(),
   policySignals: jsonb("policy_signals").$type<QaPolicySignal[]>().notNull(),
   requestedByName: text("requested_by_name").notNull(),
@@ -339,6 +344,7 @@ const caseQaReviews = pgTable("case_qa_reviews", {
   reviewerName: text("reviewer_name"),
   sampleSummary: text("sample_summary").notNull(),
   status: text("status").notNull(),
+  subjectType: text("subject_type").notNull(),
   triggerEvidence: jsonb("trigger_evidence").$type<string[]>().notNull(),
   triggerSource: text("trigger_source").notNull(),
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
@@ -387,6 +393,7 @@ export interface LeadCaptureStore {
       nextActionDueAt: string;
     }
   ): Promise<CreateWebsiteLeadResult>;
+  prepareCaseReplyDraftQaReview(caseId: string, input: PrepareCaseReplyDraftQaReviewInput): Promise<PersistedCaseDetail | null>;
   requestCaseQaReview(caseId: string, input: RequestCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   resolveCaseQaReview(caseId: string, qaReviewId: string, input: ResolveCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   getCaseDetail(caseId: string): Promise<PersistedCaseDetail | null>;
@@ -818,6 +825,8 @@ export async function createAlphaLeadCaptureStore(options?: {
       requested_by_name text not null,
       sample_summary text not null,
       status text not null,
+      subject_type text not null default 'case_message',
+      draft_message text,
       trigger_source text not null default 'manual_request',
       policy_signals jsonb not null default '[]'::jsonb,
       trigger_evidence jsonb not null default '[]'::jsonb,
@@ -831,6 +840,8 @@ export async function createAlphaLeadCaptureStore(options?: {
     alter table case_qa_reviews add column if not exists trigger_source text not null default 'manual_request';
     alter table case_qa_reviews add column if not exists policy_signals jsonb not null default '[]'::jsonb;
     alter table case_qa_reviews add column if not exists trigger_evidence jsonb not null default '[]'::jsonb;
+    alter table case_qa_reviews add column if not exists subject_type text not null default 'case_message';
+    alter table case_qa_reviews add column if not exists draft_message text;
 
     create table if not exists automation_jobs (
       id uuid primary key,
@@ -1204,6 +1215,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       .select({
         caseId: caseQaReviews.caseId,
         createdAt: caseQaReviews.createdAt,
+        draftMessage: caseQaReviews.draftMessage,
         policySignals: caseQaReviews.policySignals,
         qaReviewId: caseQaReviews.id,
         requestedByName: caseQaReviews.requestedByName,
@@ -1212,6 +1224,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         reviewerName: caseQaReviews.reviewerName,
         sampleSummary: caseQaReviews.sampleSummary,
         status: caseQaReviews.status,
+        subjectType: caseQaReviews.subjectType,
         triggerEvidence: caseQaReviews.triggerEvidence,
         triggerSource: caseQaReviews.triggerSource,
         updatedAt: caseQaReviews.updatedAt
@@ -1638,6 +1651,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         db
           .select({
             createdAt: caseQaReviews.createdAt,
+            draftMessage: caseQaReviews.draftMessage,
             policySignals: caseQaReviews.policySignals,
             qaReviewId: caseQaReviews.id,
             requestedByName: caseQaReviews.requestedByName,
@@ -1646,6 +1660,7 @@ export async function createAlphaLeadCaptureStore(options?: {
             reviewerName: caseQaReviews.reviewerName,
             sampleSummary: caseQaReviews.sampleSummary,
             status: caseQaReviews.status,
+            subjectType: caseQaReviews.subjectType,
             triggerEvidence: caseQaReviews.triggerEvidence,
             triggerSource: caseQaReviews.triggerSource,
             updatedAt: caseQaReviews.updatedAt
@@ -1810,10 +1825,12 @@ export async function createAlphaLeadCaptureStore(options?: {
     input: {
       caseId: string;
       createdAt: string;
+      draftMessage: string | null;
       policySignals: QaPolicySignal[];
       qaReviewId: string;
       requestedByName: string;
       sampleSummary: string;
+      subjectType: CaseQaReviewSubjectType;
       triggerEvidence: string[];
       triggerSource: CaseQaReviewTriggerSource;
     }
@@ -1821,6 +1838,7 @@ export async function createAlphaLeadCaptureStore(options?: {
     await transaction.insert(caseQaReviews).values({
       caseId: input.caseId,
       createdAt: input.createdAt,
+      draftMessage: input.draftMessage,
       id: input.qaReviewId,
       policySignals: input.policySignals,
       requestedByName: input.requestedByName,
@@ -1829,6 +1847,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       reviewerName: null,
       sampleSummary: input.sampleSummary,
       status: "pending_review",
+      subjectType: input.subjectType,
       triggerEvidence: input.triggerEvidence,
       triggerSource: input.triggerSource,
       updatedAt: input.createdAt
@@ -1966,10 +1985,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           await createQaReviewRecord(transaction, {
             caseId: createdCaseId,
             createdAt,
+            draftMessage: null,
             policySignals: automaticQaMatches.map((match) => match.signal),
             qaReviewId: automaticQaReviewId,
             requestedByName: "QA Policy Engine",
             sampleSummary: buildAutomaticQaSampleSummary(input.preferredLocale, automaticQaMatches.map((match) => match.signal)),
+            subjectType: "case_message",
             triggerEvidence: automaticQaMatches.map((match) => match.evidence),
             triggerSource: "policy_rule"
           });
@@ -1982,6 +2003,7 @@ export async function createAlphaLeadCaptureStore(options?: {
             payload: {
               policySignals: automaticQaMatches.map((match) => match.signal),
               qaReviewId: automaticQaReviewId,
+              subjectType: "case_message",
               triggerEvidence: automaticQaMatches.map((match) => match.evidence),
               triggerSource: "policy_rule"
             }
@@ -2071,10 +2093,12 @@ export async function createAlphaLeadCaptureStore(options?: {
         await createQaReviewRecord(transaction, {
           caseId,
           createdAt,
+          draftMessage: null,
           policySignals: [],
           qaReviewId,
           requestedByName: input.requestedByName ?? caseRecord.ownerName,
           sampleSummary: input.sampleSummary,
+          subjectType: "case_message",
           triggerEvidence: [],
           triggerSource: "manual_request"
         });
@@ -2085,12 +2109,70 @@ export async function createAlphaLeadCaptureStore(options?: {
           eventType: "qa_review_requested",
           id: randomUUID(),
           payload: {
+            draftMessage: null,
             qaReviewId,
             policySignals: [],
             requestedByName: input.requestedByName ?? caseRecord.ownerName,
             sampleSummary: input.sampleSummary,
+            subjectType: "case_message",
             triggerEvidence: [],
             triggerSource: "manual_request"
+          }
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async prepareCaseReplyDraftQaReview(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const currentQaReview = caseRecord.qaReviews[0];
+
+      if (currentQaReview?.status === "pending_review") {
+        return null;
+      }
+
+      const createdAt = new Date().toISOString();
+      const qaReviewId = randomUUID();
+      const draftPolicyMatches = detectCaseReplyDraftQaPolicyMatches(input.draftMessage);
+      const triggerSource: CaseQaReviewTriggerSource = draftPolicyMatches.length > 0 ? "policy_rule" : "manual_request";
+      const sampleSummary = buildCaseReplyDraftQaSampleSummary(
+        caseRecord.preferredLocale,
+        draftPolicyMatches.map((match) => match.signal)
+      );
+
+      await db.transaction(async (transaction) => {
+        await createQaReviewRecord(transaction, {
+          caseId,
+          createdAt,
+          draftMessage: input.draftMessage,
+          policySignals: draftPolicyMatches.map((match) => match.signal),
+          qaReviewId,
+          requestedByName: input.requestedByName ?? caseRecord.ownerName,
+          sampleSummary,
+          subjectType: "prepared_reply_draft",
+          triggerEvidence: draftPolicyMatches.map((match) => match.evidence),
+          triggerSource
+        });
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt,
+          eventType: triggerSource === "policy_rule" ? "qa_review_policy_opened" : "qa_review_requested",
+          id: randomUUID(),
+          payload: {
+            draftMessage: input.draftMessage,
+            policySignals: draftPolicyMatches.map((match) => match.signal),
+            qaReviewId,
+            requestedByName: input.requestedByName ?? caseRecord.ownerName,
+            sampleSummary,
+            subjectType: "prepared_reply_draft",
+            triggerEvidence: draftPolicyMatches.map((match) => match.evidence),
+            triggerSource
           }
         });
       });
@@ -2101,6 +2183,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       const currentQaReview = await db
         .select({
           createdAt: caseQaReviews.createdAt,
+          draftMessage: caseQaReviews.draftMessage,
           policySignals: caseQaReviews.policySignals,
           qaReviewId: caseQaReviews.id,
           requestedByName: caseQaReviews.requestedByName,
@@ -2109,6 +2192,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           reviewerName: caseQaReviews.reviewerName,
           sampleSummary: caseQaReviews.sampleSummary,
           status: caseQaReviews.status,
+          subjectType: caseQaReviews.subjectType,
           triggerEvidence: caseQaReviews.triggerEvidence,
           triggerSource: caseQaReviews.triggerSource,
           updatedAt: caseQaReviews.updatedAt
@@ -2117,11 +2201,13 @@ export async function createAlphaLeadCaptureStore(options?: {
         .where(and(eq(caseQaReviews.caseId, caseId), eq(caseQaReviews.id, qaReviewId)))
         .limit(1);
 
-      if (!currentQaReview[0]) {
+      const qaReviewRecord = currentQaReview[0];
+
+      if (!qaReviewRecord) {
         return null;
       }
 
-      if (toCaseQaReviewStatus(currentQaReview[0].status) !== "pending_review") {
+      if (toCaseQaReviewStatus(qaReviewRecord.status) !== "pending_review") {
         return null;
       }
 
@@ -2145,10 +2231,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           eventType: "qa_review_resolved",
           id: randomUUID(),
           payload: {
+            draftMessage: qaReviewRecord.draftMessage,
             qaReviewId,
             reviewSummary: input.reviewSummary,
             reviewerName: input.reviewerName ?? "QA Reviewer",
-            status: input.status
+            status: input.status,
+            subjectType: qaReviewRecord.subjectType
           }
         });
       });
@@ -4710,6 +4798,7 @@ function hydrateManagerIntervention(value: {
 
 function hydrateCaseQaReview(value: {
   createdAt: string;
+  draftMessage: string | null;
   policySignals: QaPolicySignal[] | null;
   qaReviewId: string;
   requestedByName: string;
@@ -4718,12 +4807,14 @@ function hydrateCaseQaReview(value: {
   reviewerName: string | null;
   sampleSummary: string;
   status: string;
+  subjectType: string;
   triggerEvidence: string[] | null;
   triggerSource: string;
   updatedAt: string;
 }): PersistedCaseQaReview {
   return {
     createdAt: value.createdAt,
+    draftMessage: value.draftMessage,
     policySignals: (value.policySignals ?? []).map((signal) => toCaseQaPolicySignal(signal)),
     qaReviewId: value.qaReviewId,
     requestedByName: value.requestedByName,
@@ -4732,6 +4823,7 @@ function hydrateCaseQaReview(value: {
     reviewerName: value.reviewerName,
     sampleSummary: value.sampleSummary,
     status: toCaseQaReviewStatus(value.status),
+    subjectType: toCaseQaReviewSubjectType(value.subjectType),
     triggerEvidence: value.triggerEvidence ?? [],
     triggerSource: toCaseQaReviewTriggerSource(value.triggerSource),
     updatedAt: value.updatedAt
@@ -4758,7 +4850,7 @@ function hydrateGovernanceRecentEvent(value: {
       kind: "case_message",
       policySignals: readPayloadStringArray(payload, "policySignals").map((signal) => toGovernancePolicySignal(signal)),
       status: "pending_review",
-      subjectType: null,
+      subjectType: readPayloadString(payload, "subjectType") ?? "case_message",
       triggerSource: value.eventType === "qa_review_policy_opened" ? "policy_rule" : toCaseQaReviewTriggerSource(readPayloadString(payload, "triggerSource") ?? "manual_request")
     };
   }
@@ -4774,7 +4866,7 @@ function hydrateGovernanceRecentEvent(value: {
       kind: "case_message",
       policySignals: [],
       status: toCaseQaReviewStatus(readPayloadString(payload, "status") ?? "follow_up_required"),
-      subjectType: null,
+      subjectType: readPayloadString(payload, "subjectType") ?? "case_message",
       triggerSource: null
     };
   }
@@ -4861,9 +4953,19 @@ function toCaseQaReviewTriggerSource(value: string): CaseQaReviewTriggerSource {
   throw new Error(`unsupported_case_qa_review_trigger_source:${value}`);
 }
 
+function toCaseQaReviewSubjectType(value: string): CaseQaReviewSubjectType {
+  if (value === "case_message" || value === "prepared_reply_draft") {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_qa_review_subject_type:${value}`);
+}
+
 function toCaseQaPolicySignal(value: string): CaseQaPolicySignal {
   if (
     value === "exception_request" ||
+    value === "pricing_or_exception_promise" ||
+    value === "guaranteed_outcome_promise" ||
     value === "frustrated_customer_language" ||
     value === "discrimination_risk" ||
     value === "legal_escalation_risk"

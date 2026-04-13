@@ -89,6 +89,7 @@ describe("lead capture api", () => {
     const createdCase = response.json();
 
     expect(createdCase.currentQaReview.status).toBe("pending_review");
+    expect(createdCase.currentQaReview.subjectType).toBe("case_message");
     expect(createdCase.currentQaReview.triggerSource).toBe("policy_rule");
     expect(createdCase.currentQaReview.policySignals).toEqual([
       "exception_request",
@@ -227,6 +228,97 @@ describe("lead capture api", () => {
     expect(casesResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === createdCase.caseId)?.currentQaReview?.status).toBe(
       "follow_up_required"
     );
+  });
+
+  it("opens and resolves a prepared reply-draft QA gate with persisted draft context", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Rana Khaled",
+        email: "rana@example.com",
+        message: "Please send me the next steps for the reservation.",
+        preferredLocale: "en",
+        projectInterest: "Canal Heights"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const createdCase = createResponse.json();
+
+    const unauthorizedDraftRequestResponse = await app.inject({
+      method: "POST",
+      payload: {
+        draftMessage: "We can definitely guarantee the exception and lock in the discount today.",
+        requestedByName: "Revenue Ops"
+      },
+      url: `/v1/cases/${createdCase.caseId}/reply-draft/qa-review`
+    });
+
+    expect(unauthorizedDraftRequestResponse.statusCode).toBe(401);
+
+    const draftRequestResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        draftMessage: "We can definitely guarantee the exception and lock in the discount today.",
+        requestedByName: "Revenue Ops"
+      },
+      url: `/v1/cases/${createdCase.caseId}/reply-draft/qa-review`
+    });
+
+    expect(draftRequestResponse.statusCode).toBe(200);
+    expect(draftRequestResponse.json().currentQaReview.subjectType).toBe("prepared_reply_draft");
+    expect(draftRequestResponse.json().currentQaReview.draftMessage).toBe(
+      "We can definitely guarantee the exception and lock in the discount today."
+    );
+    expect(draftRequestResponse.json().currentQaReview.triggerSource).toBe("policy_rule");
+    expect(draftRequestResponse.json().currentQaReview.policySignals).toEqual([
+      "guaranteed_outcome_promise",
+      "pricing_or_exception_promise"
+    ]);
+
+    const qaReviewId = draftRequestResponse.json().currentQaReview.qaReviewId;
+
+    const resolveResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "Remove the guarantee and discount promise before the next human reply is sent.",
+        reviewerName: "QA Desk",
+        status: "follow_up_required"
+      },
+      url: `/v1/cases/${createdCase.caseId}/qa-review/${qaReviewId}`
+    });
+
+    expect(resolveResponse.statusCode).toBe(200);
+    expect(resolveResponse.json().currentQaReview.status).toBe("follow_up_required");
+    expect(resolveResponse.json().currentQaReview.subjectType).toBe("prepared_reply_draft");
+    expect(resolveResponse.json().currentQaReview.draftMessage).toBe(
+      "We can definitely guarantee the exception and lock in the discount today."
+    );
+
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${createdCase.caseId}`
+    });
+
+    expect(detailResponse.statusCode).toBe(200);
+    expect(
+      detailResponse
+        .json()
+        .auditEvents.some(
+          (event: { eventType: string; payload?: { subjectType?: string } }) =>
+            event.eventType === "qa_review_policy_opened" && event.payload?.subjectType === "prepared_reply_draft"
+        )
+    ).toBe(true);
+    expect(
+      detailResponse
+        .json()
+        .auditEvents.some(
+          (event: { eventType: string; payload?: { subjectType?: string } }) =>
+            event.eventType === "qa_review_resolved" && event.payload?.subjectType === "prepared_reply_draft"
+        )
+    ).toBe(true);
   });
 
   it("promotes a document-complete case into controlled handover execution and completion", async () => {

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAutomaticQaSampleSummary,
+  buildCaseReplyDraftQaSampleSummary,
   buildHandoverCustomerUpdateQaSampleSummary,
+  detectCaseReplyDraftQaPolicyMatches,
   detectHandoverCustomerUpdateQaPolicyMatches,
   detectQaPolicyMatches
 } from "./qa-policy";
@@ -43,5 +45,22 @@ describe("qa policy sampling", () => {
       buildHandoverCustomerUpdateQaSampleSummary("en", ["possession_date_promise", "legal_claim_risk"])
     ).toContain("QA approval");
     expect(buildHandoverCustomerUpdateQaSampleSummary("ar", ["pricing_or_exception_promise"])).toContain("جودة");
+  });
+
+  it("detects policy signals on prepared customer reply drafts", () => {
+    const matches = detectCaseReplyDraftQaPolicyMatches(
+      "We can definitely lock in the discount today and there will be no legal issue with that exception."
+    );
+
+    expect(matches.map((match) => match.signal)).toEqual([
+      "guaranteed_outcome_promise",
+      "pricing_or_exception_promise",
+      "legal_escalation_risk"
+    ]);
+  });
+
+  it("builds a localized prepared-reply summary", () => {
+    expect(buildCaseReplyDraftQaSampleSummary("en", ["guaranteed_outcome_promise"])).toContain("prepared reply draft");
+    expect(buildCaseReplyDraftQaSampleSummary("ar", [])).toContain("مسودة رد");
   });
 });

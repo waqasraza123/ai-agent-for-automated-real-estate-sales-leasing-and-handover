@@ -12,6 +12,7 @@ import type {
   MarkHandoverCustomerUpdateDispatchReadyInput,
   ManageCaseFollowUpInput,
   PlanHandoverAppointmentInput,
+  PrepareCaseReplyDraftQaReviewInput,
   PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
@@ -112,6 +113,18 @@ export async function manageCaseFollowUp(caseId: string, input: ManageCaseFollow
 
 export async function requestCaseQaReview(caseId: string, input: RequestCaseQaReviewInput, operatorRole?: OperatorRole) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/qa-review`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function prepareCaseReplyDraftQaReview(
+  caseId: string,
+  input: PrepareCaseReplyDraftQaReviewInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/reply-draft/qa-review`, {
     headers: await getOperatorSessionHeaders(operatorRole),
     method: "POST",
     payload: input

@@ -1,15 +1,20 @@
 import { notFound } from "next/navigation";
 
-import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
+import Link from "next/link";
+
+import { canOperatorRoleAccessWorkspace, canOperatorRolePerform } from "@real-estate-ai/contracts";
 import { getDemoCaseById, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
+import { CaseReplyDraftQaRequestForm } from "@/components/case-reply-draft-qa-request-form";
 import { MessageThread } from "@/components/message-thread";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { ScreenIntro } from "@/components/screen-intro";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
+import { getCaseReplyDraftQaRequestCopy } from "@/lib/live-copy";
+import { getOperatorPermissionGuardNote } from "@/lib/operator-role";
 import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import { buildCaseReferenceCode, buildPersistedConversation, getPersistedQaReviewDisplay } from "@/lib/persisted-case-presenters";
@@ -51,6 +56,24 @@ export default async function ConversationPage(props: PageProps) {
 
   if (persistedCase) {
     const qaReviewDisplay = getPersistedQaReviewDisplay(locale, persistedCase);
+    const canManageQaSampling = canOperatorRolePerform("manage_qa_sampling", currentOperatorRole);
+    const canAccessQaWorkspace = canOperatorRoleAccessWorkspace("qa", currentOperatorRole);
+    const replyDraftCopy = getCaseReplyDraftQaRequestCopy(locale);
+    const qaSamplingGuardNote = getOperatorPermissionGuardNote(locale, "manage_qa_sampling");
+    const currentReplyDraft =
+      qaReviewDisplay?.subjectType === "prepared_reply_draft"
+        ? {
+            draftMessage: qaReviewDisplay.draftMessage,
+            reviewSummary: qaReviewDisplay.reviewSummary,
+            sampleSummary: qaReviewDisplay.sampleSummary,
+            statusLabel: qaReviewDisplay.statusLabel,
+            statusTone: qaReviewDisplay.statusTone,
+            subjectTypeLabel: qaReviewDisplay.subjectTypeLabel,
+            triggerEvidence: qaReviewDisplay.triggerEvidence,
+            triggerSourceLabel: qaReviewDisplay.triggerSourceLabel,
+            updatedAt: qaReviewDisplay.updatedAt
+          }
+        : null;
 
     return (
       <div className="page-stack">
@@ -62,15 +85,65 @@ export default async function ConversationPage(props: PageProps) {
             <div className="page-stack">
               <div className="status-row-wrap">
                 <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge>
+                <StatusBadge>{qaReviewDisplay.subjectTypeLabel}</StatusBadge>
                 <StatusBadge>{qaReviewDisplay.triggerSourceLabel}</StatusBadge>
                 {qaReviewDisplay.policySignalLabels.map((label) => (
                   <StatusBadge key={label}>{label}</StatusBadge>
                 ))}
               </div>
               <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
+              {qaReviewDisplay.draftMessage ? <p className="case-link-meta">{qaReviewDisplay.draftMessage}</p> : null}
             </div>
           </Panel>
         ) : null}
+
+        <div className="two-column-grid">
+          <Panel title={replyDraftCopy.title}>
+            <p className="panel-summary">{replyDraftCopy.summary}</p>
+            <p className="field-note">{qaSamplingGuardNote}</p>
+            <CaseReplyDraftQaRequestForm
+              canManage={canManageQaSampling && qaReviewDisplay?.status !== "pending_review"}
+              caseId={persistedCase.caseId}
+              defaultDraftMessage={currentReplyDraft?.draftMessage ?? null}
+              defaultRequestedByName={persistedCase.ownerName}
+              disabledLabel={locale === "ar" ? "يتطلب دوراً مخولاً للجودة" : "QA sampling role required"}
+              locale={locale}
+              returnPath={`/${locale}/leads/${persistedCase.caseId}/conversation`}
+            />
+          </Panel>
+
+          <Panel title={locale === "ar" ? "حالة مسودة الرد" : "Reply-draft state"}>
+            {currentReplyDraft ? (
+              <div className="page-stack">
+                <div className="row-between">
+                  <h3>{currentReplyDraft.subjectTypeLabel}</h3>
+                  <StatusBadge tone={currentReplyDraft.statusTone}>{currentReplyDraft.statusLabel}</StatusBadge>
+                </div>
+                <div className="status-row-wrap">
+                  <StatusBadge>{currentReplyDraft.triggerSourceLabel}</StatusBadge>
+                  {qaReviewDisplay?.policySignalLabels.map((label) => (
+                    <StatusBadge key={label}>{label}</StatusBadge>
+                  ))}
+                </div>
+                <p>{currentReplyDraft.draftMessage}</p>
+                <p>{currentReplyDraft.reviewSummary ?? currentReplyDraft.sampleSummary}</p>
+                {currentReplyDraft.triggerEvidence.length > 0 ? <p className="case-link-meta">{currentReplyDraft.triggerEvidence.join(", ")}</p> : null}
+                <p className="case-link-meta">{currentReplyDraft.updatedAt}</p>
+                {canAccessQaWorkspace ? (
+                  <Link className="inline-link" href={`/${locale}/qa/cases/${persistedCase.caseId}`}>
+                    {locale === "ar" ? "فتح سجل الجودة" : "Open QA record"}
+                  </Link>
+                ) : null}
+              </div>
+            ) : (
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "لا توجد حالياً مسودة رد محفوظة داخل حدود اعتماد الجودة."
+                  : "No prepared reply draft is currently sitting inside the QA approval boundary."}
+              </p>
+            )}
+          </Panel>
+        </div>
 
         <Panel title={persistedCase.customerName}>
           <MessageThread locale={locale} messages={buildPersistedConversation(persistedCase)} />

@@ -123,15 +123,22 @@ export default async function QaCaseDetailPage(props: PageProps) {
             <div className="page-stack">
               {currentQaReview ? (
                 <div className="page-stack">
-                  <h3>{locale === "ar" ? "مراجعة رسالة الحالة" : "Case-message review"}</h3>
+                  <h3>{currentQaReview.subjectTypeLabel}</h3>
                   <p>{currentQaReview.sampleSummary}</p>
                   <div className="status-row-wrap">
+                    <StatusBadge>{currentQaReview.subjectTypeLabel}</StatusBadge>
                     <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
                     {currentQaReview.policySignalLabels.map((label) => (
                       <StatusBadge key={label}>{label}</StatusBadge>
                     ))}
                   </div>
                   <dl className="detail-list">
+                    {currentQaReview.draftMessage ? (
+                      <div>
+                        <dt>{locale === "ar" ? "الرد المجهز" : "Prepared reply draft"}</dt>
+                        <dd>{currentQaReview.draftMessage}</dd>
+                      </div>
+                    ) : null}
                     <div>
                       <dt>{locale === "ar" ? "الجهة الطالبة" : "Requested by"}</dt>
                       <dd>{currentQaReview.requestedByName}</dd>
@@ -218,14 +225,16 @@ export default async function QaCaseDetailPage(props: PageProps) {
                   />
                 ) : (
                   <div className="page-stack">
-                    <h3>{locale === "ar" ? "قرار رسالة الحالة" : "Case-message decision"}</h3>
+                    <h3>{currentQaReview.subjectTypeLabel}</h3>
                     <StatusBadge tone={currentQaReview.statusTone}>{currentQaReview.statusLabel}</StatusBadge>
                     <div className="status-row-wrap">
+                      <StatusBadge>{currentQaReview.subjectTypeLabel}</StatusBadge>
                       <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
                       {currentQaReview.policySignalLabels.map((label) => (
                         <StatusBadge key={label}>{label}</StatusBadge>
                       ))}
                     </div>
+                    {currentQaReview.draftMessage ? <p>{currentQaReview.draftMessage}</p> : null}
                     <p>{currentQaReview.reviewSummary ?? currentQaReview.sampleSummary}</p>
                     <p className="case-link-meta">{currentQaReview.reviewedAt ?? currentQaReview.updatedAt}</p>
                   </div>
@@ -287,15 +296,17 @@ export default async function QaCaseDetailPage(props: PageProps) {
           renderItem={(qaReview) => (
             <article key={qaReview.qaReviewId} className="intervention-row">
               <div className="row-between">
-                <h3>{qaReview.sampleSummary}</h3>
+                <h3>{qaReview.subjectTypeLabel}</h3>
                 <StatusBadge tone={qaReview.statusTone}>{qaReview.statusLabel}</StatusBadge>
               </div>
               <div className="status-row-wrap">
+                <StatusBadge>{qaReview.subjectTypeLabel}</StatusBadge>
                 <StatusBadge>{qaReview.triggerSourceLabel}</StatusBadge>
                 {qaReview.policySignalLabels.map((label) => (
                   <StatusBadge key={label}>{label}</StatusBadge>
                 ))}
               </div>
+              {qaReview.draftMessage ? <p>{qaReview.draftMessage}</p> : null}
               <p>{qaReview.reviewSummary ?? "—"}</p>
               <p className="case-link-meta">
                 {qaReview.reviewerName ?? qaReview.requestedByName}

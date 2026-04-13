@@ -1046,9 +1046,11 @@ export function RevenueManagerCommandCenter(props: {
                     </div>
                     <div className="status-row-wrap">
                       <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge>
+                      <StatusBadge>{qaReviewDisplay.subjectTypeLabel}</StatusBadge>
                       <StatusBadge>{qaReviewDisplay.triggerSourceLabel}</StatusBadge>
                     </div>
                   </div>
+                  {qaReviewDisplay.draftMessage ? <p>{qaReviewDisplay.draftMessage}</p> : null}
                   <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
                   <p className="case-link-meta">{qaReviewDisplay.updatedAt}</p>
                   <div className="status-row-wrap">
@@ -1300,6 +1302,16 @@ function getGovernanceRecentEventSummary(
   }
 
   if (event.action === "opened") {
+    if (event.subjectType === "prepared_reply_draft") {
+      return event.triggerSource === "policy_rule"
+        ? locale === "ar"
+          ? "فُتحت مراجعة جودة لمسودة رد مجهزة بعد رصد صياغة وعد أو سياسة حساسة."
+          : "A QA gate opened on a prepared reply draft after policy-sensitive promise language was detected."
+        : locale === "ar"
+          ? "أُرسلت مسودة رد مجهزة إلى الجودة قبل متابعة المحادثة."
+          : "A prepared reply draft was sent to QA before the conversation continues.";
+    }
+
     return event.triggerSource === "policy_rule"
       ? locale === "ar"
         ? "فُتحت مراجعة جودة تلقائية بسبب إشارات سياسة داخل رسالة الحالة."
@@ -1309,12 +1321,22 @@ function getGovernanceRecentEventSummary(
         : "A manager explicitly requested QA review before the conversation continues.";
   }
 
-  return event.status === "approved"
-    ? locale === "ar"
-      ? "اعتمدت الجودة هذه الحالة ويمكن متابعة المسار التجاري دون عائق إضافي."
-      : "QA approved the case and the commercial workflow can continue without an extra hold."
-    : locale === "ar"
-      ? "أعادت الجودة هذه الحالة إلى متابعة بشرية أو تصحيح مباشر."
+  if (event.status === "approved") {
+    return event.subjectType === "prepared_reply_draft"
+      ? locale === "ar"
+        ? "اعتمدت الجودة مسودة الرد ويمكن للمالك البشري متابعة الإرسال اليدوي."
+        : "QA approved the prepared reply draft and the human owner can continue the manual response."
+      : locale === "ar"
+        ? "اعتمدت الجودة هذه الحالة ويمكن متابعة المسار التجاري دون عائق إضافي."
+        : "QA approved the case and the commercial workflow can continue without an extra hold.";
+  }
+
+  return locale === "ar"
+    ? event.subjectType === "prepared_reply_draft"
+      ? "أعادت الجودة مسودة الرد لتعديل مباشر قبل متابعة العميل."
+      : "أعادت الجودة هذه الحالة إلى متابعة بشرية أو تصحيح مباشر."
+    : event.subjectType === "prepared_reply_draft"
+      ? "QA sent the prepared reply draft back for corrective changes before the customer reply continues."
       : "QA marked the case for direct human follow-up or corrective action.";
 }
 

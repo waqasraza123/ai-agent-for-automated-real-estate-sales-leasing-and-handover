@@ -10,6 +10,7 @@ import type {
   MarkHandoverCustomerUpdateDispatchReadyInput,
   ManageCaseFollowUpInput,
   PlanHandoverAppointmentInput,
+  PrepareCaseReplyDraftQaReviewInput,
   RequestCaseQaReviewInput,
   PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
@@ -105,6 +106,24 @@ export async function requestPersistedCaseQaReview(
   }
 
   return store.requestCaseQaReview(caseId, input);
+}
+
+export async function preparePersistedCaseReplyDraftQaReview(
+  store: LeadCaptureStore,
+  caseId: string,
+  input: PrepareCaseReplyDraftQaReviewInput
+): Promise<PersistedCaseDetail | null> {
+  const caseDetail = await store.getCaseDetail(caseId);
+
+  if (!caseDetail) {
+    return null;
+  }
+
+  if (caseDetail.currentQaReview?.status === "pending_review") {
+    throw new WorkflowRuleError("qa_review_already_pending");
+  }
+
+  return store.prepareCaseReplyDraftQaReview(caseId, input);
 }
 
 export async function resolvePersistedCaseQaReview(

@@ -5,13 +5,14 @@ import type {
   PersistedHandoverCaseDetail,
   SupportedLocale
 } from "@real-estate-ai/contracts";
-import type { ConversationMessage, JourneyEvent } from "@real-estate-ai/domain";
+import type { ConversationMessage, JourneyEvent, LocalizedText } from "@real-estate-ai/domain";
 
 import {
   getAutomationStatusLabel,
   getCaseQaPolicySignalLabel,
   getCaseStageLabel,
   getCaseQaReviewStatusLabel,
+  getCaseQaReviewSubjectTypeLabel,
   getCaseQaReviewTriggerSourceLabel,
   getDocumentRequestDetail,
   getDocumentRequestStatusLabel,
@@ -81,7 +82,7 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
             en: "Generated from the persisted alpha workflow"
           };
 
-  return [
+  const conversation: ConversationMessage[] = [
     {
       body: {
         ar: caseDetail.message,
@@ -102,6 +103,21 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
       timestamp: formatTimestamp(caseDetail.updatedAt)
     }
   ];
+
+  if (caseDetail.currentQaReview?.subjectType === "prepared_reply_draft" && caseDetail.currentQaReview.draftMessage) {
+    conversation.push({
+      body: {
+        ar: caseDetail.currentQaReview.draftMessage,
+        en: caseDetail.currentQaReview.draftMessage
+      },
+      id: `${caseDetail.caseId}-${caseDetail.currentQaReview.qaReviewId}-reply-draft`,
+      sender: "manager",
+      state: getPreparedReplyDraftState(caseDetail),
+      timestamp: formatTimestamp(caseDetail.currentQaReview.updatedAt)
+    });
+  }
+
+  return conversation;
 }
 
 export function buildPersistedHandoverTimeline(handoverCase: PersistedHandoverCaseDetail): JourneyEvent[] {
@@ -363,6 +379,7 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
         : ("critical" as const);
 
   return {
+    draftMessage: caseDetail.currentQaReview.draftMessage,
     policySignalLabels: caseDetail.currentQaReview.policySignals.map((signal) => getCaseQaPolicySignalLabel(locale, signal)),
     policySignals: caseDetail.currentQaReview.policySignals,
     qaReviewId: caseDetail.currentQaReview.qaReviewId,
@@ -374,6 +391,8 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
     status: caseDetail.currentQaReview.status,
     statusLabel: getCaseQaReviewStatusLabel(locale, caseDetail.currentQaReview.status),
     statusTone,
+    subjectType: caseDetail.currentQaReview.subjectType,
+    subjectTypeLabel: getCaseQaReviewSubjectTypeLabel(locale, caseDetail.currentQaReview.subjectType),
     triggerEvidence: caseDetail.currentQaReview.triggerEvidence,
     triggerSource: caseDetail.currentQaReview.triggerSource,
     triggerSourceLabel: getCaseQaReviewTriggerSourceLabel(locale, caseDetail.currentQaReview.triggerSource),
@@ -444,7 +463,7 @@ export function getPersistedActiveQaItemDisplay(locale: SupportedLocale, caseDet
       sampleSummary: caseQaReview.sampleSummary,
       statusLabel: caseQaReview.statusLabel,
       statusTone: caseQaReview.statusTone,
-      subjectLabel: locale === "ar" ? "رسالة الحالة" : "Case message",
+      subjectLabel: caseQaReview.subjectTypeLabel,
       triggerEvidence: caseQaReview.triggerEvidence,
       triggerSourceLabel: caseQaReview.triggerSourceLabel,
       updatedAt: caseQaReview.updatedAt
@@ -476,7 +495,7 @@ export function getPersistedActiveQaItemDisplay(locale: SupportedLocale, caseDet
           sampleSummary: caseQaReview.sampleSummary,
           statusLabel: caseQaReview.statusLabel,
           statusTone: caseQaReview.statusTone,
-          subjectLabel: locale === "ar" ? "رسالة الحالة" : "Case message",
+          subjectLabel: caseQaReview.subjectTypeLabel,
           triggerEvidence: caseQaReview.triggerEvidence,
           triggerSourceLabel: caseQaReview.triggerSourceLabel,
           updatedAt: caseQaReview.updatedAt
@@ -488,6 +507,7 @@ export function getPersistedActiveQaItemDisplay(locale: SupportedLocale, caseDet
 export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.qaReviews.map((qaReview) => ({
     createdAt: new Date(qaReview.createdAt).toLocaleString(locale),
+    draftMessage: qaReview.draftMessage,
     policySignalLabels: qaReview.policySignals.map((signal) => getCaseQaPolicySignalLabel(locale, signal)),
     policySignals: qaReview.policySignals,
     qaReviewId: qaReview.qaReviewId,
@@ -504,6 +524,8 @@ export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail:
         : qaReview.status === "follow_up_required"
           ? ("warning" as const)
           : ("critical" as const),
+    subjectType: qaReview.subjectType,
+    subjectTypeLabel: getCaseQaReviewSubjectTypeLabel(locale, qaReview.subjectType),
     triggerEvidence: qaReview.triggerEvidence,
     triggerSource: qaReview.triggerSource,
     triggerSourceLabel: getCaseQaReviewTriggerSourceLabel(locale, qaReview.triggerSource),
@@ -1127,6 +1149,41 @@ function getHandoverCustomerUpdateQaReviewTone(
   }
 
   return "warning";
+}
+
+function getPreparedReplyDraftState(caseDetail: PersistedCaseDetail): LocalizedText {
+  const qaReview = caseDetail.currentQaReview;
+
+  if (!qaReview || qaReview.subjectType !== "prepared_reply_draft") {
+    return {
+      ar: "مسودة رد مجهزة",
+      en: "Prepared reply draft"
+    };
+  }
+
+  if (qaReview.status === "pending_review") {
+    return qaReview.triggerSource === "policy_rule"
+      ? {
+          ar: "مسودة رد تنتظر اعتماد الجودة بعد إشارة سياسة",
+          en: "Reply draft pending QA after a policy trigger"
+        }
+      : {
+          ar: "مسودة رد تنتظر اعتماد الجودة",
+          en: "Reply draft pending QA approval"
+        };
+  }
+
+  if (qaReview.status === "follow_up_required") {
+    return {
+      ar: "الجودة طلبت تعديل مسودة الرد",
+      en: "QA requested reply-draft changes"
+    };
+  }
+
+  return {
+    ar: "مسودة الرد معتمدة للجولة البشرية التالية",
+    en: "Reply draft approved for the next human response"
+  };
 }
 
 function getQaDisplayPriority(status: "approved" | "follow_up_required" | "pending_review" | "not_required") {

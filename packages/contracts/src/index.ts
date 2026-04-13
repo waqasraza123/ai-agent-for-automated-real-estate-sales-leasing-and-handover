@@ -35,8 +35,11 @@ export const managerInterventionSeveritySchema = z.enum(["warning", "critical"])
 export const managerInterventionStatusSchema = z.enum(["open", "resolved"]);
 export const caseQaReviewStatusSchema = z.enum(["pending_review", "approved", "follow_up_required"]);
 export const caseQaReviewTriggerSourceSchema = z.enum(["manual_request", "policy_rule"]);
+export const caseQaReviewSubjectTypeSchema = z.enum(["case_message", "prepared_reply_draft"]);
 export const caseQaPolicySignalSchema = z.enum([
   "exception_request",
+  "pricing_or_exception_promise",
+  "guaranteed_outcome_promise",
   "frustrated_customer_language",
   "discrimination_risk",
   "legal_escalation_risk"
@@ -130,6 +133,11 @@ export const updateAutomationStatusInputSchema = z.object({
 export const requestCaseQaReviewInputSchema = z.object({
   requestedByName: z.string().trim().min(2).max(120).optional(),
   sampleSummary: z.string().trim().min(10).max(280)
+});
+
+export const prepareCaseReplyDraftQaReviewInputSchema = z.object({
+  draftMessage: z.string().trim().min(10).max(2000),
+  requestedByName: z.string().trim().min(2).max(120).optional()
 });
 
 export const resolveCaseQaReviewInputSchema = z.object({
@@ -277,6 +285,7 @@ export const persistedManagerInterventionSchema = z.object({
 
 export const persistedCaseQaReviewSchema = z.object({
   createdAt: z.iso.datetime(),
+  draftMessage: z.string().nullable(),
   policySignals: z.array(caseQaPolicySignalSchema),
   qaReviewId: z.uuid(),
   requestedByName: z.string(),
@@ -285,6 +294,7 @@ export const persistedCaseQaReviewSchema = z.object({
   reviewerName: z.string().nullable(),
   sampleSummary: z.string(),
   status: caseQaReviewStatusSchema,
+  subjectType: caseQaReviewSubjectTypeSchema,
   triggerEvidence: z.array(z.string()),
   triggerSource: caseQaReviewTriggerSourceSchema,
   updatedAt: z.iso.datetime()
@@ -556,6 +566,7 @@ export type CaseStage = z.infer<typeof caseStageSchema>;
 export type CaseQaReviewStatus = z.infer<typeof caseQaReviewStatusSchema>;
 export type CaseQaPolicySignal = z.infer<typeof caseQaPolicySignalSchema>;
 export type CaseQaReviewTriggerSource = z.infer<typeof caseQaReviewTriggerSourceSchema>;
+export type CaseQaReviewSubjectType = z.infer<typeof caseQaReviewSubjectTypeSchema>;
 export type CompleteHandoverInput = z.infer<typeof completeHandoverInputSchema>;
 export type ConfirmHandoverAppointmentInput = z.infer<typeof confirmHandoverAppointmentInputSchema>;
 export type HandoverClosureState = z.infer<typeof handoverClosureStateSchema>;
@@ -596,6 +607,7 @@ export type OperatorPermission = z.infer<typeof operatorPermissionSchema>;
 export type OperatorRole = z.infer<typeof operatorRoleSchema>;
 export type OperatorSessionPayload = z.infer<typeof operatorSessionPayloadSchema>;
 export type OperatorWorkspace = z.infer<typeof operatorWorkspaceSchema>;
+export type PrepareCaseReplyDraftQaReviewInput = z.infer<typeof prepareCaseReplyDraftQaReviewInputSchema>;
 export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseQaReview = z.infer<typeof persistedCaseQaReviewSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;

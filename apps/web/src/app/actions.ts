@@ -17,6 +17,7 @@ import {
   markHandoverCustomerUpdateDispatchReadyInputSchema,
   manageCaseFollowUpInputSchema,
   planHandoverAppointmentInputSchema,
+  prepareCaseReplyDraftQaReviewInputSchema,
   prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   requestCaseQaReviewInputSchema,
@@ -55,6 +56,7 @@ import {
   markHandoverCustomerUpdateDispatchReady,
   manageCaseFollowUp,
   planHandoverAppointment,
+  prepareCaseReplyDraftQaReview,
   prepareHandoverCustomerUpdateDelivery,
   qualifyCase,
   requestCaseQaReview,
@@ -208,6 +210,53 @@ export async function requestCaseQaReviewAction(_: FormActionState, formData: Fo
         locale === "ar"
           ? "تم إرسال الحالة إلى طابور مراجعة الجودة مع ملخص واضح للعينة."
           : "The case was sent to the QA review queue with a clear sampling summary.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "توجد مراجعة جودة مفتوحة بالفعل لهذه الحالة."
+            : "An open QA review already exists for this case.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function prepareCaseReplyDraftQaReviewAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const caseId = formData.get("caseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof caseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = prepareCaseReplyDraftQaReviewInputSchema.safeParse({
+    draftMessage: formData.get("draftMessage"),
+    requestedByName: normalizeOptionalString(formData.get("requestedByName"))
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedCase = await prepareCaseReplyDraftQaReview(caseId, result.data, await getOperatorRole());
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم حفظ مسودة الرد وإرسالها إلى اعتماد الجودة قبل متابعة المحادثة."
+          : "The prepared reply draft was saved and sent into the QA approval boundary.",
       status: "success"
     };
   } catch (error) {

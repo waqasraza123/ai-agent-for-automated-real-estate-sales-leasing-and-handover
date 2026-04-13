@@ -8,6 +8,7 @@ import {
   createHandoverPostCompletionFollowUpInputSchema,
   createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
+  prepareCaseReplyDraftQaReviewInputSchema,
   requestCaseQaReviewInputSchema,
   resolveCaseQaReviewInputSchema,
   resolveHandoverCustomerUpdateQaReviewInputSchema,
@@ -35,6 +36,7 @@ import {
   confirmPersistedHandoverAppointment,
   createPersistedHandoverBlocker,
   createPersistedHandoverPostCompletionFollowUp,
+  preparePersistedCaseReplyDraftQaReview,
   resolvePersistedCaseQaReview,
   resolvePersistedHandoverPostCompletionFollowUp,
   requestPersistedCaseQaReview,
@@ -117,6 +119,47 @@ export function buildApiApp(dependencies: {
     }
 
     return caseDetail;
+  });
+
+  app.post<{
+    Params: {
+      caseId: string;
+    };
+  }>("/v1/cases/:caseId/reply-draft/qa-review", async (request, reply) => {
+    const permission = "manage_qa_sampling";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = prepareCaseReplyDraftQaReviewInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const caseDetail = await preparePersistedCaseReplyDraftQaReview(dependencies.store, request.params.caseId, result.data);
+
+      if (!caseDetail) {
+        return reply.status(404).send({
+          error: "case_not_found"
+        });
+      }
+
+      return reply.status(200).send(caseDetail);
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
   });
 
   app.post<{

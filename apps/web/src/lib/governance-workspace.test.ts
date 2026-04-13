@@ -14,6 +14,7 @@ function buildRevenueQaCase(caseId: string, status: CaseQaReviewStatus, updatedA
       status === "approved"
         ? {
             createdAt: updatedAt,
+            draftMessage: null,
             policySignals: [],
             qaReviewId: `${caseId}-qa`,
             requestedByName: "Revenue Ops",
@@ -22,12 +23,14 @@ function buildRevenueQaCase(caseId: string, status: CaseQaReviewStatus, updatedA
             reviewerName: "QA Reviewer",
             sampleSummary: "Revenue conversation review",
             status,
+            subjectType: "case_message",
             triggerEvidence: [],
             triggerSource,
             updatedAt
           }
         : {
             createdAt: updatedAt,
+            draftMessage: null,
             policySignals: status === "pending_review" ? ["exception_request"] : ["discrimination_risk"],
             qaReviewId: `${caseId}-qa`,
             requestedByName: "Revenue Ops",
@@ -36,6 +39,7 @@ function buildRevenueQaCase(caseId: string, status: CaseQaReviewStatus, updatedA
             reviewerName: status === "follow_up_required" ? "QA Reviewer" : null,
             sampleSummary: "Revenue conversation review",
             status,
+            subjectType: "case_message",
             triggerEvidence: ["policy trigger"],
             triggerSource,
             updatedAt

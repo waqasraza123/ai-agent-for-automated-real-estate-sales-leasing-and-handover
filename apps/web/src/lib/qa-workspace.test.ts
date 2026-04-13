@@ -12,6 +12,7 @@ function buildCase(caseId: string, status: CaseQaReviewStatus, updatedAt: string
     currentHandoverCustomerUpdateQaReview: null,
     currentQaReview: {
       createdAt: updatedAt,
+      draftMessage: null,
       policySignals: status === "pending_review" ? ["exception_request"] : [],
       qaReviewId: `${caseId}-qa`,
       requestedByName: "Revenue Ops",
@@ -20,6 +21,7 @@ function buildCase(caseId: string, status: CaseQaReviewStatus, updatedAt: string
       reviewerName: status === "pending_review" ? null : "QA Reviewer",
       sampleSummary: "Customer escalation review",
       status,
+      subjectType: "case_message",
       triggerEvidence: status === "pending_review" ? ["exception"] : [],
       triggerSource: status === "pending_review" ? "policy_rule" : "manual_request",
       updatedAt

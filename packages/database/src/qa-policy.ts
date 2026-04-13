@@ -1,6 +1,6 @@
-import type { HandoverCustomerUpdateQaPolicySignal, SupportedLocale } from "@real-estate-ai/contracts";
+import type { CaseQaPolicySignal, HandoverCustomerUpdateQaPolicySignal, SupportedLocale } from "@real-estate-ai/contracts";
 
-export type QaPolicySignal = "discrimination_risk" | "exception_request" | "frustrated_customer_language" | "legal_escalation_risk";
+export type QaPolicySignal = CaseQaPolicySignal;
 
 export interface QaPolicyMatch {
   evidence: string;
@@ -146,6 +146,74 @@ const handoverCustomerUpdateQaPolicyLexicon: Array<{
   }
 ];
 
+const caseReplyDraftQaPolicyLexicon: Array<{
+  patterns: RegExp[];
+  signal: QaPolicySignal;
+}> = [
+  {
+    patterns: [
+      /\bguarantee(?:d|s)?\b/i,
+      /\bpromise(?:d|s)?\b/i,
+      /\bdefinitely\b/i,
+      /\bcertainly\b/i,
+      /\blocked in\b/i,
+      /\bapproved today\b/i,
+      /نضمن/u,
+      /مضمون/u,
+      /بالتأكيد/u,
+      /مؤكد/u
+    ],
+    signal: "guaranteed_outcome_promise"
+  },
+  {
+    patterns: [
+      /\bdiscount\b/i,
+      /\bwaive\b/i,
+      /\bfee waiver\b/i,
+      /\bexception\b/i,
+      /\bspecial approval\b/i,
+      /\bflexible payment\b/i,
+      /خصم/u,
+      /إعفاء/u,
+      /استثناء/u,
+      /موافقة خاصة/u,
+      /دفعات مرنة/u
+    ],
+    signal: "pricing_or_exception_promise"
+  },
+  {
+    patterns: [
+      /\bnationality only\b/i,
+      /\bmale only\b/i,
+      /\bfemale only\b/i,
+      /\bfamily only\b/i,
+      /\bno kids\b/i,
+      /جنسية/u,
+      /للرجال فقط/u,
+      /للنساء فقط/u,
+      /للعائلات فقط/u,
+      /بدون أطفال/u
+    ],
+    signal: "discrimination_risk"
+  },
+  {
+    patterns: [
+      /\blegally guaranteed\b/i,
+      /\bno legal issue\b/i,
+      /\bno liability\b/i,
+      /\bcontractually guaranteed\b/i,
+      /\bregulator(?:y)? approval\b/i,
+      /\blawyer\b/i,
+      /ضمان قانوني/u,
+      /لا توجد مسؤولية/u,
+      /موافقة تنظيمية/u,
+      /مضمون قانونياً/u,
+      /محامي/u
+    ],
+    signal: "legal_escalation_risk"
+  }
+];
+
 export function buildAutomaticQaSampleSummary(locale: SupportedLocale, signals: QaPolicySignal[]) {
   const labels = signals.map((signal) => getQaPolicySignalSummary(locale, signal));
 
@@ -166,8 +234,28 @@ export function detectQaPolicyMatches(message: string): QaPolicyMatch[] {
   return collectMatches(message, qaPolicyLexicon);
 }
 
+export function detectCaseReplyDraftQaPolicyMatches(message: string): QaPolicyMatch[] {
+  return collectMatches(message, caseReplyDraftQaPolicyLexicon);
+}
+
 export function detectHandoverCustomerUpdateQaPolicyMatches(message: string): HandoverCustomerUpdateQaPolicyMatch[] {
   return collectMatches(message, handoverCustomerUpdateQaPolicyLexicon);
+}
+
+export function buildCaseReplyDraftQaSampleSummary(locale: SupportedLocale, signals: QaPolicySignal[]) {
+  const labels = signals.map((signal) => getCaseReplyDraftQaPolicySignalSummary(locale, signal));
+
+  if (labels.length === 0) {
+    return locale === "ar"
+      ? "تم تجهيز مسودة رد للعميل وإرسالها لاعتماد جودة بشري قبل متابعة المحادثة."
+      : "A prepared customer reply draft was sent for human QA approval before the conversation continues.";
+  }
+
+  const joinedLabels = joinLabels(locale, labels);
+
+  return locale === "ar"
+    ? `تتطلب مسودة الرد المجهزة اعتماد جودة بشري لأنها تضمنت ${joinedLabels}.`
+    : `This prepared reply draft requires human QA approval because it included ${joinedLabels}.`;
 }
 
 export function buildHandoverCustomerUpdateQaSampleSummary(
@@ -194,14 +282,41 @@ function getQaPolicySignalSummary(locale: SupportedLocale, signal: QaPolicySigna
     ar: {
       discrimination_risk: "إشارات تمييز أو عدالة حساسة",
       exception_request: "طلب استثناء أو موافقة خاصة",
+      guaranteed_outcome_promise: "وعود مؤكدة بنتيجة أو توفر",
       frustrated_customer_language: "لغة عميل غاضبة أو متصاعدة",
-      legal_escalation_risk: "إشارات قانونية أو تنظيمية"
+      legal_escalation_risk: "إشارات قانونية أو تنظيمية",
+      pricing_or_exception_promise: "وعد سعري أو استثناء غير معتمد"
     },
     en: {
       discrimination_risk: "discrimination or fairness-risk language",
       exception_request: "an exception or special-approval request",
+      guaranteed_outcome_promise: "guaranteed outcome or availability language",
       frustrated_customer_language: "frustrated or escalated customer language",
-      legal_escalation_risk: "legal or regulatory escalation language"
+      legal_escalation_risk: "legal or regulatory escalation language",
+      pricing_or_exception_promise: "a pricing or exception promise"
+    }
+  } as const;
+
+  return labels[locale][signal];
+}
+
+function getCaseReplyDraftQaPolicySignalSummary(locale: SupportedLocale, signal: QaPolicySignal) {
+  const labels = {
+    ar: {
+      discrimination_risk: "صياغة تمييز أو عدالة حساسة",
+      exception_request: "طلب استثناء يحتاج مراجعة بشرية",
+      guaranteed_outcome_promise: "وعد مؤكد بنتيجة أو توفر أو اعتماد",
+      frustrated_customer_language: "صياغة تصعيدية غير مناسبة للعميل",
+      legal_escalation_risk: "ادعاءات قانونية أو تنظيمية غير آمنة",
+      pricing_or_exception_promise: "وعد سعري أو استثناء غير معتمد"
+    },
+    en: {
+      discrimination_risk: "discrimination or fairness-risk language",
+      exception_request: "an exception-oriented approval request",
+      guaranteed_outcome_promise: "a guaranteed outcome, approval, or availability promise",
+      frustrated_customer_language: "escalatory or frustrated language",
+      legal_escalation_risk: "unsafe legal or regulatory claims",
+      pricing_or_exception_promise: "a pricing or exception promise"
     }
   } as const;
 

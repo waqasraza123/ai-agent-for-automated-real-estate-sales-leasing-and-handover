@@ -103,18 +103,37 @@ export function getCaseQaPolicySignalLabel(locale: SupportedLocale, signal: Case
     ar: {
       discrimination_risk: "مخاطر تمييز أو عدالة",
       exception_request: "طلب استثناء",
+      guaranteed_outcome_promise: "وعد مؤكد بنتيجة",
       frustrated_customer_language: "تصعيد أو انزعاج عميل",
-      legal_escalation_risk: "تصعيد قانوني أو تنظيمي"
+      legal_escalation_risk: "مخاطر قانونية أو تنظيمية",
+      pricing_or_exception_promise: "وعد سعري أو استثناء"
     },
     en: {
       discrimination_risk: "Discrimination risk",
       exception_request: "Exception request",
+      guaranteed_outcome_promise: "Guaranteed outcome",
       frustrated_customer_language: "Frustrated customer",
-      legal_escalation_risk: "Legal escalation"
+      legal_escalation_risk: "Legal or regulatory risk",
+      pricing_or_exception_promise: "Pricing or exception promise"
     }
   } as const;
 
   return labels[locale][signal];
+}
+
+export function getCaseQaReviewSubjectTypeLabel(locale: SupportedLocale, subjectType: "case_message" | "prepared_reply_draft") {
+  const labels = {
+    ar: {
+      case_message: "رسالة الحالة",
+      prepared_reply_draft: "مسودة رد مجهزة"
+    },
+    en: {
+      case_message: "Case message",
+      prepared_reply_draft: "Prepared reply draft"
+    }
+  } as const;
+
+  return labels[locale][subjectType];
 }
 
 export function getCaseStageLabel(locale: SupportedLocale, stage: CaseStage) {
@@ -230,6 +249,26 @@ export function getQaReviewRequestCopy(locale: SupportedLocale) {
     sampleSummary: "Sampling reason or risk to review",
     summary: "Open an explicit QA review when the case needs human inspection for safety, interpretation, or response quality.",
     title: "Send case to QA"
+  };
+}
+
+export function getCaseReplyDraftQaRequestCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "إرسال المسودة للجودة",
+      draftMessage: "مسودة الرد المجهزة",
+      requestedByName: "اسم الجهة الطالبة",
+      summary: "جهز الرد التالي للعميل وارفعه إلى اعتماد الجودة مع إبقاء النص والأدلة المرصودة على سجل الحالة الحي.",
+      title: "اعتماد جودة لمسودة الرد"
+    };
+  }
+
+  return {
+    action: "Send draft to QA",
+    draftMessage: "Prepared reply draft",
+    requestedByName: "Requested by",
+    summary: "Prepare the next customer reply and send it into QA approval while keeping the draft text and any policy evidence on the live case record.",
+    title: "Reply draft QA approval"
   };
 }
 
