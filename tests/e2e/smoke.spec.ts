@@ -64,6 +64,7 @@ test("manager entry resolves to the handover command center in default role mode
   await expect(page).toHaveURL(/\/en\/manager\/handover$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Handover command center");
   await expect(page.getByRole("heading", { level: 2, name: "Fixture handover queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Draft governance queue" })).toBeVisible();
 });
 
 test("sales manager lands in the revenue command center", async ({ context, page }) => {
@@ -74,6 +75,7 @@ test("sales manager lands in the revenue command center", async ({ context, page
   await expect(page).toHaveURL(/\/en\/manager\/revenue$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Revenue command center");
   await expect(page.getByText("Revenue follow-up queue")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Revenue governance queue" })).toBeVisible();
 });
 
 test("admin manager gateway exposes both dedicated manager routes", async ({ context, page }) => {

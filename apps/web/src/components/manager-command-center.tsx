@@ -8,7 +8,12 @@ import { Panel, StatusBadge } from "@real-estate-ai/ui";
 import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
-import { getInterventionCountLabel } from "@/lib/live-copy";
+import {
+  getCaseQaPolicySignalLabel,
+  getHandoverCustomerUpdateQaPolicySignalLabel,
+  getInterventionCountLabel
+} from "@/lib/live-copy";
+import { buildManagerGovernanceSummary, type GovernanceSignalCount } from "@/lib/governance-workspace";
 import {
   buildManagerWorkspaceQueues,
   getManagerWorkspaceCapabilities,
@@ -24,6 +29,7 @@ import {
   getPersistedAutomationLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
+  getPersistedHandoverCustomerUpdateQaReviewDisplay,
   getPersistedHandoverWorkspaceDisplay,
   getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
@@ -37,6 +43,8 @@ export function HandoverManagerCommandCenter(props: {
   const workspaceCopy = getManagerWorkspaceCopy(props.locale, "manager_handover");
   const managerCapabilities = getManagerWorkspaceCapabilities(props.currentOperatorRole);
   const { closureCases, executionCases, planningCases } = buildManagerWorkspaceQueues(props.persistedCases);
+  const governanceSummary = buildManagerGovernanceSummary(props.persistedCases);
+  const canAccessQaWorkspace = canOperatorRoleAccessWorkspace("qa", props.currentOperatorRole);
   const canAccessRevenueManagerWorkspace = canOperatorRoleAccessWorkspace("manager_revenue", props.currentOperatorRole);
   const actionableSurfaceLabels = [
     managerCapabilities.canManagePlanning ? (props.locale === "ar" ? "تخطيط التسليم" : "Handover planning") : null,
@@ -105,6 +113,15 @@ export function HandoverManagerCommandCenter(props: {
                 : "Shows how handover risk will surface before the live workflow is fully enabled."}
             </p>
           </article>
+          <article className="metric-tile metric-tile-ocean">
+            <p className="metric-label">{props.locale === "ar" ? "بوابات جودة المسودات" : "Draft QA gates"}</p>
+            <p className="metric-value">0</p>
+            <p className="metric-detail">
+              {props.locale === "ar"
+                ? "ستظهر هنا ضغوط جودة المسودات الصادرة عندما تتوفر سجلات تسليم حيّة."
+                : "Outbound draft-governance pressure will surface here once live handover records are available."}
+            </p>
+          </article>
         </div>
 
         <div className="two-column-grid">
@@ -152,6 +169,19 @@ export function HandoverManagerCommandCenter(props: {
             />
           </Panel>
         </div>
+
+        <Panel title={props.locale === "ar" ? "طابور حوكمة المسودات" : "Draft governance queue"}>
+          <StatefulStack
+            emptySummary={
+              props.locale === "ar"
+                ? "ستظهر مراجعات جودة مسودات العميل هنا عندما تفتح البوابات على سجلات التسليم الحية."
+                : "Prepared customer-update QA gates will appear here once live handover records open outbound governance holds."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد بوابات جودة بعد" : "No draft QA gates yet"}
+            items={[]}
+            renderItem={() => null}
+          />
+        </Panel>
 
         {canAccessRevenueManagerWorkspace ? (
           <WorkspaceAccessPanel
@@ -227,6 +257,24 @@ export function HandoverManagerCommandCenter(props: {
               : "Completed records now inside review, aftercare, or administrative archive boundaries."}
           </p>
         </article>
+        <article className="metric-tile metric-tile-ocean">
+          <p className="metric-label">{props.locale === "ar" ? "حوكمة المسودات" : "Draft governance"}</p>
+          <p className="metric-value">{governanceSummary.handoverAttentionCases.length}</p>
+          <p className="metric-detail">
+            {props.locale === "ar"
+              ? "مسودات تحديث العميل التي لا تزال متوقفة بانتظار جودة أو تحتاج إعادة صياغة."
+              : "Prepared customer updates that are still blocked on QA or need draft changes before they can move on."}
+          </p>
+        </article>
+        <article className="metric-tile metric-tile-rose">
+          <p className="metric-label">{props.locale === "ar" ? "مراجعات قديمة" : "Stale pending QA"}</p>
+          <p className="metric-value">{governanceSummary.stalePendingCasesCount}</p>
+          <p className="metric-detail">
+            {props.locale === "ar"
+              ? "عناصر جودة معلقة لأكثر من يوم وتحتاج تصعيداً أو إعادة توجيه واضحة."
+              : "Governance items that have been pending for more than a day and likely need escalation or re-routing."}
+          </p>
+        </article>
       </div>
 
       {managerCapabilities.canManagePlanning ? (
@@ -264,6 +312,72 @@ export function HandoverManagerCommandCenter(props: {
           />
         </Panel>
       ) : null}
+
+      <div className="two-column-grid">
+        <Panel title={props.locale === "ar" ? "طابور حوكمة المسودات" : "Draft governance queue"}>
+          <StatefulStack
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً مسودات تحديث عميل متوقفة عند بوابة جودة."
+                : "No prepared customer updates are currently sitting in an outbound QA hold."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد بوابات مفتوحة" : "No open draft QA gates"}
+            items={governanceSummary.handoverAttentionCases}
+            renderItem={(caseItem) => {
+              const qaReviewDisplay = getPersistedHandoverCustomerUpdateQaReviewDisplay(props.locale, caseItem);
+
+              if (!qaReviewDisplay) {
+                return null;
+              }
+
+              return (
+                <article key={caseItem.caseId} className="alert-row alert-row-high">
+                  <div className="row-between">
+                    <div className="stack-tight">
+                      <h3>{caseItem.customerName}</h3>
+                      <p className="case-link-meta">{buildCaseReferenceCode(caseItem.caseId)}</p>
+                    </div>
+                    <div className="status-row-wrap">
+                      <StatusBadge tone={qaReviewDisplay.reviewStatusTone}>{qaReviewDisplay.reviewStatusLabel}</StatusBadge>
+                      <StatusBadge>{qaReviewDisplay.typeLabel}</StatusBadge>
+                    </div>
+                  </div>
+                  <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.reviewSampleSummary}</p>
+                  <p className="case-link-meta">{qaReviewDisplay.updatedAt}</p>
+                  <div className="status-row-wrap">
+                    {qaReviewDisplay.policySignalLabels.map((label) => (
+                      <StatusBadge key={`${caseItem.caseId}-${label}`}>{label}</StatusBadge>
+                    ))}
+                  </div>
+                  <div className="status-row-wrap">
+                    <Link className="inline-link" href={`/${props.locale}/handover/${qaReviewDisplay.handoverCaseId}`}>
+                      {props.locale === "ar" ? "فتح سجل التسليم" : "Open handover"}
+                    </Link>
+                    {canAccessQaWorkspace ? (
+                      <Link className="inline-link" href={`/${props.locale}/qa/cases/${caseItem.caseId}`}>
+                        {props.locale === "ar" ? "فتح سجل الجودة" : "Open QA record"}
+                      </Link>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            }}
+          />
+        </Panel>
+
+        <Panel title={props.locale === "ar" ? "بؤر مخاطر الجودة" : "Governance hotspots"}>
+          <GovernanceHotspotsPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً إشارات سياسة مفتوحة داخل مسار التسليم."
+                : "No policy hotspots are currently open inside the handover surface."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد بؤر مفتوحة" : "No active hotspots"}
+            locale={props.locale}
+            topPolicySignals={governanceSummary.topPolicySignals.filter((signal) => signal.kind === "handover_customer_update")}
+          />
+        </Panel>
+      </div>
 
       <div className="two-column-grid">
         {managerCapabilities.canManageExecution ? (
@@ -350,6 +464,8 @@ export function ManagerWorkspaceGateway(props: {
   const messages = getMessages(props.locale);
   const { closureCases, executionCases, openInterventionsCount, pausedAutomationCases, planningCases, revenueAttentionCases } =
     buildManagerWorkspaceQueues(props.persistedCases);
+  const governanceSummary = buildManagerGovernanceSummary(props.persistedCases);
+  const canAccessQaWorkspace = canOperatorRoleAccessWorkspace("qa", props.currentOperatorRole);
   const currentRoleLabel = getOperatorRoleLabel(props.locale, props.currentOperatorRole);
 
   return (
@@ -378,6 +494,46 @@ export function ManagerWorkspaceGateway(props: {
           </div>
         </div>
       </Panel>
+
+      {props.persistedCases.length > 0 ? (
+        <Panel title={props.locale === "ar" ? "ضغط الحوكمة الحالي" : "Current governance pressure"}>
+          <div className="page-stack">
+            <p className="panel-summary">
+              {props.locale === "ar"
+                ? `${governanceSummary.totalAttentionCasesCount} عنصر حوكمة مفتوح عبر الإيرادات والتسليم، منها ${governanceSummary.pendingCasesCount} بانتظار القرار و${governanceSummary.followUpRequiredCasesCount} تحتاج تصحيحاً.`
+                : `${governanceSummary.totalAttentionCasesCount} governance items are open across revenue and handover, with ${governanceSummary.pendingCasesCount} waiting for a decision and ${governanceSummary.followUpRequiredCasesCount} needing corrective follow-up.`}
+            </p>
+            <div className="status-row-wrap">
+              <StatusBadge tone="critical">
+                {props.locale === "ar" ? `${governanceSummary.pendingCasesCount} بانتظار المراجعة` : `${governanceSummary.pendingCasesCount} pending`}
+              </StatusBadge>
+              <StatusBadge tone="warning">
+                {props.locale === "ar"
+                  ? `${governanceSummary.followUpRequiredCasesCount} تحتاج متابعة`
+                  : `${governanceSummary.followUpRequiredCasesCount} follow-up`}
+              </StatusBadge>
+              <StatusBadge>
+                {props.locale === "ar"
+                  ? `${governanceSummary.handoverAttentionCases.length} في التسليم`
+                  : `${governanceSummary.handoverAttentionCases.length} handover`}
+              </StatusBadge>
+              <StatusBadge>
+                {props.locale === "ar"
+                  ? `${governanceSummary.revenueAttentionCases.length} في الإيرادات`
+                  : `${governanceSummary.revenueAttentionCases.length} revenue`}
+              </StatusBadge>
+              {governanceSummary.topPolicySignals[0] ? (
+                <StatusBadge>{getGovernanceSignalLabel(props.locale, governanceSummary.topPolicySignals[0])}</StatusBadge>
+              ) : null}
+            </div>
+            {canAccessQaWorkspace ? (
+              <Link className="inline-link" href={`/${props.locale}/qa`}>
+                {props.locale === "ar" ? "فتح مركز الجودة" : "Open QA review center"}
+              </Link>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
 
       <div className="two-column-grid">
         <WorkspaceAccessPanel
@@ -457,8 +613,10 @@ export function RevenueManagerCommandCenter(props: {
   const workspaceCopy = getManagerWorkspaceCopy(props.locale, "manager_revenue");
   const managerCapabilities = getManagerWorkspaceCapabilities(props.currentOperatorRole);
   const { openInterventionsCount, pausedAutomationCases, revenueAttentionCases } = buildManagerWorkspaceQueues(props.persistedCases);
+  const governanceSummary = buildManagerGovernanceSummary(props.persistedCases);
   const canAccessHandoverManagerWorkspace = canOperatorRoleAccessWorkspace("manager_handover", props.currentOperatorRole);
   const canAccessHandoverWorkspace = canOperatorRoleAccessWorkspace("handover", props.currentOperatorRole);
+  const canAccessQaWorkspace = canOperatorRoleAccessWorkspace("qa", props.currentOperatorRole);
 
   if (props.persistedCases.length === 0) {
     return (
@@ -500,6 +658,15 @@ export function RevenueManagerCommandCenter(props: {
                 : "A case list already wired for follow-up ownership and next-step visibility."}
             </p>
           </article>
+          <article className="metric-tile metric-tile-rose">
+            <p className="metric-label">{props.locale === "ar" ? "ضغوط الحوكمة" : "Governance pressure"}</p>
+            <p className="metric-value">0</p>
+            <p className="metric-detail">
+              {props.locale === "ar"
+                ? "ستظهر مراجعات جودة الرسائل هنا عندما تتوفر حالات حيّة محفوظة."
+                : "Conversation-governance holds will surface here once persisted live cases are available."}
+            </p>
+          </article>
         </div>
 
         <div className="two-column-grid">
@@ -538,6 +705,19 @@ export function RevenueManagerCommandCenter(props: {
             />
           </Panel>
         </div>
+
+        <Panel title={props.locale === "ar" ? "طابور حوكمة الإيرادات" : "Revenue governance queue"}>
+          <StatefulStack
+            emptySummary={
+              props.locale === "ar"
+                ? "ستظهر مراجعات جودة الرسائل هنا عندما تُرسل الحالات الحية إلى بوابات الجودة."
+                : "Conversation QA holds will appear here once live cases start opening governance review gates."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد مراجعات جودة بعد" : "No conversation QA holds yet"}
+            items={[]}
+            renderItem={() => null}
+          />
+        </Panel>
 
         {canAccessHandoverManagerWorkspace ? (
           <WorkspaceAccessPanel
@@ -609,6 +789,24 @@ export function RevenueManagerCommandCenter(props: {
             {props.locale === "ar"
               ? "حالات أوقفت فيها الأتمتة بقرار إداري واضح."
               : "Cases where automation was paused behind an explicit managerial decision."}
+          </p>
+        </article>
+        <article className="metric-tile metric-tile-mint">
+          <p className="metric-label">{props.locale === "ar" ? "حوكمة المحادثات" : "Conversation governance"}</p>
+          <p className="metric-value">{governanceSummary.revenueAttentionCases.length}</p>
+          <p className="metric-detail">
+            {props.locale === "ar"
+              ? "حالات ما زالت رسائلها داخل مراجعة الجودة أو تحتاج متابعة تصحيحية."
+              : "Cases whose customer-facing message state is still blocked on QA or needs corrective follow-up."}
+          </p>
+        </article>
+        <article className="metric-tile metric-tile-rose">
+          <p className="metric-label">{props.locale === "ar" ? "مراجعات قديمة" : "Stale pending QA"}</p>
+          <p className="metric-value">{governanceSummary.stalePendingCasesCount}</p>
+          <p className="metric-detail">
+            {props.locale === "ar"
+              ? "مراجعات جودة معلقة لأكثر من يوم وقد تحتاج تصعيداً من الإدارة."
+              : "QA items that have been pending for more than a day and may need managerial escalation."}
           </p>
         </article>
       </div>
@@ -697,6 +895,116 @@ export function RevenueManagerCommandCenter(props: {
           />
         </Panel>
       </div>
+
+      <div className="two-column-grid">
+        <Panel title={props.locale === "ar" ? "طابور حوكمة الإيرادات" : "Revenue governance queue"}>
+          <StatefulStack
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً حالات إيرادات معلقة عند مراجعة الجودة."
+                : "No revenue-side cases are currently waiting on QA governance."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد مراجعات مفتوحة" : "No open governance reviews"}
+            items={governanceSummary.revenueAttentionCases}
+            renderItem={(caseItem) => {
+              const qaReviewDisplay = getPersistedQaReviewDisplay(props.locale, caseItem);
+
+              if (!qaReviewDisplay) {
+                return null;
+              }
+
+              return (
+                <article key={caseItem.caseId} className="alert-row alert-row-high">
+                  <div className="row-between">
+                    <div className="stack-tight">
+                      <h3>{caseItem.customerName}</h3>
+                      <p className="case-link-meta">{buildCaseReferenceCode(caseItem.caseId)}</p>
+                    </div>
+                    <div className="status-row-wrap">
+                      <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge>
+                      <StatusBadge>{qaReviewDisplay.triggerSourceLabel}</StatusBadge>
+                    </div>
+                  </div>
+                  <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
+                  <p className="case-link-meta">{qaReviewDisplay.updatedAt}</p>
+                  <div className="status-row-wrap">
+                    {qaReviewDisplay.policySignalLabels.map((label) => (
+                      <StatusBadge key={`${caseItem.caseId}-${label}`}>{label}</StatusBadge>
+                    ))}
+                  </div>
+                  <div className="status-row-wrap">
+                    <Link className="inline-link" href={`/${props.locale}/leads/${caseItem.caseId}`}>
+                      {props.locale === "ar" ? "فتح الحالة" : "Open case"}
+                    </Link>
+                    {canAccessQaWorkspace ? (
+                      <Link className="inline-link" href={`/${props.locale}/qa/cases/${caseItem.caseId}`}>
+                        {props.locale === "ar" ? "فتح سجل الجودة" : "Open QA record"}
+                      </Link>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            }}
+          />
+        </Panel>
+
+        <Panel title={props.locale === "ar" ? "بؤر مخاطر الجودة" : "Governance hotspots"}>
+          <GovernanceHotspotsPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً إشارات سياسة مفتوحة داخل مسار الإيرادات."
+                : "No policy hotspots are currently open inside the revenue surface."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد بؤر مفتوحة" : "No active hotspots"}
+            locale={props.locale}
+            topPolicySignals={governanceSummary.topPolicySignals.filter((signal) => signal.kind === "case_message")}
+          />
+        </Panel>
+      </div>
     </div>
   );
+}
+
+function GovernanceHotspotsPanel(props: {
+  emptySummary: string;
+  emptyTitle: string;
+  locale: SupportedLocale;
+  topPolicySignals: GovernanceSignalCount[];
+}) {
+  return (
+    <StatefulStack
+      emptySummary={props.emptySummary}
+      emptyTitle={props.emptyTitle}
+      items={props.topPolicySignals}
+      renderItem={(signalCount) => (
+        <article
+          key={`${signalCount.kind}-${signalCount.signal}`}
+          className={signalCount.kind === "handover_customer_update" ? "intervention-row intervention-row-open" : "intervention-row"}
+        >
+          <div className="row-between">
+            <h3>{getGovernanceSignalLabel(props.locale, signalCount)}</h3>
+            <StatusBadge tone={signalCount.count > 1 ? "critical" : "warning"}>{signalCount.count}</StatusBadge>
+          </div>
+          <p>
+            {signalCount.kind === "handover_customer_update"
+              ? props.locale === "ar"
+                ? "إشارة متكررة داخل مسودات تحديث العميل في مسار التسليم."
+                : "Recurring risk signal inside prepared customer-update drafts."
+              : props.locale === "ar"
+                ? "إشارة متكررة داخل مراجعات رسائل العملاء في مسار الإيرادات."
+                : "Recurring risk signal inside customer-message QA reviews."}
+          </p>
+        </article>
+      )}
+    />
+  );
+}
+
+function getGovernanceSignalLabel(locale: SupportedLocale, signalCount: GovernanceSignalCount) {
+  return signalCount.kind === "handover_customer_update"
+    ? getHandoverCustomerUpdateQaPolicySignalLabel(
+        locale,
+        signalCount.signal as Parameters<typeof getHandoverCustomerUpdateQaPolicySignalLabel>[1]
+      )
+    : getCaseQaPolicySignalLabel(locale, signalCount.signal as Parameters<typeof getCaseQaPolicySignalLabel>[1]);
 }
