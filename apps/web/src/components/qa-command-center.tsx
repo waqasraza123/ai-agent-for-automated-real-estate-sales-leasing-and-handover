@@ -7,7 +7,7 @@ import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
 import { getPreferredOperatorSurfacePath, getOperatorRoleLabel } from "@/lib/operator-role";
-import { buildCaseReferenceCode, getPersistedQaReviewDisplay } from "@/lib/persisted-case-presenters";
+import { buildCaseReferenceCode, getPersistedActiveQaItemDisplay } from "@/lib/persisted-case-presenters";
 import { buildQaWorkspaceQueues, getQaWorkspaceCopy } from "@/lib/qa-workspace";
 
 export function QaCommandCenter(props: {
@@ -80,7 +80,7 @@ export function QaCommandCenter(props: {
             emptyTitle={props.locale === "ar" ? "لا يوجد طابور جودة" : "No QA queue"}
             items={qaCases}
             renderItem={(caseItem) => {
-              const qaReview = getPersistedQaReviewDisplay(props.locale, caseItem);
+              const qaReview = getPersistedActiveQaItemDisplay(props.locale, caseItem);
 
               if (!qaReview) {
                 return null;
@@ -97,6 +97,7 @@ export function QaCommandCenter(props: {
                   <div className="case-link-aside">
                     <StatusBadge tone={qaReview.statusTone}>{qaReview.statusLabel}</StatusBadge>
                     <StatusBadge>{qaReview.triggerSourceLabel}</StatusBadge>
+                    <StatusBadge>{qaReview.subjectLabel}</StatusBadge>
                     {qaReview.policySignalLabels[0] ? <StatusBadge>{qaReview.policySignalLabels[0]}</StatusBadge> : null}
                     <StatusBadge>{caseItem.ownerName}</StatusBadge>
                   </div>
@@ -116,7 +117,7 @@ export function QaCommandCenter(props: {
             emptyTitle={props.locale === "ar" ? "لا يوجد اعتماد بعد" : "No approvals yet"}
             items={approvedCases}
             renderItem={(caseItem) => {
-              const qaReview = getPersistedQaReviewDisplay(props.locale, caseItem);
+              const qaReview = getPersistedActiveQaItemDisplay(props.locale, caseItem);
 
               if (!qaReview) {
                 return null;

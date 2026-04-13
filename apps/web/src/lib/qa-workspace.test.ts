@@ -9,6 +9,7 @@ function buildCase(caseId: string, status: CaseQaReviewStatus, updatedAt: string
     automationStatus: "active",
     caseId,
     createdAt: "2026-04-10T08:00:00.000Z",
+    currentHandoverCustomerUpdateQaReview: null,
     currentQaReview: {
       createdAt: updatedAt,
       policySignals: status === "pending_review" ? ["exception_request"] : [],
@@ -51,6 +52,32 @@ describe("qa workspace", () => {
     expect(queues.followUpCases.map((caseItem) => caseItem.caseId)).toEqual(["case-follow-up"]);
     expect(queues.approvedCases.map((caseItem) => caseItem.caseId)).toEqual(["case-approved"]);
     expect(queues.qaCases.map((caseItem) => caseItem.caseId)).toEqual(["case-pending", "case-follow-up", "case-approved"]);
+  });
+
+  it("includes active handover draft reviews in the same queue", () => {
+    const queues = buildQaWorkspaceQueues([
+      buildCase("case-message", "approved", "2026-04-12T09:00:00.000Z"),
+      {
+        ...buildCase("case-draft", "approved", "2026-04-12T07:00:00.000Z"),
+        currentHandoverCustomerUpdateQaReview: {
+          customerUpdateId: "7f1f1111-1111-4111-8111-111111111111",
+          deliverySummary: "We guarantee the keys by Friday.",
+          handoverCaseId: "8f1f1111-1111-4111-8111-111111111111",
+          policySignals: ["possession_date_promise"],
+          reviewSampleSummary: "Prepared draft needs QA approval before dispatch.",
+          reviewStatus: "pending_review",
+          reviewSummary: null,
+          reviewedAt: null,
+          reviewerName: null,
+          triggerEvidence: ["guarantee"],
+          type: "appointment_confirmation",
+          updatedAt: "2026-04-12T10:00:00.000Z"
+        }
+      }
+    ]);
+
+    expect(queues.pendingCases.map((caseItem) => caseItem.caseId)).toEqual(["case-draft"]);
+    expect(queues.qaCases.map((caseItem) => caseItem.caseId)).toEqual(["case-draft", "case-message"]);
   });
 
   it("returns localized copy", () => {

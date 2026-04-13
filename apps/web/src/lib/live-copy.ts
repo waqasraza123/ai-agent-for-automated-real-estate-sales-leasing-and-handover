@@ -15,6 +15,8 @@ import type {
   HandoverBlockerStatus,
   HandoverBlockerType,
   HandoverCaseStatus,
+  HandoverCustomerUpdateQaPolicySignal,
+  HandoverCustomerUpdateQaReviewStatus,
   HandoverCustomerUpdateStatus,
   HandoverCustomerUpdateType,
   HandoverMilestoneStatus,
@@ -252,6 +254,30 @@ export function getQaReviewResolutionCopy(locale: SupportedLocale) {
     reviewerName: "Reviewer name",
     summary: "Close the QA review with an explicit decision about whether the case is safe to continue or needs corrective follow-up.",
     title: "QA review decision"
+  };
+}
+
+export function getHandoverCustomerUpdateQaReviewCopy(locale: SupportedLocale) {
+  if (locale === "ar") {
+    return {
+      action: "حفظ قرار الجودة",
+      approved: "اعتماد المسودة",
+      followUpRequired: "تحتاج تعديل",
+      reviewSummary: "ملخص قرار الجودة",
+      reviewerName: "اسم المراجع",
+      summary: "اعتمد مسودة تحديث العميل المجهزة أو أعدها للفريق مع ملاحظات واضحة قبل اعتبارها جاهزة للإرسال.",
+      title: "اعتماد جودة لمسودة التحديث"
+    };
+  }
+
+  return {
+    action: "Save QA decision",
+    approved: "Approve draft",
+    followUpRequired: "Needs draft changes",
+    reviewSummary: "QA decision summary",
+    reviewerName: "Reviewer name",
+    summary: "Approve the prepared customer-update draft or send it back with explicit correction notes before it can become dispatch-ready.",
+    title: "Draft QA approval"
   };
 }
 
@@ -838,6 +864,50 @@ export function getHandoverCustomerUpdateStatusLabel(locale: SupportedLocale, st
   } as const;
 
   return labels[locale][status];
+}
+
+export function getHandoverCustomerUpdateQaReviewStatusLabel(
+  locale: SupportedLocale,
+  status: HandoverCustomerUpdateQaReviewStatus
+) {
+  const labels = {
+    ar: {
+      approved: "مجاز من الجودة",
+      follow_up_required: "تعديل مطلوب",
+      not_required: "لا يحتاج مراجعة",
+      pending_review: "بانتظار الجودة"
+    },
+    en: {
+      approved: "QA approved",
+      follow_up_required: "Draft changes required",
+      not_required: "No QA gate",
+      pending_review: "Pending QA review"
+    }
+  } as const;
+
+  return labels[locale][status];
+}
+
+export function getHandoverCustomerUpdateQaPolicySignalLabel(
+  locale: SupportedLocale,
+  signal: HandoverCustomerUpdateQaPolicySignal
+) {
+  const labels = {
+    ar: {
+      discrimination_risk: "صياغة تمييز أو عدالة حساسة",
+      legal_claim_risk: "ادعاءات قانونية أو تنظيمية",
+      possession_date_promise: "وعد بموعد تسليم أو مفاتيح",
+      pricing_or_exception_promise: "وعد سعري أو استثناء"
+    },
+    en: {
+      discrimination_risk: "Discrimination risk",
+      legal_claim_risk: "Legal claim risk",
+      possession_date_promise: "Possession-date promise",
+      pricing_or_exception_promise: "Pricing or exception promise"
+    }
+  } as const;
+
+  return labels[locale][signal];
 }
 
 export function getHandoverCustomerUpdateTypeDetail(locale: SupportedLocale, type: HandoverCustomerUpdateType) {

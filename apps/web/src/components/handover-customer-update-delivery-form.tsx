@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import type { HandoverCustomerUpdateStatus, SupportedLocale } from "@real-estate-ai/contracts";
+import type { HandoverCustomerUpdateQaReviewStatus, HandoverCustomerUpdateStatus, SupportedLocale } from "@real-estate-ai/contracts";
 import { cx } from "@real-estate-ai/ui";
 
 import { initialFormActionState, prepareHandoverCustomerUpdateDeliveryAction } from "@/app/actions";
@@ -16,12 +16,15 @@ export function HandoverCustomerUpdateDeliveryForm(props: {
   deliverySummary: string;
   handoverCaseId: string;
   locale: SupportedLocale;
+  qaReviewStatus: HandoverCustomerUpdateQaReviewStatus;
   returnPath: string;
   status: HandoverCustomerUpdateStatus;
 }) {
   const copy = getHandoverDeliveryPreparationCopy(props.locale);
   const [state, action] = useActionState(prepareHandoverCustomerUpdateDeliveryAction, initialFormActionState);
-  const isPrepared = props.status === "prepared_for_delivery" || props.status === "ready_to_dispatch";
+  const isDispatchReady = props.status === "ready_to_dispatch";
+  const isPendingQaReview = props.qaReviewStatus === "pending_review";
+  const isPrepared = props.status === "prepared_for_delivery" && props.qaReviewStatus !== "follow_up_required";
 
   return (
     <form action={action} className="form-stack">
@@ -44,7 +47,15 @@ export function HandoverCustomerUpdateDeliveryForm(props: {
       </label>
 
       <div className="form-actions-row">
-        {isPrepared ? (
+        {isDispatchReady ? (
+          <button className="primary-button" disabled type="button">
+            {props.locale === "ar" ? "جاهز للإرسال" : "Ready to dispatch"}
+          </button>
+        ) : isPendingQaReview ? (
+          <button className="primary-button" disabled type="button">
+            {props.locale === "ar" ? "بانتظار الجودة" : "Pending QA review"}
+          </button>
+        ) : isPrepared ? (
           <button className="primary-button" disabled type="button">
             {props.locale === "ar" ? "تم التجهيز" : "Already prepared"}
           </button>

@@ -1520,6 +1520,153 @@ describe("lead capture api", () => {
     expect(allowedDispatchReadyResponse.statusCode).toBe(200);
     expect(allowedDispatchReadyResponse.json().status).toBe("scheduled");
   }, 50000);
+
+  it("requires QA approval on risky prepared customer updates before dispatch readiness", async () => {
+    const planningRecord = await createPlanningBoundaryHandoverRecord(app);
+
+    await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        ownerName: "Scheduling Desk",
+        status: "ready",
+        targetAt: "2026-04-20T10:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/milestones/${planningRecord.schedulingMilestoneId}`
+    });
+
+    await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.schedulingInviteId}`
+    });
+
+    const appointmentPlanResponse = await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        coordinatorName: "Field Handover Team",
+        location: "Tower B Lobby",
+        scheduledAt: "2026-04-22T09:30:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment`
+    });
+
+    const appointmentId = appointmentPlanResponse.json().appointment.appointmentId;
+
+    await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        ownerName: "Appointment Approvals",
+        status: "ready",
+        targetAt: "2026-04-21T12:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/milestones/${planningRecord.appointmentHoldMilestoneId}`
+    });
+
+    await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}`
+    });
+
+    await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        status: "internally_confirmed"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment/${appointmentId}/confirmation`
+    });
+
+    const riskyDeliveryPreparationResponse = await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        deliverySummary: "We guarantee the keys by Friday and can waive the final admin fee if needed.",
+        status: "prepared_for_delivery"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/delivery`
+    });
+
+    expect(riskyDeliveryPreparationResponse.statusCode).toBe(200);
+    expect(
+      riskyDeliveryPreparationResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) =>
+          customerUpdate.customerUpdateId === planningRecord.appointmentConfirmationCustomerUpdateId
+      )?.qaReviewStatus
+    ).toBe("pending_review");
+    expect(
+      riskyDeliveryPreparationResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) =>
+          customerUpdate.customerUpdateId === planningRecord.appointmentConfirmationCustomerUpdateId
+      )?.qaPolicySignals
+    ).toEqual(["possession_date_promise", "pricing_or_exception_promise"]);
+
+    const blockedDispatchReadyResponse = await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        status: "ready_to_dispatch"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/dispatch-ready`
+    });
+
+    expect(blockedDispatchReadyResponse.statusCode).toBe(409);
+    expect(blockedDispatchReadyResponse.json().error).toBe("handover_customer_update_qa_review_pending");
+
+    const forbiddenQaResolutionResponse = await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "A handover manager attempted to clear the QA gate directly.",
+        reviewerName: "Handover Desk",
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/qa-review`
+    });
+
+    expect(forbiddenQaResolutionResponse.statusCode).toBe(403);
+    expect(forbiddenQaResolutionResponse.json().permission).toBe("manage_qa_reviews");
+
+    const allowedQaResolutionResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "The draft was reviewed and can proceed to manual dispatch handling.",
+        reviewerName: "QA Reviewer",
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/qa-review`
+    });
+
+    expect(allowedQaResolutionResponse.statusCode).toBe(200);
+    expect(
+      allowedQaResolutionResponse.json().customerUpdates.find(
+        (customerUpdate: { customerUpdateId: string }) =>
+          customerUpdate.customerUpdateId === planningRecord.appointmentConfirmationCustomerUpdateId
+      )?.qaReviewStatus
+    ).toBe("approved");
+
+    const allowedDispatchReadyResponse = await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        status: "ready_to_dispatch"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/dispatch-ready`
+    });
+
+    expect(allowedDispatchReadyResponse.statusCode).toBe(200);
+    expect(allowedDispatchReadyResponse.json().status).toBe("scheduled");
+  }, 50000);
 });
 
 async function createPlanningBoundaryHandoverRecord(app: ReturnType<typeof buildApiApp>) {

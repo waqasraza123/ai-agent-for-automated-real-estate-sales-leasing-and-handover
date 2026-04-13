@@ -64,6 +64,18 @@ export const handoverCustomerUpdateStatusSchema = z.enum([
   "prepared_for_delivery",
   "ready_to_dispatch"
 ]);
+export const handoverCustomerUpdateQaReviewStatusSchema = z.enum([
+  "not_required",
+  "pending_review",
+  "approved",
+  "follow_up_required"
+]);
+export const handoverCustomerUpdateQaPolicySignalSchema = z.enum([
+  "possession_date_promise",
+  "pricing_or_exception_promise",
+  "legal_claim_risk",
+  "discrimination_risk"
+]);
 export const handoverAppointmentStatusSchema = z.enum(["planned", "internally_confirmed"]);
 export const handoverReviewOutcomeSchema = z.enum(["accepted", "follow_up_required"]);
 export const handoverPostCompletionFollowUpStatusSchema = z.enum(["open", "resolved"]);
@@ -161,6 +173,12 @@ export const prepareHandoverCustomerUpdateDeliveryInputSchema = z.object({
 
 export const markHandoverCustomerUpdateDispatchReadyInputSchema = z.object({
   status: z.literal("ready_to_dispatch")
+});
+
+export const resolveHandoverCustomerUpdateQaReviewInputSchema = z.object({
+  reviewSummary: z.string().trim().min(10).max(280),
+  reviewerName: z.string().trim().min(2).max(120).optional(),
+  status: z.enum(["approved", "follow_up_required"])
 });
 
 export const planHandoverAppointmentInputSchema = z.object({
@@ -307,7 +325,29 @@ export const persistedHandoverCustomerUpdateSchema = z.object({
   deliveryPreparedAt: z.iso.datetime().nullable(),
   deliverySummary: z.string().nullable(),
   dispatchReadyAt: z.iso.datetime().nullable(),
+  qaPolicySignals: z.array(handoverCustomerUpdateQaPolicySignalSchema),
+  qaReviewSampleSummary: z.string().nullable(),
+  qaReviewStatus: handoverCustomerUpdateQaReviewStatusSchema,
+  qaReviewSummary: z.string().nullable(),
+  qaReviewedAt: z.iso.datetime().nullable(),
+  qaReviewerName: z.string().nullable(),
+  qaTriggerEvidence: z.array(z.string()),
   status: handoverCustomerUpdateStatusSchema,
+  type: handoverCustomerUpdateTypeSchema,
+  updatedAt: z.iso.datetime()
+});
+
+export const persistedCurrentHandoverCustomerUpdateQaReviewSchema = z.object({
+  customerUpdateId: z.uuid(),
+  deliverySummary: z.string().nullable(),
+  handoverCaseId: z.uuid(),
+  policySignals: z.array(handoverCustomerUpdateQaPolicySignalSchema),
+  reviewSampleSummary: z.string(),
+  reviewStatus: handoverCustomerUpdateQaReviewStatusSchema,
+  reviewSummary: z.string().nullable(),
+  reviewedAt: z.iso.datetime().nullable(),
+  reviewerName: z.string().nullable(),
+  triggerEvidence: z.array(z.string()),
   type: handoverCustomerUpdateTypeSchema,
   updatedAt: z.iso.datetime()
 });
@@ -382,6 +422,7 @@ export const persistedCaseSummarySchema = z.object({
   automationStatus: automationStatusSchema,
   caseId: z.uuid(),
   createdAt: z.iso.datetime(),
+  currentHandoverCustomerUpdateQaReview: persistedCurrentHandoverCustomerUpdateQaReviewSchema.nullable(),
   currentQaReview: persistedCaseQaReviewSchema.nullable(),
   customerName: z.string(),
   followUpStatus: followUpStatusSchema,
@@ -462,6 +503,8 @@ export type HandoverBlockerStatus = z.infer<typeof handoverBlockerStatusSchema>;
 export type HandoverBlockerType = z.infer<typeof handoverBlockerTypeSchema>;
 export type HandoverCaseStatus = z.infer<typeof handoverCaseStatusSchema>;
 export type HandoverCustomerUpdateStatus = z.infer<typeof handoverCustomerUpdateStatusSchema>;
+export type HandoverCustomerUpdateQaPolicySignal = z.infer<typeof handoverCustomerUpdateQaPolicySignalSchema>;
+export type HandoverCustomerUpdateQaReviewStatus = z.infer<typeof handoverCustomerUpdateQaReviewStatusSchema>;
 export type HandoverCustomerUpdateType = z.infer<typeof handoverCustomerUpdateTypeSchema>;
 export type HandoverMilestoneStatus = z.infer<typeof handoverMilestoneStatusSchema>;
 export type HandoverMilestoneType = z.infer<typeof handoverMilestoneTypeSchema>;
@@ -481,6 +524,7 @@ export type OperatorWorkspace = z.infer<typeof operatorWorkspaceSchema>;
 export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseQaReview = z.infer<typeof persistedCaseQaReviewSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
+export type PersistedCurrentHandoverCustomerUpdateQaReview = z.infer<typeof persistedCurrentHandoverCustomerUpdateQaReviewSchema>;
 export type PersistedDocumentRequest = z.infer<typeof persistedDocumentRequestSchema>;
 export type PersistedHandoverAppointment = z.infer<typeof persistedHandoverAppointmentSchema>;
 export type PersistedHandoverArchiveReview = z.infer<typeof persistedHandoverArchiveReviewSchema>;
@@ -504,6 +548,7 @@ export type QualifyCaseInput = z.infer<typeof qualifyCaseInputSchema>;
 export type RequestCaseQaReviewInput = z.infer<typeof requestCaseQaReviewInputSchema>;
 export type ResolveHandoverPostCompletionFollowUpInput = z.infer<typeof resolveHandoverPostCompletionFollowUpInputSchema>;
 export type ResolveCaseQaReviewInput = z.infer<typeof resolveCaseQaReviewInputSchema>;
+export type ResolveHandoverCustomerUpdateQaReviewInput = z.infer<typeof resolveHandoverCustomerUpdateQaReviewInputSchema>;
 export type SaveHandoverArchiveReviewInput = z.infer<typeof saveHandoverArchiveReviewInputSchema>;
 export type SaveHandoverReviewInput = z.infer<typeof saveHandoverReviewInputSchema>;
 export type ScheduleVisitInput = z.infer<typeof scheduleVisitInputSchema>;

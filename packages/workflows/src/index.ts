@@ -17,6 +17,7 @@ import type {
   PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ResolveCaseQaReviewInput,
+  ResolveHandoverCustomerUpdateQaReviewInput,
   ResolveHandoverPostCompletionFollowUpInput,
   SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
@@ -26,11 +27,14 @@ import type {
   UpdateHandoverArchiveStatusInput,
   UpdateHandoverBlockerInput,
   UpdateDocumentRequestInput,
+  HandoverCustomerUpdateQaReviewStatus,
   UpdateHandoverMilestoneInput,
   UpdateHandoverTaskStatusInput
 } from "@real-estate-ai/contracts";
 import {
   deriveCustomerUpdateStatusFromMilestone,
+  buildHandoverCustomerUpdateQaSampleSummary,
+  detectHandoverCustomerUpdateQaPolicyMatches,
   deriveDocumentWorkflowNextAction,
   deriveHandoverCaseStatus,
   getHandoverCaseNextAction,
@@ -1076,6 +1080,19 @@ export async function preparePersistedHandoverCustomerUpdateDelivery(
     throw new WorkflowRuleError("handover_appointment_not_confirmed");
   }
 
+  const qaPolicyMatches = detectHandoverCustomerUpdateQaPolicyMatches(input.deliverySummary);
+  const nextQaReview =
+    qaPolicyMatches.length > 0
+      ? {
+          policyMatches: qaPolicyMatches,
+          sampleSummary: buildHandoverCustomerUpdateQaSampleSummary(
+            handoverCase.preferredLocale,
+            qaPolicyMatches.map((match) => match.signal)
+          )
+        }
+      : null;
+  const nextQaReviewStatus: HandoverCustomerUpdateQaReviewStatus = nextQaReview ? "pending_review" : "not_required";
+
   const updatedCustomerUpdates = handoverCase.customerUpdates.map((item) =>
     item.customerUpdateId === customerUpdateId
       ? {
@@ -1083,6 +1100,13 @@ export async function preparePersistedHandoverCustomerUpdateDelivery(
           deliveryPreparedAt: new Date().toISOString(),
           deliverySummary: input.deliverySummary,
           dispatchReadyAt: null,
+          qaPolicySignals: nextQaReview?.policyMatches.map((match) => match.signal) ?? [],
+          qaReviewSampleSummary: nextQaReview?.sampleSummary ?? null,
+          qaReviewStatus: nextQaReviewStatus,
+          qaReviewSummary: null,
+          qaReviewedAt: null,
+          qaReviewerName: null,
+          qaTriggerEvidence: nextQaReview?.policyMatches.map((match) => match.evidence) ?? [],
           status: input.status
         }
       : item
@@ -1096,6 +1120,7 @@ export async function preparePersistedHandoverCustomerUpdateDelivery(
 
   return store.prepareHandoverCustomerUpdateDelivery(handoverCaseId, customerUpdateId, {
     ...input,
+    qaReview: nextQaReview,
     nextAction: getHandoverCaseNextAction(
       handoverCase.preferredLocale,
       nextHandoverStatus,
@@ -1114,6 +1139,76 @@ export async function preparePersistedHandoverCustomerUpdateDelivery(
       handoverCase.blockers
     ),
     nextHandoverStatus
+  });
+}
+
+export async function resolvePersistedHandoverCustomerUpdateQaReview(
+  store: LeadCaptureStore,
+  handoverCaseId: string,
+  customerUpdateId: string,
+  input: ResolveHandoverCustomerUpdateQaReviewInput
+): Promise<PersistedHandoverCaseDetail | null> {
+  const handoverCase = await store.getHandoverCaseDetail(handoverCaseId);
+
+  if (!handoverCase) {
+    return null;
+  }
+
+  const customerUpdate = handoverCase.customerUpdates.find((item) => item.customerUpdateId === customerUpdateId);
+
+  if (!customerUpdate) {
+    return null;
+  }
+
+  if (customerUpdate.status !== "prepared_for_delivery") {
+    throw new WorkflowRuleError("handover_customer_update_qa_target_not_prepared");
+  }
+
+  if (customerUpdate.qaReviewStatus !== "pending_review") {
+    throw new WorkflowRuleError("handover_customer_update_qa_review_not_pending");
+  }
+  const resolvedQaReviewStatus: HandoverCustomerUpdateQaReviewStatus = input.status;
+
+  const updatedCustomerUpdates = handoverCase.customerUpdates.map((item) =>
+    item.customerUpdateId === customerUpdateId
+      ? {
+          ...item,
+          qaReviewStatus: resolvedQaReviewStatus,
+          qaReviewSummary: input.reviewSummary,
+          qaReviewedAt: new Date().toISOString(),
+          qaReviewerName: input.reviewerName ?? item.qaReviewerName ?? "QA Team"
+        }
+      : item
+  );
+
+  return store.resolveHandoverCustomerUpdateQaReview(handoverCaseId, customerUpdateId, {
+    ...input,
+    nextAction: getHandoverCaseNextAction(
+      handoverCase.preferredLocale,
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      updatedCustomerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers,
+      handoverCase.review,
+      handoverCase.postCompletionFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
+    ),
+    nextActionDueAt: getHandoverCaseNextActionDueAt(
+      handoverCase.status,
+      handoverCase.tasks,
+      handoverCase.milestones,
+      updatedCustomerUpdates,
+      handoverCase.appointment,
+      handoverCase.blockers,
+      handoverCase.review,
+      handoverCase.postCompletionFollowUp,
+      handoverCase.archiveReview,
+      handoverCase.archiveStatus
+    ),
+    nextHandoverStatus: handoverCase.status
   });
 }
 
@@ -1137,6 +1232,14 @@ export async function markPersistedHandoverCustomerUpdateDispatchReady(
 
   if (customerUpdate.status !== "prepared_for_delivery") {
     throw new WorkflowRuleError("handover_delivery_preparation_required");
+  }
+
+  if (customerUpdate.qaReviewStatus === "pending_review") {
+    throw new WorkflowRuleError("handover_customer_update_qa_review_pending");
+  }
+
+  if (customerUpdate.qaReviewStatus === "follow_up_required") {
+    throw new WorkflowRuleError("handover_customer_update_qa_follow_up_required");
   }
 
   if (handoverCase.appointment?.status !== "internally_confirmed") {

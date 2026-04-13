@@ -19,6 +19,7 @@ import type {
   QualifyCaseInput,
   RequestCaseQaReviewInput,
   ResolveCaseQaReviewInput,
+  ResolveHandoverCustomerUpdateQaReviewInput,
   ResolveHandoverPostCompletionFollowUpInput,
   SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
@@ -350,6 +351,22 @@ export async function prepareHandoverCustomerUpdateDelivery(
 ) {
   return requestJson<PersistedHandoverCaseDetail>(
     `/v1/handover-cases/${handoverCaseId}/customer-updates/${customerUpdateId}/delivery`,
+    {
+      headers: await getOperatorSessionHeaders(operatorRole),
+      method: "PATCH",
+      payload: input
+    }
+  );
+}
+
+export async function resolveHandoverCustomerUpdateQaReview(
+  handoverCaseId: string,
+  customerUpdateId: string,
+  input: ResolveHandoverCustomerUpdateQaReviewInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<PersistedHandoverCaseDetail>(
+    `/v1/handover-cases/${handoverCaseId}/customer-updates/${customerUpdateId}/qa-review`,
     {
       headers: await getOperatorSessionHeaders(operatorRole),
       method: "PATCH",

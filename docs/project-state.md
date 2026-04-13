@@ -53,6 +53,7 @@
 - The next persisted Phase 5 trust-hardening boundary is now live locally: the API now accepts only signed operator sessions, the integration harness has fully migrated off raw role headers, and invalid or legacy session attempts are rejected at the boundary
 - The next persisted Phase 5 manager-routing boundary is now live locally: the blended manager command center is now split into dedicated revenue and handover routes, while the shared `/manager` entry redirects single-surface roles and acts as a chooser only when both command surfaces are valid
 - The next persisted Phase 5 QA-policy boundary is now live locally: inbound website lead messages are automatically sampled into QA review when policy signals match, with localized summaries and persisted trigger evidence visible in queue and case detail surfaces
+- The next persisted Phase 5 outbound-QA boundary is now live locally: prepared handover customer updates can automatically open a draft QA approval gate from policy-pack matches, the QA workspace can resolve those draft reviews, and dispatch readiness is blocked until the gate is cleared
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -86,6 +87,7 @@
 - Added the next persisted Phase 5 manager-routing slice with shared manager workspace helpers, dedicated revenue and handover command-center routes, a role-aware `/manager` gateway, expanded manager-route smoke coverage, and manager-path revalidation across server actions
 - Added the next persisted Phase 5 QA-governance slice with a first-class `qa_reviewer` role, dedicated `/qa` workspace routes, persisted case-linked QA sampling and review records, localized QA forms and queue views, and role-aware integration plus smoke coverage
 - Added the next persisted Phase 5 QA-policy slice with automatic intake-time QA trigger detection, localized policy-sample summaries, persisted trigger evidence and signal metadata, queue and case-detail visibility for manual vs policy-triggered reviews, and integration coverage for automatic review creation
+- Added the next persisted Phase 5 outbound-QA slice with policy-pack checks on prepared handover customer updates, persisted per-draft QA review state and evidence, reviewer-only QA resolution from the `/qa` case surface, blocked dispatch-ready promotion until QA approval, and integration coverage for the new gate
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -129,6 +131,7 @@
 - QA sampling is now a case-linked persisted boundary with append-friendly review history, while queue surfaces and case detail use the latest review as the active QA state
 - QA review requests are limited to managerial roles plus `admin`, while QA review resolution is limited to `qa_reviewer` and `admin`
 - Automatic QA sampling now runs during website lead intake when the inbound message matches local policy heuristics, and the persisted review keeps explicit trigger source, signal list, and matched-evidence context
+- Prepared handover customer updates now carry their own persisted QA gate state, and dispatch-ready promotion is blocked whenever the latest draft review is pending or marked for follow-up
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - Playwright smoke verification now runs against a production Next server because the dev-server path was intermittently unstable on the handover route in this environment
 - The repository uses a versioned `core.hooksPath` pointing to `.githooks`
@@ -144,7 +147,7 @@
 - Real provider integrations
 - Real AI execution and automation enforcement
 - Deeper qualification policy logic and approval boundaries beyond the current structured alpha form
-- Broader QA policy packs and message-level draft approval gates beyond the current intake-triggered automatic case sampling boundary
+- Broader QA policy packs and message-level approval gates beyond the current intake sampling plus prepared handover customer-update draft gate
 - Redis or BullMQ-backed durable job orchestration beyond the current local alpha worker
 - Leasing-specific rejection reasons and policy rules beyond the current shared document-request model
 - Real outbound customer communication, provider callbacks, external archive systems, broader post-completion workflows, and fully automated handover execution beyond the current planning, dispatch-ready, blocker, in-progress, controlled-completion, aftercare, and admin-closure boundaries

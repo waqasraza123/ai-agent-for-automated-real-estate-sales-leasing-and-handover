@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { canOperatorRoleAccessWorkspace, canOperatorRolePerform, type SupportedLocale } from "@real-estate-ai/contracts";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
 
+import { HandoverCustomerUpdateQaReviewForm } from "@/components/handover-customer-update-qa-review-form";
 import { MessageThread } from "@/components/message-thread";
 import { QaReviewResolutionForm } from "@/components/qa-review-resolution-form";
 import { QaWorkspaceUnavailable } from "@/components/qa-command-center";
@@ -21,6 +22,7 @@ import {
   formatCaseLastChange,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
+  getPersistedHandoverCustomerUpdateQaReviewDisplay,
   getPersistedQaReviewDisplay,
   getPersistedQaReviewHistory
 } from "@/lib/persisted-case-presenters";
@@ -46,6 +48,7 @@ export default async function QaCaseDetailPage(props: PageProps) {
   }
 
   const currentQaReview = getPersistedQaReviewDisplay(locale, persistedCase);
+  const currentCustomerUpdateQaReview = getPersistedHandoverCustomerUpdateQaReviewDisplay(locale, persistedCase);
   const qaReviewHistory = getPersistedQaReviewHistory(locale, persistedCase);
   const resolutionCopy = getQaReviewResolutionCopy(locale);
   const canManageQaReview = canOperatorRolePerform("manage_qa_reviews", currentOperatorRole);
@@ -69,8 +72,10 @@ export default async function QaCaseDetailPage(props: PageProps) {
             </div>
             <div>
               <p className="detail-label">{locale === "ar" ? "الحالة الحالية" : "Current state"}</p>
-              <StatusBadge tone={currentQaReview?.statusTone ?? "warning"}>
-                {currentQaReview?.statusLabel ?? (locale === "ar" ? "لا توجد مراجعة" : "No QA review")}
+              <StatusBadge tone={currentQaReview?.statusTone ?? currentCustomerUpdateQaReview?.reviewStatusTone ?? "warning"}>
+                {currentQaReview?.statusLabel ??
+                  currentCustomerUpdateQaReview?.reviewStatusLabel ??
+                  (locale === "ar" ? "لا توجد مراجعة" : "No QA review")}
               </StatusBadge>
             </div>
             <div>
@@ -97,6 +102,14 @@ export default async function QaCaseDetailPage(props: PageProps) {
                 <StatusBadge>{currentQaReview.requestedByName}</StatusBadge>
               </>
             ) : null}
+            {currentCustomerUpdateQaReview ? (
+              <>
+                <StatusBadge tone={currentCustomerUpdateQaReview.reviewStatusTone}>
+                  {currentCustomerUpdateQaReview.reviewStatusLabel}
+                </StatusBadge>
+                <StatusBadge>{currentCustomerUpdateQaReview.typeLabel}</StatusBadge>
+              </>
+            ) : null}
           </div>
           {canAccessSalesWorkspace ? (
             <Link className="inline-link" href={`/${locale}/leads/${persistedCase.caseId}`}>
@@ -105,34 +118,73 @@ export default async function QaCaseDetailPage(props: PageProps) {
           ) : null}
         </Panel>
 
-        <Panel title={locale === "ar" ? "ملخص العينة الحالية" : "Current sample summary"}>
-          {currentQaReview ? (
+        <Panel title={locale === "ar" ? "عناصر الجودة الحالية" : "Current QA items"}>
+          {currentQaReview || currentCustomerUpdateQaReview ? (
             <div className="page-stack">
-              <p>{currentQaReview.sampleSummary}</p>
-              <div className="status-row-wrap">
-                <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
-                {currentQaReview.policySignalLabels.map((label) => (
-                  <StatusBadge key={label}>{label}</StatusBadge>
-                ))}
-              </div>
-              <dl className="detail-list">
-                <div>
-                  <dt>{locale === "ar" ? "الجهة الطالبة" : "Requested by"}</dt>
-                  <dd>{currentQaReview.requestedByName}</dd>
+              {currentQaReview ? (
+                <div className="page-stack">
+                  <h3>{locale === "ar" ? "مراجعة رسالة الحالة" : "Case-message review"}</h3>
+                  <p>{currentQaReview.sampleSummary}</p>
+                  <div className="status-row-wrap">
+                    <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
+                    {currentQaReview.policySignalLabels.map((label) => (
+                      <StatusBadge key={label}>{label}</StatusBadge>
+                    ))}
+                  </div>
+                  <dl className="detail-list">
+                    <div>
+                      <dt>{locale === "ar" ? "الجهة الطالبة" : "Requested by"}</dt>
+                      <dd>{currentQaReview.requestedByName}</dd>
+                    </div>
+                    <div>
+                      <dt>{locale === "ar" ? "الأدلة المطابقة" : "Matched evidence"}</dt>
+                      <dd>{currentQaReview.triggerEvidence.length > 0 ? currentQaReview.triggerEvidence.join(", ") : "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>{locale === "ar" ? "آخر تحديث" : "Last updated"}</dt>
+                      <dd>{currentQaReview.updatedAt}</dd>
+                    </div>
+                    <div>
+                      <dt>{locale === "ar" ? "قرار المراجع" : "Reviewer decision"}</dt>
+                      <dd>{currentQaReview.reviewSummary ?? "—"}</dd>
+                    </div>
+                  </dl>
                 </div>
-                <div>
-                  <dt>{locale === "ar" ? "الأدلة المطابقة" : "Matched evidence"}</dt>
-                  <dd>{currentQaReview.triggerEvidence.length > 0 ? currentQaReview.triggerEvidence.join(", ") : "—"}</dd>
+              ) : null}
+              {currentCustomerUpdateQaReview ? (
+                <div className="page-stack">
+                  <h3>{locale === "ar" ? "مراجعة مسودة تحديث العميل" : "Customer-update draft review"}</h3>
+                  <p>{currentCustomerUpdateQaReview.reviewSampleSummary}</p>
+                  <div className="status-row-wrap">
+                    <StatusBadge>{currentCustomerUpdateQaReview.typeLabel}</StatusBadge>
+                    {currentCustomerUpdateQaReview.policySignalLabels.map((label) => (
+                      <StatusBadge key={label}>{label}</StatusBadge>
+                    ))}
+                  </div>
+                  <dl className="detail-list">
+                    <div>
+                      <dt>{locale === "ar" ? "المسودة المجهزة" : "Prepared draft"}</dt>
+                      <dd>{currentCustomerUpdateQaReview.deliverySummary ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>{locale === "ar" ? "الأدلة المطابقة" : "Matched evidence"}</dt>
+                      <dd>
+                        {currentCustomerUpdateQaReview.triggerEvidence.length > 0
+                          ? currentCustomerUpdateQaReview.triggerEvidence.join(", ")
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{locale === "ar" ? "آخر تحديث" : "Last updated"}</dt>
+                      <dd>{currentCustomerUpdateQaReview.updatedAt}</dd>
+                    </div>
+                    <div>
+                      <dt>{locale === "ar" ? "قرار المراجع" : "Reviewer decision"}</dt>
+                      <dd>{currentCustomerUpdateQaReview.reviewSummary ?? "—"}</dd>
+                    </div>
+                  </dl>
                 </div>
-                <div>
-                  <dt>{locale === "ar" ? "آخر تحديث" : "Last updated"}</dt>
-                  <dd>{currentQaReview.updatedAt}</dd>
-                </div>
-                <div>
-                  <dt>{locale === "ar" ? "قرار المراجع" : "Reviewer decision"}</dt>
-                  <dd>{currentQaReview.reviewSummary ?? "—"}</dd>
-                </div>
-              </dl>
+              ) : null}
             </div>
           ) : (
             <p className="panel-summary">
@@ -150,31 +202,69 @@ export default async function QaCaseDetailPage(props: PageProps) {
         <Panel title={resolutionCopy.title}>
           <p className="panel-summary">{resolutionCopy.summary}</p>
           <p className="field-note">{qaGuardNote}</p>
-          {currentQaReview ? (
-            currentQaReview.status === "pending_review" ? (
-              <QaReviewResolutionForm
-                canManage={canManageQaReview}
-                caseId={persistedCase.caseId}
-                currentStatus={currentQaReview.status}
-                defaultReviewerName={locale === "ar" ? "فريق الجودة" : "QA Team"}
-                disabledLabel={locale === "ar" ? "يتطلب مراجع جودة" : "QA reviewer required"}
-                locale={locale}
-                qaReviewId={currentQaReview.qaReviewId}
-                returnPath={`/${locale}/qa/cases/${persistedCase.caseId}`}
-              />
-            ) : (
-              <div className="page-stack">
-                <StatusBadge tone={currentQaReview.statusTone}>{currentQaReview.statusLabel}</StatusBadge>
-                <div className="status-row-wrap">
-                  <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
-                  {currentQaReview.policySignalLabels.map((label) => (
-                    <StatusBadge key={label}>{label}</StatusBadge>
-                  ))}
-                </div>
-                <p>{currentQaReview.reviewSummary ?? currentQaReview.sampleSummary}</p>
-                <p className="case-link-meta">{currentQaReview.reviewedAt ?? currentQaReview.updatedAt}</p>
-              </div>
-            )
+          {currentQaReview || currentCustomerUpdateQaReview ? (
+            <div className="page-stack">
+              {currentQaReview ? (
+                currentQaReview.status === "pending_review" ? (
+                  <QaReviewResolutionForm
+                    canManage={canManageQaReview}
+                    caseId={persistedCase.caseId}
+                    currentStatus={currentQaReview.status}
+                    defaultReviewerName={locale === "ar" ? "فريق الجودة" : "QA Team"}
+                    disabledLabel={locale === "ar" ? "يتطلب مراجع جودة" : "QA reviewer required"}
+                    locale={locale}
+                    qaReviewId={currentQaReview.qaReviewId}
+                    returnPath={`/${locale}/qa/cases/${persistedCase.caseId}`}
+                  />
+                ) : (
+                  <div className="page-stack">
+                    <h3>{locale === "ar" ? "قرار رسالة الحالة" : "Case-message decision"}</h3>
+                    <StatusBadge tone={currentQaReview.statusTone}>{currentQaReview.statusLabel}</StatusBadge>
+                    <div className="status-row-wrap">
+                      <StatusBadge>{currentQaReview.triggerSourceLabel}</StatusBadge>
+                      {currentQaReview.policySignalLabels.map((label) => (
+                        <StatusBadge key={label}>{label}</StatusBadge>
+                      ))}
+                    </div>
+                    <p>{currentQaReview.reviewSummary ?? currentQaReview.sampleSummary}</p>
+                    <p className="case-link-meta">{currentQaReview.reviewedAt ?? currentQaReview.updatedAt}</p>
+                  </div>
+                )
+              ) : null}
+              {currentCustomerUpdateQaReview ? (
+                currentCustomerUpdateQaReview.reviewStatus === "pending_review" ? (
+                  <div className="page-stack">
+                    <h3>{locale === "ar" ? "قرار مسودة تحديث العميل" : "Customer-update draft decision"}</h3>
+                    <HandoverCustomerUpdateQaReviewForm
+                      canManage={canManageQaReview}
+                      customerUpdateId={currentCustomerUpdateQaReview.customerUpdateId}
+                      defaultReviewerName={locale === "ar" ? "فريق الجودة" : "QA Team"}
+                      disabledLabel={locale === "ar" ? "يتطلب مراجع جودة" : "QA reviewer required"}
+                      handoverCaseId={currentCustomerUpdateQaReview.handoverCaseId}
+                      locale={locale}
+                      returnPath={`/${locale}/qa/cases/${persistedCase.caseId}`}
+                    />
+                  </div>
+                ) : (
+                  <div className="page-stack">
+                    <h3>{locale === "ar" ? "قرار مسودة تحديث العميل" : "Customer-update draft decision"}</h3>
+                    <StatusBadge tone={currentCustomerUpdateQaReview.reviewStatusTone}>
+                      {currentCustomerUpdateQaReview.reviewStatusLabel}
+                    </StatusBadge>
+                    <div className="status-row-wrap">
+                      <StatusBadge>{currentCustomerUpdateQaReview.typeLabel}</StatusBadge>
+                      {currentCustomerUpdateQaReview.policySignalLabels.map((label) => (
+                        <StatusBadge key={label}>{label}</StatusBadge>
+                      ))}
+                    </div>
+                    <p>{currentCustomerUpdateQaReview.reviewSummary ?? currentCustomerUpdateQaReview.reviewSampleSummary}</p>
+                    <p className="case-link-meta">
+                      {currentCustomerUpdateQaReview.reviewedAt ?? currentCustomerUpdateQaReview.updatedAt}
+                    </p>
+                  </div>
+                )
+              ) : null}
+            </div>
           ) : (
             <p className="panel-summary">
               {locale === "ar"

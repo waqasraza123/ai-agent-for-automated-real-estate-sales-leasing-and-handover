@@ -21,6 +21,7 @@ import {
   qualifyCaseInputSchema,
   requestCaseQaReviewInputSchema,
   resolveCaseQaReviewInputSchema,
+  resolveHandoverCustomerUpdateQaReviewInputSchema,
   resolveHandoverPostCompletionFollowUpInputSchema,
   saveHandoverArchiveReviewInputSchema,
   scheduleVisitInputSchema,
@@ -58,6 +59,7 @@ import {
   qualifyCase,
   requestCaseQaReview,
   resolveCaseQaReview,
+  resolveHandoverCustomerUpdateQaReview,
   resolveHandoverPostCompletionFollowUp,
   saveHandoverArchiveReview,
   scheduleVisit,
@@ -1117,12 +1119,17 @@ export async function prepareHandoverCustomerUpdateDeliveryAction(
       await getOperatorRole()
     );
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+    const updatedCustomerUpdate = updatedHandoverCase.customerUpdates.find((item) => item.customerUpdateId === customerUpdateId);
 
     return {
       message:
-        locale === "ar"
-          ? "تم تجهيز تحديث العميل كرسالة جاهزة للإرسال لاحقاً من دون تشغيل أي مزود خارجي."
-          : "The customer update was prepared for later dispatch without triggering any external provider.",
+        updatedCustomerUpdate?.qaReviewStatus === "pending_review"
+          ? locale === "ar"
+            ? "تم تجهيز التحديث وتم فتح حد اعتماد جودة قبل تحويله إلى جاهز للإرسال."
+            : "The customer update was prepared and a QA approval gate was opened before dispatch readiness."
+          : locale === "ar"
+            ? "تم تجهيز تحديث العميل كرسالة جاهزة للإرسال لاحقاً من دون تشغيل أي مزود خارجي."
+            : "The customer update was prepared for later dispatch without triggering any external provider.",
       status: "success"
     };
   } catch (error) {
@@ -1132,6 +1139,63 @@ export async function prepareHandoverCustomerUpdateDeliveryAction(
           locale === "ar"
             ? "لا يمكن تجهيز الإرسال قبل اعتماد حد التأكيد الداخلي وتثبيت الموعد داخلياً."
             : "Delivery preparation stays locked until the appointment is internally confirmed and the boundary is approved.",
+        status: "error"
+      };
+    }
+
+    return getActionError(locale, error);
+  }
+}
+
+export async function resolveHandoverCustomerUpdateQaReviewAction(
+  _: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const customerUpdateId = formData.get("customerUpdateId");
+  const handoverCaseId = formData.get("handoverCaseId");
+  const returnPath = formData.get("returnPath");
+
+  if (typeof customerUpdateId !== "string" || typeof handoverCaseId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = resolveHandoverCustomerUpdateQaReviewInputSchema.safeParse({
+    reviewSummary: formData.get("reviewSummary"),
+    reviewerName: normalizeOptionalString(formData.get("reviewerName")),
+    status: formData.get("status")
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedHandoverCase = await resolveHandoverCustomerUpdateQaReview(
+      handoverCaseId,
+      customerUpdateId,
+      result.data,
+      await getOperatorRole()
+    );
+    revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم حفظ قرار الجودة على تحديث العميل المجهز."
+          : "The QA decision for the prepared customer update was saved.",
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 409) {
+      return {
+        message:
+          locale === "ar"
+            ? "لا يمكن إغلاق هذا الحد لأن مراجعة الجودة لم تعد بانتظار القرار أو لأن التحديث لم يعد مجهزاً."
+            : "This QA gate can no longer be resolved because it is no longer pending or the draft is no longer prepared.",
         status: "error"
       };
     }
@@ -1182,11 +1246,21 @@ export async function markHandoverCustomerUpdateDispatchReadyAction(
     };
   } catch (error) {
     if (error instanceof WebApiError && error.status === 409) {
+      const errorCode = typeof error.body === "object" && error.body && "error" in error.body ? error.body.error : null;
+
       return {
         message:
-          locale === "ar"
-            ? "لا يمكن تحويل التحديث إلى جاهز للإرسال قبل تجهيز المحتوى أولاً."
-            : "Dispatch readiness requires a prepared delivery package first.",
+          errorCode === "handover_customer_update_qa_review_pending"
+            ? locale === "ar"
+              ? "تم تعليق هذا الحد بانتظار اعتماد الجودة على الصياغة المجهزة."
+              : "Dispatch readiness is blocked until QA approves the prepared draft."
+            : errorCode === "handover_customer_update_qa_follow_up_required"
+              ? locale === "ar"
+                ? "تتطلب الجودة تعديل الصياغة المجهزة قبل تحويلها إلى جاهز للإرسال."
+                : "QA requested draft changes before this update can be marked dispatch-ready."
+              : locale === "ar"
+                ? "لا يمكن تحويل التحديث إلى جاهز للإرسال قبل تجهيز المحتوى أولاً."
+                : "Dispatch readiness requires a prepared delivery package first.",
         status: "error"
       };
     }

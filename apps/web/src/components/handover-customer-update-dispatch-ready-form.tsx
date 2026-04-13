@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import type { HandoverCustomerUpdateStatus, SupportedLocale } from "@real-estate-ai/contracts";
+import type { HandoverCustomerUpdateQaReviewStatus, HandoverCustomerUpdateStatus, SupportedLocale } from "@real-estate-ai/contracts";
 import { cx } from "@real-estate-ai/ui";
 
 import { initialFormActionState, markHandoverCustomerUpdateDispatchReadyAction } from "@/app/actions";
@@ -15,6 +15,7 @@ export function HandoverCustomerUpdateDispatchReadyForm(props: {
   disabledLabel: string;
   handoverCaseId: string;
   locale: SupportedLocale;
+  qaReviewStatus: HandoverCustomerUpdateQaReviewStatus;
   returnPath: string;
   status: HandoverCustomerUpdateStatus;
 }) {
@@ -22,6 +23,8 @@ export function HandoverCustomerUpdateDispatchReadyForm(props: {
   const [state, action] = useActionState(markHandoverCustomerUpdateDispatchReadyAction, initialFormActionState);
   const isPrepared = props.status === "prepared_for_delivery";
   const isDispatchReady = props.status === "ready_to_dispatch";
+  const isPendingQaReview = props.qaReviewStatus === "pending_review";
+  const requiresQaFollowUp = props.qaReviewStatus === "follow_up_required";
 
   return (
     <form action={action} className="form-stack">
@@ -35,6 +38,14 @@ export function HandoverCustomerUpdateDispatchReadyForm(props: {
         {isDispatchReady ? (
           <button className="primary-button" disabled type="button">
             {props.locale === "ar" ? "جاهز للإرسال" : "Ready to dispatch"}
+          </button>
+        ) : isPendingQaReview ? (
+          <button className="primary-button" disabled type="button">
+            {props.locale === "ar" ? "بانتظار الجودة" : "Pending QA review"}
+          </button>
+        ) : requiresQaFollowUp ? (
+          <button className="primary-button" disabled type="button">
+            {props.locale === "ar" ? "مطلوب تعديل الصياغة" : "Draft changes required"}
           </button>
         ) : isPrepared ? (
           <FormSubmitButton

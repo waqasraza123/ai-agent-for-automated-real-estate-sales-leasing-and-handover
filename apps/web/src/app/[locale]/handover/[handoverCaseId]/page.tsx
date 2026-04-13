@@ -37,6 +37,7 @@ import {
   getPersistedHandoverArchiveReviewDisplay,
   getPersistedHandoverArchiveStatusDisplay,
   getPersistedHandoverBlockerDisplay,
+  getPersistedHandoverCustomerUpdateQaReviewDisplay,
   getPersistedHandoverCustomerUpdateDisplay,
   getPersistedHandoverMilestoneDisplay,
   getPersistedHandoverPostCompletionFollowUpDisplay,
@@ -45,7 +46,7 @@ import {
   getPersistedHandoverDisplay,
   getPersistedHandoverStatusLabel
 } from "@/lib/persisted-case-presenters";
-import { tryGetPersistedHandoverCaseDetail } from "@/lib/live-api";
+import { tryGetPersistedCaseDetail, tryGetPersistedHandoverCaseDetail } from "@/lib/live-api";
 
 interface PageProps {
   params: Promise<{ locale: SupportedLocale; handoverCaseId: string }>;
@@ -80,18 +81,26 @@ export default async function HandoverPage(props: PageProps) {
   const persistedHandoverCase = await tryGetPersistedHandoverCaseDetail(handoverCaseId);
 
   if (persistedHandoverCase) {
+    const persistedCaseDetail = await tryGetPersistedCaseDetail(persistedHandoverCase.caseId);
     const appointmentItem = getPersistedHandoverAppointmentDisplay(locale, persistedHandoverCase);
     const blockerItems = getPersistedHandoverBlockerDisplay(locale, persistedHandoverCase);
     const openBlockerItems = blockerItems.filter((blocker) => blocker.status !== "resolved");
     const taskItems = getPersistedHandoverDisplay(locale, persistedHandoverCase);
     const milestoneItems = getPersistedHandoverMilestoneDisplay(locale, persistedHandoverCase);
     const customerUpdateItems = getPersistedHandoverCustomerUpdateDisplay(locale, persistedHandoverCase);
+    const activeCustomerUpdateQaReview = persistedCaseDetail
+      ? getPersistedHandoverCustomerUpdateQaReviewDisplay(locale, persistedCaseDetail)
+      : null;
     const reviewItem = getPersistedHandoverReviewDisplay(locale, persistedHandoverCase);
     const postCompletionFollowUpItem = getPersistedHandoverPostCompletionFollowUpDisplay(locale, persistedHandoverCase);
     const archiveReviewItem = getPersistedHandoverArchiveReviewDisplay(locale, persistedHandoverCase);
     const archiveStatusItem = getPersistedHandoverArchiveStatusDisplay(locale, persistedHandoverCase);
     const appointmentHoldMilestone = milestoneItems.find((milestone) => milestone.type === "handover_appointment_hold");
     const appointmentConfirmationUpdate = customerUpdateItems.find((customerUpdate) => customerUpdate.type === "appointment_confirmation");
+    const appointmentConfirmationQaReview =
+      activeCustomerUpdateQaReview?.customerUpdateId === appointmentConfirmationUpdate?.customerUpdateId
+        ? activeCustomerUpdateQaReview
+        : null;
     const canManageArchiveBoundary =
       persistedHandoverCase.status === "completed" &&
       Boolean(reviewItem) &&
@@ -565,6 +574,19 @@ export default async function HandoverPage(props: PageProps) {
                     </div>
                   </div>
                 ) : null}
+                {appointmentConfirmationQaReview ? (
+                  <div className="page-stack">
+                    <div className="status-row-wrap">
+                      <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
+                        {appointmentConfirmationQaReview.reviewStatusLabel}
+                      </StatusBadge>
+                      {appointmentConfirmationQaReview.policySignalLabels.map((label) => (
+                        <StatusBadge key={label}>{label}</StatusBadge>
+                      ))}
+                    </div>
+                    <p>{appointmentConfirmationQaReview.reviewSampleSummary}</p>
+                  </div>
+                ) : null}
                 <HandoverCustomerUpdateDeliveryForm
                   canManage={canManageCustomerUpdates}
                   customerUpdateId={appointmentConfirmationUpdate.customerUpdateId}
@@ -572,6 +594,7 @@ export default async function HandoverPage(props: PageProps) {
                   deliverySummary={appointmentConfirmationUpdate.deliverySummary ?? ""}
                   handoverCaseId={persistedHandoverCase.handoverCaseId}
                   locale={locale}
+                  qaReviewStatus={appointmentConfirmationUpdate.qaReviewStatus}
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                   status={appointmentConfirmationUpdate.status}
                 />
@@ -606,12 +629,24 @@ export default async function HandoverPage(props: PageProps) {
                     </div>
                   </div>
                 ) : null}
+                {appointmentConfirmationQaReview ? (
+                  <div className="page-stack">
+                    <div className="status-row-wrap">
+                      <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
+                        {appointmentConfirmationQaReview.reviewStatusLabel}
+                      </StatusBadge>
+                      <StatusBadge>{appointmentConfirmationQaReview.typeLabel}</StatusBadge>
+                    </div>
+                    <p>{appointmentConfirmationQaReview.reviewSummary ?? appointmentConfirmationQaReview.reviewSampleSummary}</p>
+                  </div>
+                ) : null}
                 <HandoverCustomerUpdateDispatchReadyForm
                   canManage={canManageCustomerUpdates}
                   customerUpdateId={appointmentConfirmationUpdate.customerUpdateId}
                   disabledLabel={locale === "ar" ? "يتطلب مدير التسليم" : "Handover manager required"}
                   handoverCaseId={persistedHandoverCase.handoverCaseId}
                   locale={locale}
+                  qaReviewStatus={appointmentConfirmationUpdate.qaReviewStatus}
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                   status={appointmentConfirmationUpdate.status}
                 />
@@ -752,6 +787,14 @@ export default async function HandoverPage(props: PageProps) {
                         <StatusBadge tone={customerUpdate.statusTone}>{customerUpdate.statusLabel}</StatusBadge>
                       </div>
                       <p>{customerUpdate.summary}</p>
+                      {customerUpdate.qaReviewStatus !== "not_required" ? (
+                        <div className="status-row-wrap">
+                          <StatusBadge tone={customerUpdate.qaReviewStatusTone}>{customerUpdate.qaReviewStatusLabel}</StatusBadge>
+                          {customerUpdate.qaPolicySignalLabels.map((label) => (
+                            <StatusBadge key={label}>{label}</StatusBadge>
+                          ))}
+                        </div>
+                      ) : null}
                       <p className="case-link-meta">{customerUpdate.updatedAt}</p>
                     </div>
                     <div className="document-row-actions">

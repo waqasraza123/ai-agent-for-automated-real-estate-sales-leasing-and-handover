@@ -27,6 +27,8 @@ import type {
   HandoverBlockerType,
   HandoverCaseStatus,
   HandoverCustomerUpdateStatus,
+  HandoverCustomerUpdateQaPolicySignal,
+  HandoverCustomerUpdateQaReviewStatus,
   HandoverCustomerUpdateType,
   HandoverMilestoneStatus,
   HandoverMilestoneType,
@@ -40,6 +42,7 @@ import type {
   PersistedCaseQaReview,
   PersistedCaseDetail,
   PersistedCaseSummary,
+  PersistedCurrentHandoverCustomerUpdateQaReview,
   PersistedDocumentRequest,
   PersistedHandoverAppointment,
   PersistedHandoverArchiveReview,
@@ -60,6 +63,7 @@ import type {
   QualificationReadiness,
   RequestCaseQaReviewInput,
   ResolveCaseQaReviewInput,
+  ResolveHandoverCustomerUpdateQaReviewInput,
   ResolveHandoverPostCompletionFollowUpInput,
   SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
@@ -75,7 +79,14 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { buildAutomaticQaSampleSummary, detectQaPolicyMatches, type QaPolicySignal } from "./qa-policy";
+import {
+  buildAutomaticQaSampleSummary,
+  buildHandoverCustomerUpdateQaSampleSummary,
+  detectHandoverCustomerUpdateQaPolicyMatches,
+  detectQaPolicyMatches,
+  type HandoverCustomerUpdateQaPolicyMatch,
+  type QaPolicySignal
+} from "./qa-policy";
 
 const defaultOwnerName = "Revenue Ops Queue";
 const defaultDocumentTypes: DocumentRequestType[] = ["government_id", "proof_of_funds", "employment_letter"];
@@ -220,6 +231,13 @@ const handoverCustomerUpdates = pgTable("handover_customer_updates", {
     .notNull()
     .references(() => handoverCases.id, { onDelete: "cascade" }),
   id: uuid("id").primaryKey(),
+  qaPolicySignals: jsonb("qa_policy_signals").$type<HandoverCustomerUpdateQaPolicySignal[]>().notNull(),
+  qaReviewSampleSummary: text("qa_review_sample_summary"),
+  qaReviewStatus: text("qa_review_status").notNull(),
+  qaReviewSummary: text("qa_review_summary"),
+  qaReviewedAt: timestamp("qa_reviewed_at", { mode: "string", withTimezone: true }),
+  qaReviewerName: text("qa_reviewer_name"),
+  qaTriggerEvidence: jsonb("qa_trigger_evidence").$type<string[]>().notNull(),
   status: text("status").notNull(),
   type: text("type").notNull(),
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
@@ -476,6 +494,21 @@ export interface LeadCaptureStore {
     handoverCaseId: string,
     customerUpdateId: string,
     input: PrepareHandoverCustomerUpdateDeliveryInput & {
+      qaReview:
+        | {
+            policyMatches: HandoverCustomerUpdateQaPolicyMatch[];
+            sampleSummary: string;
+          }
+        | null;
+      nextAction: string;
+      nextActionDueAt: string;
+      nextHandoverStatus: HandoverCaseStatus;
+    }
+  ): Promise<PersistedHandoverCaseDetail | null>;
+  resolveHandoverCustomerUpdateQaReview(
+    handoverCaseId: string,
+    customerUpdateId: string,
+    input: ResolveHandoverCustomerUpdateQaReviewInput & {
       nextAction: string;
       nextActionDueAt: string;
       nextHandoverStatus: HandoverCaseStatus;
@@ -690,6 +723,13 @@ export async function createAlphaLeadCaptureStore(options?: {
       delivery_summary text,
       delivery_prepared_at timestamptz,
       dispatch_ready_at timestamptz,
+      qa_review_status text not null default 'not_required',
+      qa_review_sample_summary text,
+      qa_review_summary text,
+      qa_reviewer_name text,
+      qa_reviewed_at timestamptz,
+      qa_policy_signals jsonb not null default '[]'::jsonb,
+      qa_trigger_evidence jsonb not null default '[]'::jsonb,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
@@ -697,6 +737,13 @@ export async function createAlphaLeadCaptureStore(options?: {
     alter table handover_customer_updates add column if not exists delivery_summary text;
     alter table handover_customer_updates add column if not exists delivery_prepared_at timestamptz;
     alter table handover_customer_updates add column if not exists dispatch_ready_at timestamptz;
+    alter table handover_customer_updates add column if not exists qa_review_status text not null default 'not_required';
+    alter table handover_customer_updates add column if not exists qa_review_sample_summary text;
+    alter table handover_customer_updates add column if not exists qa_review_summary text;
+    alter table handover_customer_updates add column if not exists qa_reviewer_name text;
+    alter table handover_customer_updates add column if not exists qa_reviewed_at timestamptz;
+    alter table handover_customer_updates add column if not exists qa_policy_signals jsonb not null default '[]'::jsonb;
+    alter table handover_customer_updates add column if not exists qa_trigger_evidence jsonb not null default '[]'::jsonb;
 
     create table if not exists handover_appointments (
       id uuid primary key,
@@ -910,6 +957,13 @@ export async function createAlphaLeadCaptureStore(options?: {
           deliveryPreparedAt: handoverCustomerUpdates.deliveryPreparedAt,
           deliverySummary: handoverCustomerUpdates.deliverySummary,
           dispatchReadyAt: handoverCustomerUpdates.dispatchReadyAt,
+          qaPolicySignals: handoverCustomerUpdates.qaPolicySignals,
+          qaReviewSampleSummary: handoverCustomerUpdates.qaReviewSampleSummary,
+          qaReviewStatus: handoverCustomerUpdates.qaReviewStatus,
+          qaReviewSummary: handoverCustomerUpdates.qaReviewSummary,
+          qaReviewedAt: handoverCustomerUpdates.qaReviewedAt,
+          qaReviewerName: handoverCustomerUpdates.qaReviewerName,
+          qaTriggerEvidence: handoverCustomerUpdates.qaTriggerEvidence,
           status: handoverCustomerUpdates.status,
           type: handoverCustomerUpdates.type,
           updatedAt: handoverCustomerUpdates.updatedAt
@@ -1174,6 +1228,63 @@ export async function createAlphaLeadCaptureStore(options?: {
     return latestReviews;
   };
 
+  const listCurrentHandoverCustomerUpdateQaReviews = async (caseIds: string[]) => {
+    const caseIdsWithValues = caseIds.filter(Boolean);
+
+    if (caseIdsWithValues.length === 0) {
+      return new Map<string, PersistedCurrentHandoverCustomerUpdateQaReview>();
+    }
+
+    const records = await db
+      .select({
+        caseId: handoverCases.caseId,
+        customerUpdateId: handoverCustomerUpdates.id,
+        deliverySummary: handoverCustomerUpdates.deliverySummary,
+        handoverCaseId: handoverCustomerUpdates.handoverCaseId,
+        policySignals: handoverCustomerUpdates.qaPolicySignals,
+        reviewSampleSummary: handoverCustomerUpdates.qaReviewSampleSummary,
+        reviewStatus: handoverCustomerUpdates.qaReviewStatus,
+        reviewSummary: handoverCustomerUpdates.qaReviewSummary,
+        reviewedAt: handoverCustomerUpdates.qaReviewedAt,
+        reviewerName: handoverCustomerUpdates.qaReviewerName,
+        triggerEvidence: handoverCustomerUpdates.qaTriggerEvidence,
+        type: handoverCustomerUpdates.type,
+        updatedAt: handoverCustomerUpdates.updatedAt
+      })
+      .from(handoverCustomerUpdates)
+      .innerJoin(handoverCases, eq(handoverCustomerUpdates.handoverCaseId, handoverCases.id))
+      .where(and(inArray(handoverCases.caseId, caseIdsWithValues), inArray(handoverCustomerUpdates.qaReviewStatus, [
+        "pending_review",
+        "follow_up_required",
+        "approved"
+      ])))
+      .orderBy(desc(handoverCustomerUpdates.updatedAt), desc(handoverCustomerUpdates.createdAt));
+
+    const latestReviews = new Map<string, PersistedCurrentHandoverCustomerUpdateQaReview>();
+
+    for (const record of records) {
+      const hydratedReview = hydrateCurrentHandoverCustomerUpdateQaReview(record);
+      const existingReview = latestReviews.get(record.caseId);
+
+      if (!existingReview) {
+        latestReviews.set(record.caseId, hydratedReview);
+        continue;
+      }
+
+      const nextPriority = getCurrentHandoverCustomerUpdateQaPriority(hydratedReview.reviewStatus);
+      const existingPriority = getCurrentHandoverCustomerUpdateQaPriority(existingReview.reviewStatus);
+
+      if (
+        nextPriority < existingPriority ||
+        (nextPriority === existingPriority && new Date(hydratedReview.updatedAt).getTime() > new Date(existingReview.updatedAt).getTime())
+      ) {
+        latestReviews.set(record.caseId, hydratedReview);
+      }
+    }
+
+    return latestReviews;
+  };
+
   const getPersistedCaseDetail = async (caseId: string): Promise<PersistedCaseDetail | null> => {
     const persistedCase = await db
       .select({
@@ -1212,6 +1323,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       persistedDocumentRequests,
       persistedInterventions,
       persistedQaReviews,
+      currentHandoverCustomerUpdateQaReviewMap,
       linkedHandoverCase,
       handoverClosureMap
     ] = await Promise.all([
@@ -1289,6 +1401,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           .from(caseQaReviews)
           .where(eq(caseQaReviews.caseId, caseId))
           .orderBy(desc(caseQaReviews.createdAt), desc(caseQaReviews.updatedAt)),
+        listCurrentHandoverCustomerUpdateQaReviews([caseId]),
         db
           .select({
             createdAt: handoverCases.createdAt,
@@ -1316,6 +1429,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       budget: caseRecord.budget,
       caseId: caseRecord.caseId,
       createdAt: caseRecord.createdAt,
+      currentHandoverCustomerUpdateQaReview: currentHandoverCustomerUpdateQaReviewMap.get(caseId) ?? null,
       currentQaReview: hydratedQaReviews[0] ?? null,
       currentVisit: currentVisit[0]
         ? {
@@ -1667,6 +1781,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         automationStatus: toAutomationStatus(createdCase.automationStatus),
         caseId: createdCase.caseId,
         createdAt: createdCase.createdAt,
+        currentHandoverCustomerUpdateQaReview: null,
         currentQaReview,
         customerName: createdCase.customerName,
         followUpStatus: toFollowUpStatus(createdCase.nextActionDueAt),
@@ -1815,9 +1930,11 @@ export async function createAlphaLeadCaptureStore(options?: {
         .orderBy(desc(cases.createdAt));
 
       const caseIds = persistedCases.map((caseRecord) => caseRecord.caseId);
-      const [openInterventionCounts, currentQaReviews, linkedHandoverCases, handoverClosureSummaries] = await Promise.all([
+      const [openInterventionCounts, currentQaReviews, currentHandoverCustomerUpdateQaReviews, linkedHandoverCases, handoverClosureSummaries] =
+        await Promise.all([
         listOpenInterventionCounts(caseIds),
         listCurrentQaReviews(caseIds),
+        listCurrentHandoverCustomerUpdateQaReviews(caseIds),
         listLinkedHandoverCases(caseIds),
         listHandoverClosureSummaries(caseIds)
       ]);
@@ -1826,6 +1943,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         automationStatus: toAutomationStatus(caseRecord.automationStatus),
         caseId: caseRecord.caseId,
         createdAt: caseRecord.createdAt,
+        currentHandoverCustomerUpdateQaReview: currentHandoverCustomerUpdateQaReviews.get(caseRecord.caseId) ?? null,
         currentQaReview: currentQaReviews.get(caseRecord.caseId) ?? null,
         customerName: caseRecord.customerName,
         followUpStatus: toFollowUpStatus(caseRecord.nextActionDueAt),
@@ -2171,6 +2289,13 @@ export async function createAlphaLeadCaptureStore(options?: {
             dispatchReadyAt: null,
             handoverCaseId: createdHandoverCaseId,
             id: randomUUID(),
+            qaPolicySignals: [],
+            qaReviewSampleSummary: null,
+            qaReviewStatus: "not_required",
+            qaReviewSummary: null,
+            qaReviewedAt: null,
+            qaReviewerName: null,
+            qaTriggerEvidence: [],
             status: "blocked",
             type: customerUpdateType,
             updatedAt
@@ -3134,6 +3259,10 @@ export async function createAlphaLeadCaptureStore(options?: {
       }
 
       const updatedAt = new Date().toISOString();
+      const qaReviewSampleSummary = input.qaReview?.sampleSummary ?? null;
+      const qaPolicySignals = input.qaReview?.policyMatches.map((match) => match.signal) ?? [];
+      const qaTriggerEvidence = input.qaReview?.policyMatches.map((match) => match.evidence) ?? [];
+      const qaReviewStatus: HandoverCustomerUpdateQaReviewStatus = input.qaReview ? "pending_review" : "not_required";
 
       await db.transaction(async (transaction) => {
         await transaction
@@ -3142,6 +3271,13 @@ export async function createAlphaLeadCaptureStore(options?: {
             deliveryPreparedAt: updatedAt,
             deliverySummary: input.deliverySummary,
             dispatchReadyAt: null,
+            qaPolicySignals,
+            qaReviewSampleSummary,
+            qaReviewStatus,
+            qaReviewSummary: null,
+            qaReviewedAt: null,
+            qaReviewerName: null,
+            qaTriggerEvidence,
             status: input.status,
             updatedAt
           })
@@ -3174,6 +3310,103 @@ export async function createAlphaLeadCaptureStore(options?: {
             customerUpdateId,
             deliverySummary: input.deliverySummary,
             handoverCaseId,
+            qaPolicySignals,
+            qaReviewSampleSummary,
+            qaReviewStatus,
+            status: input.status,
+            type: customerUpdate.type
+          }
+        });
+
+        if (input.qaReview) {
+          await transaction.insert(auditEvents).values({
+            caseId: handoverRecord.caseId,
+            createdAt: updatedAt,
+            eventType: "handover_customer_update_qa_review_requested",
+            id: randomUUID(),
+            payload: {
+              customerUpdateId,
+              handoverCaseId,
+              policySignals: qaPolicySignals,
+              reviewSampleSummary: qaReviewSampleSummary,
+              triggerEvidence: qaTriggerEvidence,
+              type: customerUpdate.type
+            }
+          });
+        }
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          caseId: handoverRecord.caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt
+        });
+      });
+
+      return getHandoverCaseDetail(handoverCaseId);
+    },
+    async resolveHandoverCustomerUpdateQaReview(handoverCaseId, customerUpdateId, input) {
+      const handoverRecord = await getHandoverCaseDetail(handoverCaseId);
+
+      if (!handoverRecord) {
+        return null;
+      }
+
+      const customerUpdate = handoverRecord.customerUpdates.find((item) => item.customerUpdateId === customerUpdateId);
+
+      if (!customerUpdate) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(handoverRecord.caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const updatedAt = new Date().toISOString();
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(handoverCustomerUpdates)
+          .set({
+            qaReviewStatus: input.status,
+            qaReviewSummary: input.reviewSummary,
+            qaReviewedAt: updatedAt,
+            qaReviewerName: input.reviewerName ?? customerUpdate.qaReviewerName ?? "QA Team",
+            updatedAt
+          })
+          .where(and(eq(handoverCustomerUpdates.handoverCaseId, handoverCaseId), eq(handoverCustomerUpdates.id, customerUpdateId)));
+
+        await transaction
+          .update(handoverCases)
+          .set({
+            status: input.nextHandoverStatus,
+            updatedAt
+          })
+          .where(eq(handoverCases.id, handoverCaseId));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "handover_initiated",
+            updatedAt
+          })
+          .where(eq(cases.id, handoverRecord.caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId: handoverRecord.caseId,
+          createdAt: updatedAt,
+          eventType: "handover_customer_update_qa_review_resolved",
+          id: randomUUID(),
+          payload: {
+            customerUpdateId,
+            handoverCaseId,
+            reviewSummary: input.reviewSummary,
+            reviewedAt: updatedAt,
+            reviewerName: input.reviewerName ?? customerUpdate.qaReviewerName ?? "QA Team",
             status: input.status,
             type: customerUpdate.type
           }
@@ -3289,6 +3522,13 @@ export async function createAlphaLeadCaptureStore(options?: {
             deliveryPreparedAt: null,
             deliverySummary: null,
             dispatchReadyAt: null,
+            qaPolicySignals: [],
+            qaReviewSampleSummary: null,
+            qaReviewStatus: "not_required",
+            qaReviewSummary: null,
+            qaReviewedAt: null,
+            qaReviewerName: null,
+            qaTriggerEvidence: [],
             status: input.status,
             updatedAt
           })
@@ -3381,6 +3621,13 @@ export async function createAlphaLeadCaptureStore(options?: {
             deliveryPreparedAt: null,
             deliverySummary: null,
             dispatchReadyAt: null,
+            qaPolicySignals: [],
+            qaReviewSampleSummary: null,
+            qaReviewStatus: "not_required",
+            qaReviewSummary: null,
+            qaReviewedAt: null,
+            qaReviewerName: null,
+            qaTriggerEvidence: [],
             status: input.nextCustomerUpdateStatus,
             updatedAt
           })
@@ -3564,6 +3811,10 @@ function getHandoverCaseNextAction(
 ) {
   const schedulingInviteStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "scheduling_invite")?.status;
   const appointmentConfirmationStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "appointment_confirmation")?.status;
+  const pendingCustomerUpdateQaReview = customerUpdates.find((customerUpdate) => customerUpdate.qaReviewStatus === "pending_review");
+  const followUpRequiredCustomerUpdateQaReview = customerUpdates.find(
+    (customerUpdate) => customerUpdate.qaReviewStatus === "follow_up_required"
+  );
   const openBlockers = blockers.filter((blocker) => blocker.status !== "resolved");
 
   if (status === "completed" && !review) {
@@ -3650,6 +3901,18 @@ function getHandoverCaseNextAction(
       : "Start the handover-day execution state once the scheduled record has no open blockers";
   }
 
+  if (pendingCustomerUpdateQaReview) {
+    return locale === "ar"
+      ? "احصل على اعتماد الجودة للتحديث المجهز قبل تحويله إلى حالة جاهزة للإرسال"
+      : "Get explicit QA approval on the prepared customer update before promoting it to dispatch-ready";
+  }
+
+  if (followUpRequiredCustomerUpdateQaReview) {
+    return locale === "ar"
+      ? "راجع صياغة التحديث المجهز وأعد إرساله بعد معالجة ملاحظات الجودة"
+      : "Revise the prepared customer update and resubmit it after addressing the QA feedback";
+  }
+
   if (appointmentConfirmationStatus === "ready_to_dispatch") {
     return locale === "ar"
       ? "الاحتفاظ بالتسليم المجدول حتى يتوفر مسار إرسال أو تنفيذ فعلي"
@@ -3721,6 +3984,10 @@ function getHandoverCaseNextActionDueAt(
   const blockedMilestone = milestones.find((milestone) => milestone.status === "blocked");
   const schedulingInviteStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "scheduling_invite")?.status;
   const appointmentConfirmationStatus = customerUpdates.find((customerUpdate) => customerUpdate.type === "appointment_confirmation")?.status;
+  const pendingCustomerUpdateQaReview = customerUpdates.find((customerUpdate) => customerUpdate.qaReviewStatus === "pending_review");
+  const followUpRequiredCustomerUpdateQaReview = customerUpdates.find(
+    (customerUpdate) => customerUpdate.qaReviewStatus === "follow_up_required"
+  );
   const openBlocker = blockers
     .filter((blocker) => blocker.status !== "resolved")
     .sort((left, right) => new Date(left.dueAt).getTime() - new Date(right.dueAt).getTime())[0];
@@ -3779,6 +4046,10 @@ function getHandoverCaseNextActionDueAt(
 
   if (status === "scheduled") {
     return appointment?.scheduledAt ?? createFutureTimestamp(new Date().toISOString(), 4);
+  }
+
+  if (pendingCustomerUpdateQaReview || followUpRequiredCustomerUpdateQaReview) {
+    return createFutureTimestamp(new Date().toISOString(), 4);
   }
 
   if (appointmentConfirmationStatus === "ready_to_dispatch") {
@@ -3996,6 +4267,13 @@ function hydrateHandoverCustomerUpdate(value: {
   deliveryPreparedAt: string | null;
   deliverySummary: string | null;
   dispatchReadyAt: string | null;
+  qaPolicySignals: HandoverCustomerUpdateQaPolicySignal[] | null;
+  qaReviewSampleSummary: string | null;
+  qaReviewStatus: string;
+  qaReviewSummary: string | null;
+  qaReviewedAt: string | null;
+  qaReviewerName: string | null;
+  qaTriggerEvidence: string[] | null;
   status: string;
   type: string;
   updatedAt: string;
@@ -4006,10 +4284,63 @@ function hydrateHandoverCustomerUpdate(value: {
     deliveryPreparedAt: value.deliveryPreparedAt,
     deliverySummary: value.deliverySummary,
     dispatchReadyAt: value.dispatchReadyAt,
+    qaPolicySignals: (value.qaPolicySignals ?? []).map((signal) => toHandoverCustomerUpdateQaPolicySignal(signal)),
+    qaReviewSampleSummary: value.qaReviewSampleSummary,
+    qaReviewStatus: toHandoverCustomerUpdateQaReviewStatus(value.qaReviewStatus),
+    qaReviewSummary: value.qaReviewSummary,
+    qaReviewedAt: value.qaReviewedAt,
+    qaReviewerName: value.qaReviewerName,
+    qaTriggerEvidence: value.qaTriggerEvidence ?? [],
     status: toHandoverCustomerUpdateStatus(value.status),
     type: toHandoverCustomerUpdateType(value.type),
     updatedAt: value.updatedAt
   };
+}
+
+function hydrateCurrentHandoverCustomerUpdateQaReview(value: {
+  customerUpdateId: string;
+  deliverySummary: string | null;
+  handoverCaseId: string;
+  policySignals: HandoverCustomerUpdateQaPolicySignal[] | null;
+  reviewSampleSummary: string | null;
+  reviewStatus: string;
+  reviewSummary: string | null;
+  reviewedAt: string | null;
+  reviewerName: string | null;
+  triggerEvidence: string[] | null;
+  type: string;
+  updatedAt: string;
+}): PersistedCurrentHandoverCustomerUpdateQaReview {
+  return {
+    customerUpdateId: value.customerUpdateId,
+    deliverySummary: value.deliverySummary,
+    handoverCaseId: value.handoverCaseId,
+    policySignals: (value.policySignals ?? []).map((signal) => toHandoverCustomerUpdateQaPolicySignal(signal)),
+    reviewSampleSummary: value.reviewSampleSummary ?? "QA review required before dispatch.",
+    reviewStatus: toHandoverCustomerUpdateQaReviewStatus(value.reviewStatus),
+    reviewSummary: value.reviewSummary,
+    reviewedAt: value.reviewedAt,
+    reviewerName: value.reviewerName,
+    triggerEvidence: value.triggerEvidence ?? [],
+    type: toHandoverCustomerUpdateType(value.type),
+    updatedAt: value.updatedAt
+  };
+}
+
+function getCurrentHandoverCustomerUpdateQaPriority(status: HandoverCustomerUpdateQaReviewStatus) {
+  if (status === "pending_review") {
+    return 0;
+  }
+
+  if (status === "follow_up_required") {
+    return 1;
+  }
+
+  if (status === "approved") {
+    return 2;
+  }
+
+  return 3;
 }
 
 function hydrateHandoverReview(value: {
@@ -4278,6 +4609,27 @@ function toHandoverCustomerUpdateStatus(value: string): HandoverCustomerUpdateSt
   throw new Error(`unsupported_handover_customer_update_status:${value}`);
 }
 
+function toHandoverCustomerUpdateQaPolicySignal(value: string): HandoverCustomerUpdateQaPolicySignal {
+  if (
+    value === "possession_date_promise" ||
+    value === "pricing_or_exception_promise" ||
+    value === "legal_claim_risk" ||
+    value === "discrimination_risk"
+  ) {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_customer_update_qa_policy_signal:${value}`);
+}
+
+function toHandoverCustomerUpdateQaReviewStatus(value: string): HandoverCustomerUpdateQaReviewStatus {
+  if (value === "not_required" || value === "pending_review" || value === "approved" || value === "follow_up_required") {
+    return value;
+  }
+
+  throw new Error(`unsupported_handover_customer_update_qa_review_status:${value}`);
+}
+
 function toHandoverCustomerUpdateType(value: string): HandoverCustomerUpdateType {
   if (value === "readiness_update" || value === "scheduling_invite" || value === "appointment_confirmation") {
     return value;
@@ -4411,6 +4763,8 @@ function mapMilestoneTypeToCustomerUpdateType(type: HandoverMilestoneType): Hand
 }
 
 export {
+  buildHandoverCustomerUpdateQaSampleSummary,
+  detectHandoverCustomerUpdateQaPolicyMatches,
   deriveCustomerUpdateStatusFromMilestone,
   deriveDocumentWorkflowNextAction,
   deriveHandoverCaseStatus,

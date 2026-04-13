@@ -27,6 +27,8 @@ import {
   getHandoverBlockerTypeLabel,
   getHandoverCaseStatusLabel,
   getHandoverCustomerUpdateStatusLabel,
+  getHandoverCustomerUpdateQaPolicySignalLabel,
+  getHandoverCustomerUpdateQaReviewStatusLabel,
   getHandoverCustomerUpdateTypeDetail,
   getHandoverCustomerUpdateTypeLabel,
   getHandoverMilestoneStatusLabel,
@@ -64,6 +66,16 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
             ar: "حددت الجودة أن هذه الحالة تحتاج متابعة بشرية",
             en: "QA marked this case as needing human follow-up"
           }
+        : caseDetail.currentHandoverCustomerUpdateQaReview?.reviewStatus === "pending_review"
+          ? {
+              ar: "تم تعليق التحديث المجهز بانتظار اعتماد جودة قبل الإرسال",
+              en: "A prepared customer update is paused pending QA approval before dispatch"
+            }
+          : caseDetail.currentHandoverCustomerUpdateQaReview?.reviewStatus === "follow_up_required"
+            ? {
+                ar: "طلبت الجودة تعديل صياغة تحديث العميل قبل المتابعة",
+                en: "QA requested changes to the prepared customer update before it can proceed"
+              }
         : {
             ar: "تم توليدها من حالة حية محفوظة",
             en: "Generated from the persisted alpha workflow"
@@ -209,6 +221,16 @@ export function getPersistedHandoverCustomerUpdateDisplay(locale: SupportedLocal
     deliveryPreparedAt: customerUpdate.deliveryPreparedAt ? new Date(customerUpdate.deliveryPreparedAt).toLocaleString(locale) : null,
     deliverySummary: customerUpdate.deliverySummary,
     dispatchReadyAt: customerUpdate.dispatchReadyAt ? new Date(customerUpdate.dispatchReadyAt).toLocaleString(locale) : null,
+    qaPolicySignalLabels: customerUpdate.qaPolicySignals.map((signal) => getHandoverCustomerUpdateQaPolicySignalLabel(locale, signal)),
+    qaPolicySignals: customerUpdate.qaPolicySignals,
+    qaReviewSampleSummary: customerUpdate.qaReviewSampleSummary,
+    qaReviewStatus: customerUpdate.qaReviewStatus,
+    qaReviewStatusLabel: getHandoverCustomerUpdateQaReviewStatusLabel(locale, customerUpdate.qaReviewStatus),
+    qaReviewStatusTone: getHandoverCustomerUpdateQaReviewTone(customerUpdate.qaReviewStatus),
+    qaReviewSummary: customerUpdate.qaReviewSummary,
+    qaReviewedAt: customerUpdate.qaReviewedAt ? new Date(customerUpdate.qaReviewedAt).toLocaleString(locale) : null,
+    qaReviewerName: customerUpdate.qaReviewerName,
+    qaTriggerEvidence: customerUpdate.qaTriggerEvidence,
     status: customerUpdate.status,
     statusLabel: getHandoverCustomerUpdateStatusLabel(locale, customerUpdate.status),
     statusTone: getHandoverCustomerUpdateTone(customerUpdate.status),
@@ -357,6 +379,110 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
     triggerSourceLabel: getCaseQaReviewTriggerSourceLabel(locale, caseDetail.currentQaReview.triggerSource),
     updatedAt: new Date(caseDetail.currentQaReview.updatedAt).toLocaleString(locale)
   };
+}
+
+export function getPersistedHandoverCustomerUpdateQaReviewDisplay(
+  locale: SupportedLocale,
+  caseDetail: PersistedCaseDetail | PersistedCaseSummary
+) {
+  if (!caseDetail.currentHandoverCustomerUpdateQaReview) {
+    return null;
+  }
+
+  return {
+    customerUpdateId: caseDetail.currentHandoverCustomerUpdateQaReview.customerUpdateId,
+    deliverySummary: caseDetail.currentHandoverCustomerUpdateQaReview.deliverySummary,
+    handoverCaseId: caseDetail.currentHandoverCustomerUpdateQaReview.handoverCaseId,
+    policySignalLabels: caseDetail.currentHandoverCustomerUpdateQaReview.policySignals.map((signal) =>
+      getHandoverCustomerUpdateQaPolicySignalLabel(locale, signal)
+    ),
+    policySignals: caseDetail.currentHandoverCustomerUpdateQaReview.policySignals,
+    reviewSampleSummary: caseDetail.currentHandoverCustomerUpdateQaReview.reviewSampleSummary,
+    reviewStatus: caseDetail.currentHandoverCustomerUpdateQaReview.reviewStatus,
+    reviewStatusLabel: getHandoverCustomerUpdateQaReviewStatusLabel(locale, caseDetail.currentHandoverCustomerUpdateQaReview.reviewStatus),
+    reviewStatusTone: getHandoverCustomerUpdateQaReviewTone(caseDetail.currentHandoverCustomerUpdateQaReview.reviewStatus),
+    reviewSummary: caseDetail.currentHandoverCustomerUpdateQaReview.reviewSummary,
+    reviewedAt: caseDetail.currentHandoverCustomerUpdateQaReview.reviewedAt
+      ? new Date(caseDetail.currentHandoverCustomerUpdateQaReview.reviewedAt).toLocaleString(locale)
+      : null,
+    reviewerName: caseDetail.currentHandoverCustomerUpdateQaReview.reviewerName,
+    triggerEvidence: caseDetail.currentHandoverCustomerUpdateQaReview.triggerEvidence,
+    type: caseDetail.currentHandoverCustomerUpdateQaReview.type,
+    typeLabel: getHandoverCustomerUpdateTypeLabel(locale, caseDetail.currentHandoverCustomerUpdateQaReview.type),
+    updatedAt: new Date(caseDetail.currentHandoverCustomerUpdateQaReview.updatedAt).toLocaleString(locale)
+  };
+}
+
+export function getPersistedActiveQaItemDisplay(locale: SupportedLocale, caseDetail: PersistedCaseDetail | PersistedCaseSummary) {
+  const caseQaReview = getPersistedQaReviewDisplay(locale, caseDetail);
+  const handoverCustomerUpdateQaReview = getPersistedHandoverCustomerUpdateQaReviewDisplay(locale, caseDetail);
+
+  if (!caseQaReview && !handoverCustomerUpdateQaReview) {
+    return null;
+  }
+
+  if (!caseQaReview) {
+    return {
+      kind: "handover_customer_update" as const,
+      policySignalLabels: handoverCustomerUpdateQaReview?.policySignalLabels ?? [],
+      reviewSummary: handoverCustomerUpdateQaReview?.reviewSummary,
+      sampleSummary: handoverCustomerUpdateQaReview?.reviewSampleSummary ?? "",
+      statusLabel: handoverCustomerUpdateQaReview?.reviewStatusLabel ?? "",
+      statusTone: handoverCustomerUpdateQaReview?.reviewStatusTone ?? "warning",
+      subjectLabel: handoverCustomerUpdateQaReview?.typeLabel ?? "",
+      triggerEvidence: handoverCustomerUpdateQaReview?.triggerEvidence ?? [],
+      triggerSourceLabel: locale === "ar" ? "مسودة تحديث عميل" : "Customer-update draft",
+      updatedAt: handoverCustomerUpdateQaReview?.updatedAt ?? ""
+    };
+  }
+
+  if (!handoverCustomerUpdateQaReview) {
+    return {
+      kind: "case_message" as const,
+      policySignalLabels: caseQaReview.policySignalLabels,
+      reviewSummary: caseQaReview.reviewSummary,
+      sampleSummary: caseQaReview.sampleSummary,
+      statusLabel: caseQaReview.statusLabel,
+      statusTone: caseQaReview.statusTone,
+      subjectLabel: locale === "ar" ? "رسالة الحالة" : "Case message",
+      triggerEvidence: caseQaReview.triggerEvidence,
+      triggerSourceLabel: caseQaReview.triggerSourceLabel,
+      updatedAt: caseQaReview.updatedAt
+    };
+  }
+
+  const casePriority = getQaDisplayPriority(caseQaReview.status);
+  const handoverPriority = getQaDisplayPriority(handoverCustomerUpdateQaReview.reviewStatus);
+  const preferredReview =
+    handoverPriority < casePriority ||
+    (handoverPriority === casePriority &&
+      new Date(handoverCustomerUpdateQaReview.updatedAt).getTime() > new Date(caseQaReview.updatedAt).getTime())
+      ? {
+          kind: "handover_customer_update" as const,
+          policySignalLabels: handoverCustomerUpdateQaReview.policySignalLabels,
+          reviewSummary: handoverCustomerUpdateQaReview.reviewSummary,
+          sampleSummary: handoverCustomerUpdateQaReview.reviewSampleSummary,
+          statusLabel: handoverCustomerUpdateQaReview.reviewStatusLabel,
+          statusTone: handoverCustomerUpdateQaReview.reviewStatusTone,
+          subjectLabel: handoverCustomerUpdateQaReview.typeLabel,
+          triggerEvidence: handoverCustomerUpdateQaReview.triggerEvidence,
+          triggerSourceLabel: locale === "ar" ? "مسودة تحديث عميل" : "Customer-update draft",
+          updatedAt: handoverCustomerUpdateQaReview.updatedAt
+        }
+      : {
+          kind: "case_message" as const,
+          policySignalLabels: caseQaReview.policySignalLabels,
+          reviewSummary: caseQaReview.reviewSummary,
+          sampleSummary: caseQaReview.sampleSummary,
+          statusLabel: caseQaReview.statusLabel,
+          statusTone: caseQaReview.statusTone,
+          subjectLabel: locale === "ar" ? "رسالة الحالة" : "Case message",
+          triggerEvidence: caseQaReview.triggerEvidence,
+          triggerSourceLabel: caseQaReview.triggerSourceLabel,
+          updatedAt: caseQaReview.updatedAt
+        };
+
+  return preferredReview;
 }
 
 export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
@@ -549,6 +675,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "أصبح تحديث العميل المجهز جاهزاً للإرسال، وانتقل السجل إلى حالة مجدولة داخلياً.",
         title: "جاهزية الإرسال"
       },
+      handover_customer_update_qa_review_requested: {
+        detail: "تم تعليق التحديث المجهز بانتظار اعتماد جودة لأن الصياغة تضمنت إشارة سياسة تحتاج مراجعة بشرية.",
+        title: "فتح اعتماد جودة للمسودة"
+      },
+      handover_customer_update_qa_review_resolved: {
+        detail: "تم حفظ قرار الجودة على مسودة تحديث العميل المجهزة مع إبقاء النتيجة ظاهرة للفريق.",
+        title: "إغلاق اعتماد جودة للمسودة"
+      },
       handover_execution_started: {
         detail: "تم فتح حالة تنفيذ حي ليوم التسليم بعد تصفية العوائق المفتوحة.",
         title: "بدء التنفيذ"
@@ -667,6 +801,14 @@ function describeAuditEvent(caseDetail: PersistedCaseDetail, eventType: string, 
         detail: "The prepared customer update was promoted into a ready-to-dispatch boundary and the handover moved into a scheduled state.",
         title: "Dispatch readiness saved"
       },
+      handover_customer_update_qa_review_requested: {
+        detail: "The prepared customer update was paused behind a QA approval gate because the draft matched a human-review policy signal.",
+        title: "Draft QA gate opened"
+      },
+      handover_customer_update_qa_review_resolved: {
+        detail: "The QA decision on the prepared customer update was saved and kept visible on the live record.",
+        title: "Draft QA gate resolved"
+      },
       handover_customer_update_approved: {
         detail: "A customer-facing handover boundary was approved without sending any live outbound message.",
         title: "Customer boundary approved"
@@ -780,6 +922,14 @@ function describeHandoverAuditEvent(
         detail: "أصبح تحديث العميل المجهز جاهزاً للإرسال، وانتقل سجل التسليم إلى حالة مجدولة داخلياً.",
         title: "جاهزية الإرسال"
       },
+      handover_customer_update_qa_review_requested: {
+        detail: "تم تعليق التحديث المجهز بانتظار اعتماد جودة لأن الصياغة المجهزة طابقت إشارة سياسة تتطلب مراجعة بشرية.",
+        title: "فتح اعتماد جودة للمسودة"
+      },
+      handover_customer_update_qa_review_resolved: {
+        detail: "تم حفظ قرار الجودة على مسودة تحديث العميل مع إبقاء النتيجة ظاهرة في السجل الحي.",
+        title: "إغلاق اعتماد جودة للمسودة"
+      },
       handover_customer_update_approved: {
         detail: "تم اعتماد حد تواصل مخصص للعميل دون إرسال أي رسالة فعلية.",
         title: "اعتماد حد تواصل"
@@ -845,6 +995,14 @@ function describeHandoverAuditEvent(
       handover_customer_dispatch_ready: {
         detail: "The prepared customer update is now ready to dispatch and the handover record is internally scheduled.",
         title: "Dispatch readiness saved"
+      },
+      handover_customer_update_qa_review_requested: {
+        detail: "The prepared customer update was paused behind a QA approval gate because the draft matched a human-review policy signal.",
+        title: "Draft QA gate opened"
+      },
+      handover_customer_update_qa_review_resolved: {
+        detail: "The QA decision on the prepared customer update was saved and remains visible on the live record.",
+        title: "Draft QA gate resolved"
       },
       handover_customer_update_approved: {
         detail: "A customer-facing handover boundary was approved without triggering any real outbound message.",
@@ -955,6 +1113,36 @@ function getHandoverCustomerUpdateTone(
   }
 
   return "warning";
+}
+
+function getHandoverCustomerUpdateQaReviewTone(
+  status: PersistedHandoverCaseDetail["customerUpdates"][number]["qaReviewStatus"]
+): "success" | "critical" | "warning" {
+  if (status === "approved") {
+    return "success";
+  }
+
+  if (status === "pending_review") {
+    return "critical";
+  }
+
+  return "warning";
+}
+
+function getQaDisplayPriority(status: "approved" | "follow_up_required" | "pending_review" | "not_required") {
+  if (status === "pending_review") {
+    return 0;
+  }
+
+  if (status === "follow_up_required") {
+    return 1;
+  }
+
+  if (status === "approved") {
+    return 2;
+  }
+
+  return 3;
 }
 
 function getHandoverBlockerTone(status: PersistedHandoverCaseDetail["blockers"][number]["status"]): "success" | "critical" | "warning" {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAutomaticQaSampleSummary, detectQaPolicyMatches } from "./qa-policy";
+import {
+  buildAutomaticQaSampleSummary,
+  buildHandoverCustomerUpdateQaSampleSummary,
+  detectHandoverCustomerUpdateQaPolicyMatches,
+  detectQaPolicyMatches
+} from "./qa-policy";
 
 describe("qa policy sampling", () => {
   it("detects multiple policy signals from one message", () => {
@@ -20,5 +25,23 @@ describe("qa policy sampling", () => {
       "automatic QA review"
     );
     expect(buildAutomaticQaSampleSummary("ar", ["frustrated_customer_language"])).toContain("مراجعة جودة");
+  });
+
+  it("detects outbound draft policy signals on prepared customer updates", () => {
+    const matches = detectHandoverCustomerUpdateQaPolicyMatches(
+      "We guarantee the keys by Friday and can waive the late fee if you confirm today."
+    );
+
+    expect(matches.map((match) => match.signal)).toEqual([
+      "possession_date_promise",
+      "pricing_or_exception_promise"
+    ]);
+  });
+
+  it("builds a localized outbound-review summary", () => {
+    expect(
+      buildHandoverCustomerUpdateQaSampleSummary("en", ["possession_date_promise", "legal_claim_risk"])
+    ).toContain("QA approval");
+    expect(buildHandoverCustomerUpdateQaSampleSummary("ar", ["pricing_or_exception_promise"])).toContain("جودة");
   });
 });
