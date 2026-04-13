@@ -76,6 +76,9 @@ export const handoverCustomerUpdateQaPolicySignalSchema = z.enum([
   "legal_claim_risk",
   "discrimination_risk"
 ]);
+export const governanceReviewKindSchema = z.enum(["case_message", "handover_customer_update"]);
+export const governanceReviewEventActionSchema = z.enum(["opened", "resolved"]);
+export const governancePolicySignalSchema = z.union([caseQaPolicySignalSchema, handoverCustomerUpdateQaPolicySignalSchema]);
 export const handoverAppointmentStatusSchema = z.enum(["planned", "internally_confirmed"]);
 export const handoverReviewOutcomeSchema = z.enum(["accepted", "follow_up_required"]);
 export const handoverPostCompletionFollowUpStatusSchema = z.enum(["open", "resolved"]);
@@ -418,6 +421,75 @@ export const persistedAuditEventSchema = z.object({
   payload: z.record(z.string(), z.unknown())
 });
 
+export const persistedGovernanceCurrentOpenSummarySchema = z.object({
+  caseMessageCount: z.number().int().min(0),
+  followUpRequiredCount: z.number().int().min(0),
+  handoverCustomerUpdateCount: z.number().int().min(0),
+  pendingCount: z.number().int().min(0),
+  stalePendingCount: z.number().int().min(0),
+  totalCount: z.number().int().min(0)
+});
+
+export const persistedGovernanceOpenedSummarySchema = z.object({
+  caseMessageCount: z.number().int().min(0),
+  handoverCustomerUpdateCount: z.number().int().min(0),
+  manualCaseMessageCount: z.number().int().min(0),
+  policyTriggeredCaseMessageCount: z.number().int().min(0),
+  totalCount: z.number().int().min(0)
+});
+
+export const persistedGovernanceResolvedSummarySchema = z.object({
+  approvedCount: z.number().int().min(0),
+  caseMessageCount: z.number().int().min(0),
+  followUpRequiredCount: z.number().int().min(0),
+  handoverCustomerUpdateCount: z.number().int().min(0),
+  totalCount: z.number().int().min(0)
+});
+
+export const persistedGovernancePolicySignalCountSchema = z.object({
+  count: z.number().int().min(0),
+  kind: governanceReviewKindSchema,
+  signal: governancePolicySignalSchema
+});
+
+export const persistedGovernanceDailyActivitySchema = z.object({
+  date: z.string(),
+  openedCaseMessageCount: z.number().int().min(0),
+  openedCount: z.number().int().min(0),
+  openedHandoverCustomerUpdateCount: z.number().int().min(0),
+  resolvedApprovedCount: z.number().int().min(0),
+  resolvedCaseMessageCount: z.number().int().min(0),
+  resolvedCount: z.number().int().min(0),
+  resolvedFollowUpRequiredCount: z.number().int().min(0),
+  resolvedHandoverCustomerUpdateCount: z.number().int().min(0)
+});
+
+export const persistedGovernanceRecentEventSchema = z.object({
+  action: governanceReviewEventActionSchema,
+  actorName: z.string().nullable(),
+  caseId: z.uuid(),
+  createdAt: z.iso.datetime(),
+  customerName: z.string(),
+  handoverCaseId: z.uuid().nullable(),
+  kind: governanceReviewKindSchema,
+  policySignals: z.array(governancePolicySignalSchema),
+  status: z.union([caseQaReviewStatusSchema, handoverCustomerUpdateQaReviewStatusSchema]),
+  subjectType: z.string().nullable(),
+  triggerSource: caseQaReviewTriggerSourceSchema.nullable()
+});
+
+export const persistedGovernanceSummarySchema = z.object({
+  currentOpenItems: persistedGovernanceCurrentOpenSummarySchema,
+  dailyActivity: z.array(persistedGovernanceDailyActivitySchema),
+  generatedAt: z.iso.datetime(),
+  openedItems: persistedGovernanceOpenedSummarySchema,
+  recentEvents: z.array(persistedGovernanceRecentEventSchema),
+  resolvedItems: persistedGovernanceResolvedSummarySchema,
+  topPolicySignals: z.array(persistedGovernancePolicySignalCountSchema),
+  windowEnd: z.iso.datetime(),
+  windowStart: z.iso.datetime()
+});
+
 export const persistedCaseSummarySchema = z.object({
   automationStatus: automationStatusSchema,
   caseId: z.uuid(),
@@ -497,6 +569,9 @@ export type CreateWebsiteLeadResult = z.infer<typeof createWebsiteLeadResultSche
 export type DocumentRequestStatus = z.infer<typeof documentRequestStatusSchema>;
 export type DocumentRequestType = z.infer<typeof documentRequestTypeSchema>;
 export type FollowUpStatus = z.infer<typeof followUpStatusSchema>;
+export type GovernancePolicySignal = z.infer<typeof governancePolicySignalSchema>;
+export type GovernanceReviewEventAction = z.infer<typeof governanceReviewEventActionSchema>;
+export type GovernanceReviewKind = z.infer<typeof governanceReviewKindSchema>;
 export type HandoverAppointmentStatus = z.infer<typeof handoverAppointmentStatusSchema>;
 export type HandoverBlockerSeverity = z.infer<typeof handoverBlockerSeveritySchema>;
 export type HandoverBlockerStatus = z.infer<typeof handoverBlockerStatusSchema>;
@@ -526,6 +601,10 @@ export type PersistedCaseQaReview = z.infer<typeof persistedCaseQaReviewSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
 export type PersistedCurrentHandoverCustomerUpdateQaReview = z.infer<typeof persistedCurrentHandoverCustomerUpdateQaReviewSchema>;
 export type PersistedDocumentRequest = z.infer<typeof persistedDocumentRequestSchema>;
+export type PersistedGovernanceDailyActivity = z.infer<typeof persistedGovernanceDailyActivitySchema>;
+export type PersistedGovernancePolicySignalCount = z.infer<typeof persistedGovernancePolicySignalCountSchema>;
+export type PersistedGovernanceRecentEvent = z.infer<typeof persistedGovernanceRecentEventSchema>;
+export type PersistedGovernanceSummary = z.infer<typeof persistedGovernanceSummarySchema>;
 export type PersistedHandoverAppointment = z.infer<typeof persistedHandoverAppointmentSchema>;
 export type PersistedHandoverArchiveReview = z.infer<typeof persistedHandoverArchiveReviewSchema>;
 export type PersistedHandoverArchiveStatus = z.infer<typeof persistedHandoverArchiveStatusSchema>;

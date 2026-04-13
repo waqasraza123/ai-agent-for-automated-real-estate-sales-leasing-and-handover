@@ -1667,6 +1667,183 @@ describe("lead capture api", () => {
     expect(allowedDispatchReadyResponse.statusCode).toBe(200);
     expect(allowedDispatchReadyResponse.json().status).toBe("scheduled");
   }, 50000);
+
+  it("returns a governance summary with 7-day activity and recent events across QA boundaries", async () => {
+    const policyTriggeredCaseResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Huda Karim",
+        email: "huda@example.com",
+        message: "I am frustrated and need a special approval, otherwise my lawyer will step in.",
+        preferredLocale: "en",
+        projectInterest: "Canal Heights"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const policyTriggeredCase = policyTriggeredCaseResponse.json();
+
+    const resolvePolicyCaseResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "The message needs direct human follow-up before the conversation continues.",
+        reviewerName: "QA Desk",
+        status: "follow_up_required"
+      },
+      url: `/v1/cases/${policyTriggeredCase.caseId}/qa-review/${policyTriggeredCase.currentQaReview.qaReviewId}`
+    });
+
+    expect(resolvePolicyCaseResponse.statusCode).toBe(200);
+    expect(resolvePolicyCaseResponse.json().currentQaReview.status).toBe("follow_up_required");
+
+    const planningRecord = await createPlanningBoundaryHandoverRecord(app);
+
+    await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        ownerName: "Scheduling Desk",
+        status: "ready",
+        targetAt: "2026-04-20T10:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/milestones/${planningRecord.schedulingMilestoneId}`
+    });
+
+    await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.schedulingInviteId}`
+    });
+
+    const appointmentPlanResponse = await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        coordinatorName: "Field Handover Team",
+        location: "Tower B Lobby",
+        scheduledAt: "2026-04-22T09:30:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment`
+    });
+
+    const appointmentId = appointmentPlanResponse.json().appointment.appointmentId;
+
+    await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        ownerName: "Appointment Approvals",
+        status: "ready",
+        targetAt: "2026-04-21T12:00:00.000Z"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/milestones/${planningRecord.appointmentHoldMilestoneId}`
+    });
+
+    await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}`
+    });
+
+    await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "PATCH",
+      payload: {
+        status: "internally_confirmed"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/appointment/${appointmentId}/confirmation`
+    });
+
+    const riskyDeliveryPreparationResponse = await app.inject({
+      headers: withOperatorSession("handover_manager"),
+      method: "PATCH",
+      payload: {
+        deliverySummary: "We guarantee the keys by Friday and can waive the final admin fee if needed.",
+        status: "prepared_for_delivery"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/delivery`
+    });
+
+    expect(riskyDeliveryPreparationResponse.statusCode).toBe(200);
+
+    const resolveDraftResponse = await app.inject({
+      headers: withOperatorSession("qa_reviewer"),
+      method: "PATCH",
+      payload: {
+        reviewSummary: "The prepared draft is approved for manual dispatch handling.",
+        reviewerName: "QA Reviewer",
+        status: "approved"
+      },
+      url: `/v1/handover-cases/${planningRecord.handoverCaseId}/customer-updates/${planningRecord.appointmentConfirmationCustomerUpdateId}/qa-review`
+    });
+
+    expect(resolveDraftResponse.statusCode).toBe(200);
+
+    const unauthorizedSummaryResponse = await app.inject({
+      method: "GET",
+      url: "/v1/governance/summary"
+    });
+
+    expect(unauthorizedSummaryResponse.statusCode).toBe(401);
+
+    const governanceSummaryResponse = await app.inject({
+      headers: withOperatorSession("admin"),
+      method: "GET",
+      url: "/v1/governance/summary"
+    });
+
+    expect(governanceSummaryResponse.statusCode).toBe(200);
+
+    const governanceSummary = governanceSummaryResponse.json();
+
+    expect(governanceSummary.currentOpenItems.totalCount).toBe(1);
+    expect(governanceSummary.currentOpenItems.caseMessageCount).toBe(1);
+    expect(governanceSummary.currentOpenItems.followUpRequiredCount).toBe(1);
+    expect(governanceSummary.currentOpenItems.handoverCustomerUpdateCount).toBe(0);
+    expect(governanceSummary.openedItems.totalCount).toBe(2);
+    expect(governanceSummary.openedItems.caseMessageCount).toBe(1);
+    expect(governanceSummary.openedItems.policyTriggeredCaseMessageCount).toBe(1);
+    expect(governanceSummary.openedItems.handoverCustomerUpdateCount).toBe(1);
+    expect(governanceSummary.resolvedItems.totalCount).toBe(2);
+    expect(governanceSummary.resolvedItems.approvedCount).toBe(1);
+    expect(governanceSummary.resolvedItems.followUpRequiredCount).toBe(1);
+    expect(
+      governanceSummary.topPolicySignals.some(
+        (signal: { kind: string; signal: string }) => signal.kind === "handover_customer_update" && signal.signal === "possession_date_promise"
+      )
+    ).toBe(true);
+    expect(
+      governanceSummary.recentEvents.some(
+        (event: { action: string; kind: string; status: string }) =>
+          event.action === "resolved" && event.kind === "case_message" && event.status === "follow_up_required"
+      )
+    ).toBe(true);
+    expect(
+      governanceSummary.recentEvents.some(
+        (event: { action: string; kind: string; status: string }) =>
+          event.action === "resolved" && event.kind === "handover_customer_update" && event.status === "approved"
+      )
+    ).toBe(true);
+    expect(
+      governanceSummary.dailyActivity.reduce(
+        (totals: { opened: number; resolved: number }, item: { openedCount: number; resolvedCount: number }) => ({
+          opened: totals.opened + item.openedCount,
+          resolved: totals.resolved + item.resolvedCount
+        }),
+        { opened: 0, resolved: 0 }
+      )
+    ).toEqual({
+      opened: 2,
+      resolved: 2
+    });
+  }, 50000);
 });
 
 async function createPlanningBoundaryHandoverRecord(app: ReturnType<typeof buildApiApp>) {

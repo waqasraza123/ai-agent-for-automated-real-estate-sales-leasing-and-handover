@@ -44,6 +44,7 @@ import {
   startPersistedHandoverExecution,
   WorkflowRuleError,
   getPersistedCaseDetail,
+  getPersistedGovernanceSummary,
   getPersistedHandoverCaseDetail,
   listPersistedCases,
   markPersistedHandoverCustomerUpdateDispatchReady,
@@ -62,7 +63,7 @@ import {
   updatePersistedHandoverTask
 } from "@real-estate-ai/workflows";
 
-import { requireOperatorPermission, requireOperatorWorkspace } from "./operator-session";
+import { requireAnyOperatorWorkspace, requireOperatorPermission, requireOperatorWorkspace } from "./operator-session";
 
 export function buildApiApp(dependencies: {
   store: LeadCaptureStore;
@@ -93,6 +94,14 @@ export function buildApiApp(dependencies: {
   app.get("/v1/cases", async () => ({
     cases: await listPersistedCases(dependencies.store)
   }));
+
+  app.get("/v1/governance/summary", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue", "manager_handover", "qa"])) {
+      return reply;
+    }
+
+    return getPersistedGovernanceSummary(dependencies.store);
+  });
 
   app.get<{
     Params: {

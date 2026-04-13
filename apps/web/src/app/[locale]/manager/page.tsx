@@ -7,7 +7,7 @@ import { ManagerWorkspaceGateway } from "@/components/manager-command-center";
 import { ScreenIntro } from "@/components/screen-intro";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
 import { getDefaultManagerPath } from "@/lib/manager-workspace";
-import { tryListPersistedCases } from "@/lib/live-api";
+import { tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +48,14 @@ export default async function ManagerPage(props: PageProps) {
     redirect(getDefaultManagerPath(locale, currentOperatorRole));
   }
 
-  const persistedCases = await tryListPersistedCases();
+  const [persistedCases, governanceReport] = await Promise.all([tryListPersistedCases(), tryGetPersistedGovernanceSummary()]);
 
-  return <ManagerWorkspaceGateway currentOperatorRole={currentOperatorRole} locale={locale} persistedCases={persistedCases} />;
+  return (
+    <ManagerWorkspaceGateway
+      currentOperatorRole={currentOperatorRole}
+      governanceReport={governanceReport}
+      locale={locale}
+      persistedCases={persistedCases}
+    />
+  );
 }

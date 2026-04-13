@@ -1,6 +1,12 @@
 import Link from "next/link";
 
-import { canOperatorRoleAccessWorkspace, type OperatorRole, type PersistedCaseSummary, type SupportedLocale } from "@real-estate-ai/contracts";
+import {
+  canOperatorRoleAccessWorkspace,
+  type OperatorRole,
+  type PersistedCaseSummary,
+  type PersistedGovernanceSummary,
+  type SupportedLocale
+} from "@real-estate-ai/contracts";
 import { demoDataset, getLocalizedText } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import { Panel, StatusBadge } from "@real-estate-ai/ui";
@@ -10,6 +16,9 @@ import { StatefulStack } from "@/components/stateful-stack";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
 import {
   getCaseQaPolicySignalLabel,
+  getCaseQaReviewStatusLabel,
+  getHandoverCustomerUpdateQaReviewStatusLabel,
+  getHandoverCustomerUpdateTypeLabel,
   getHandoverCustomerUpdateQaPolicySignalLabel,
   getInterventionCountLabel
 } from "@/lib/live-copy";
@@ -36,6 +45,7 @@ import {
 
 export function HandoverManagerCommandCenter(props: {
   currentOperatorRole: OperatorRole;
+  governanceReport: PersistedGovernanceSummary | null;
   locale: SupportedLocale;
   persistedCases: PersistedCaseSummary[];
 }) {
@@ -182,6 +192,34 @@ export function HandoverManagerCommandCenter(props: {
             renderItem={() => null}
           />
         </Panel>
+
+        <div className="two-column-grid">
+          <Panel title={props.locale === "ar" ? "اتجاه جودة المسودات" : "Draft QA trend"}>
+            <GovernanceActivityPanel
+              emptySummary={
+                props.locale === "ar"
+                  ? "سيظهر اتجاه فتح وحسم مراجعات مسودات التسليم هنا عند توفر التقرير الحي."
+                  : "Opened and resolved draft-review history will appear here once the live governance report is available."
+              }
+              emptyTitle={props.locale === "ar" ? "لا يوجد تقرير بعد" : "No draft report yet"}
+              items={filterGovernanceDailyActivity(props.governanceReport, "handover_customer_update")}
+              locale={props.locale}
+            />
+          </Panel>
+
+          <Panel title={props.locale === "ar" ? "آخر نشاطات جودة المسودات" : "Recent draft QA activity"}>
+            <GovernanceRecentEventsPanel
+              emptySummary={
+                props.locale === "ar"
+                  ? "ستظهر آخر بوابات جودة مسودات التسليم هنا عندما تتوفر بيانات التقرير الحي."
+                  : "Recent draft QA openings and resolutions will appear here once live governance reporting is available."
+              }
+              emptyTitle={props.locale === "ar" ? "لا توجد أحداث بعد" : "No draft QA events"}
+              events={filterGovernanceRecentEvents(props.governanceReport, "handover_customer_update")}
+              locale={props.locale}
+            />
+          </Panel>
+        </div>
 
         {canAccessRevenueManagerWorkspace ? (
           <WorkspaceAccessPanel
@@ -380,6 +418,34 @@ export function HandoverManagerCommandCenter(props: {
       </div>
 
       <div className="two-column-grid">
+        <Panel title={props.locale === "ar" ? "اتجاه جودة المسودات" : "Draft QA trend"}>
+          <GovernanceActivityPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً بيانات اتجاه محفوظة لمراجعات مسودات التسليم."
+                : "No persisted trend history is currently available for handover draft reviews."
+            }
+            emptyTitle={props.locale === "ar" ? "لا يوجد اتجاه بعد" : "No draft trend yet"}
+            items={filterGovernanceDailyActivity(props.governanceReport, "handover_customer_update")}
+            locale={props.locale}
+          />
+        </Panel>
+
+        <Panel title={props.locale === "ar" ? "آخر نشاطات جودة المسودات" : "Recent draft QA activity"}>
+          <GovernanceRecentEventsPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً أحداث محفوظة لفتحات أو حسومات جودة مسودات التسليم."
+                : "No persisted openings or resolutions are currently recorded for handover draft reviews."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد أحداث حديثة" : "No recent draft QA events"}
+            events={filterGovernanceRecentEvents(props.governanceReport, "handover_customer_update")}
+            locale={props.locale}
+          />
+        </Panel>
+      </div>
+
+      <div className="two-column-grid">
         {managerCapabilities.canManageExecution ? (
           <Panel title={props.locale === "ar" ? "طابور تنفيذ التسليم" : "Handover execution queue"}>
             <StatefulStack
@@ -458,6 +524,7 @@ export function HandoverManagerCommandCenter(props: {
 
 export function ManagerWorkspaceGateway(props: {
   currentOperatorRole: OperatorRole;
+  governanceReport: PersistedGovernanceSummary | null;
   locale: SupportedLocale;
   persistedCases: PersistedCaseSummary[];
 }) {
@@ -536,6 +603,34 @@ export function ManagerWorkspaceGateway(props: {
       ) : null}
 
       <div className="two-column-grid">
+        <Panel title={props.locale === "ar" ? "اتجاه الحوكمة لسبعة أيام" : "7-day governance trend"}>
+          <GovernanceActivityPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "سيظهر تاريخ الفتح والحسم هنا عندما تتوفر بيانات تقرير الحوكمة الحي."
+                : "Opened and resolved governance history will appear here once the live reporting summary is available."
+            }
+            emptyTitle={props.locale === "ar" ? "لا يوجد تقرير بعد" : "No governance report yet"}
+            items={props.governanceReport?.dailyActivity ?? []}
+            locale={props.locale}
+          />
+        </Panel>
+
+        <Panel title={props.locale === "ar" ? "أحدث نشاطات الحوكمة" : "Recent governance activity"}>
+          <GovernanceRecentEventsPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "سيظهر آخر فتح أو حسم لحدود الجودة هنا عندما تتوفر بيانات التقرير الحي."
+                : "Recent QA opens and resolutions will appear here once the live governance report is available."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد أحداث بعد" : "No recent governance events"}
+            events={props.governanceReport?.recentEvents ?? []}
+            locale={props.locale}
+          />
+        </Panel>
+      </div>
+
+      <div className="two-column-grid">
         <WorkspaceAccessPanel
           actionHref={getManagerWorkspacePath(props.locale, "manager_revenue")}
           actionLabel={props.locale === "ar" ? "فتح قيادة الإيرادات" : "Open revenue command center"}
@@ -606,6 +701,7 @@ export function ManagerWorkspaceUnavailable(props: {
 
 export function RevenueManagerCommandCenter(props: {
   currentOperatorRole: OperatorRole;
+  governanceReport: PersistedGovernanceSummary | null;
   locale: SupportedLocale;
   persistedCases: PersistedCaseSummary[];
 }) {
@@ -718,6 +814,34 @@ export function RevenueManagerCommandCenter(props: {
             renderItem={() => null}
           />
         </Panel>
+
+        <div className="two-column-grid">
+          <Panel title={props.locale === "ar" ? "اتجاه جودة المحادثات" : "Conversation QA trend"}>
+            <GovernanceActivityPanel
+              emptySummary={
+                props.locale === "ar"
+                  ? "سيظهر اتجاه فتح وحسم مراجعات المحادثات هنا عند توفر التقرير الحي."
+                  : "Opened and resolved conversation-review history will appear here once the live governance report is available."
+              }
+              emptyTitle={props.locale === "ar" ? "لا يوجد تقرير بعد" : "No conversation report yet"}
+              items={filterGovernanceDailyActivity(props.governanceReport, "case_message")}
+              locale={props.locale}
+            />
+          </Panel>
+
+          <Panel title={props.locale === "ar" ? "آخر نشاطات جودة المحادثات" : "Recent conversation QA activity"}>
+            <GovernanceRecentEventsPanel
+              emptySummary={
+                props.locale === "ar"
+                  ? "ستظهر آخر فتحات وحسومات جودة المحادثات هنا عندما تتوفر بيانات التقرير الحي."
+                  : "Recent conversation QA openings and resolutions will appear here once live governance reporting is available."
+              }
+              emptyTitle={props.locale === "ar" ? "لا توجد أحداث بعد" : "No conversation QA events"}
+              events={filterGovernanceRecentEvents(props.governanceReport, "case_message")}
+              locale={props.locale}
+            />
+          </Panel>
+        </div>
 
         {canAccessHandoverManagerWorkspace ? (
           <WorkspaceAccessPanel
@@ -961,6 +1085,34 @@ export function RevenueManagerCommandCenter(props: {
           />
         </Panel>
       </div>
+
+      <div className="two-column-grid">
+        <Panel title={props.locale === "ar" ? "اتجاه جودة المحادثات" : "Conversation QA trend"}>
+          <GovernanceActivityPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً بيانات اتجاه محفوظة لمراجعات المحادثات."
+                : "No persisted trend history is currently available for conversation QA reviews."
+            }
+            emptyTitle={props.locale === "ar" ? "لا يوجد اتجاه بعد" : "No conversation trend yet"}
+            items={filterGovernanceDailyActivity(props.governanceReport, "case_message")}
+            locale={props.locale}
+          />
+        </Panel>
+
+        <Panel title={props.locale === "ar" ? "آخر نشاطات جودة المحادثات" : "Recent conversation QA activity"}>
+          <GovernanceRecentEventsPanel
+            emptySummary={
+              props.locale === "ar"
+                ? "لا توجد حالياً أحداث محفوظة لفتحات أو حسومات جودة المحادثات."
+                : "No persisted openings or resolutions are currently recorded for conversation QA reviews."
+            }
+            emptyTitle={props.locale === "ar" ? "لا توجد أحداث حديثة" : "No recent conversation QA events"}
+            events={filterGovernanceRecentEvents(props.governanceReport, "case_message")}
+            locale={props.locale}
+          />
+        </Panel>
+      </div>
     </div>
   );
 }
@@ -998,6 +1150,172 @@ function GovernanceHotspotsPanel(props: {
       )}
     />
   );
+}
+
+function GovernanceActivityPanel(props: {
+  emptySummary: string;
+  emptyTitle: string;
+  items: Array<{
+    date: string;
+    openedCount: number;
+    resolvedApprovedCount: number;
+    resolvedCaseMessageCount: number;
+    resolvedCount: number;
+    resolvedFollowUpRequiredCount: number;
+    resolvedHandoverCustomerUpdateCount: number;
+  }>;
+  locale: SupportedLocale;
+}) {
+  return (
+    <StatefulStack
+      emptySummary={props.emptySummary}
+      emptyTitle={props.emptyTitle}
+      items={props.items}
+      renderItem={(item) => (
+        <article key={item.date} className="intervention-row">
+          <div className="row-between">
+            <h3>{new Date(`${item.date}T00:00:00.000Z`).toLocaleDateString(props.locale, { month: "short", day: "numeric" })}</h3>
+            <div className="status-row-wrap">
+              <StatusBadge tone={item.openedCount > item.resolvedCount ? "warning" : "success"}>
+                {props.locale === "ar" ? `${item.openedCount} فتحت` : `${item.openedCount} opened`}
+              </StatusBadge>
+              <StatusBadge tone={item.resolvedCount > 0 ? "success" : "warning"}>
+                {props.locale === "ar" ? `${item.resolvedCount} حسمت` : `${item.resolvedCount} resolved`}
+              </StatusBadge>
+            </div>
+          </div>
+          <p>
+            {props.locale === "ar"
+              ? item.openedCount > item.resolvedCount
+                ? "ضغط الحوكمة ازداد في هذا اليوم أكثر مما حُسم."
+                : "تم حسم النشاطات اليومية بقدر يوازي أو يفوق الفتحات الجديدة."
+              : item.openedCount > item.resolvedCount
+                ? "Governance pressure increased on this day faster than reviews were closed."
+                : "Daily governance work was resolved at the same pace as, or faster than, new openings."}
+          </p>
+        </article>
+      )}
+    />
+  );
+}
+
+function GovernanceRecentEventsPanel(props: {
+  emptySummary: string;
+  emptyTitle: string;
+  events: PersistedGovernanceSummary["recentEvents"];
+  locale: SupportedLocale;
+}) {
+  return (
+    <StatefulStack
+      emptySummary={props.emptySummary}
+      emptyTitle={props.emptyTitle}
+      items={props.events}
+      renderItem={(event) => {
+        const statusLabel =
+          event.kind === "handover_customer_update"
+            ? getHandoverCustomerUpdateQaReviewStatusLabel(
+                props.locale,
+                event.status as Parameters<typeof getHandoverCustomerUpdateQaReviewStatusLabel>[1]
+              )
+            : getCaseQaReviewStatusLabel(props.locale, event.status as Parameters<typeof getCaseQaReviewStatusLabel>[1]);
+        const statusTone =
+          event.status === "approved" ? "success" : event.status === "follow_up_required" ? "warning" : ("critical" as const);
+
+        return (
+          <article key={`${event.caseId}-${event.createdAt}-${event.kind}-${event.action}`} className="intervention-row">
+            <div className="row-between">
+              <div className="stack-tight">
+                <h3>{event.customerName}</h3>
+                <p className="case-link-meta">{new Date(event.createdAt).toLocaleString(props.locale)}</p>
+              </div>
+              <div className="status-row-wrap">
+                <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
+                {event.subjectType && event.kind === "handover_customer_update" ? (
+                  <StatusBadge>
+                    {getHandoverCustomerUpdateTypeLabel(
+                      props.locale,
+                      event.subjectType as Parameters<typeof getHandoverCustomerUpdateTypeLabel>[1]
+                    )}
+                  </StatusBadge>
+                ) : null}
+              </div>
+            </div>
+            <p>{getGovernanceRecentEventSummary(props.locale, event)}</p>
+            <div className="status-row-wrap">
+              {event.policySignals.map((signal) => (
+                <StatusBadge key={`${event.caseId}-${event.createdAt}-${signal}`}>
+                  {getGovernanceSignalLabel(props.locale, {
+                    count: 1,
+                    kind: event.kind,
+                    signal
+                  })}
+                </StatusBadge>
+              ))}
+            </div>
+          </article>
+        );
+      }}
+    />
+  );
+}
+
+function filterGovernanceDailyActivity(report: PersistedGovernanceSummary | null, kind: GovernanceSignalCount["kind"]) {
+  if (!report) {
+    return [];
+  }
+
+  return report.dailyActivity.map((item) => ({
+    date: item.date,
+    openedCount: kind === "case_message" ? item.openedCaseMessageCount : item.openedHandoverCustomerUpdateCount,
+    resolvedApprovedCount: item.resolvedApprovedCount,
+    resolvedCaseMessageCount: item.resolvedCaseMessageCount,
+    resolvedCount: kind === "case_message" ? item.resolvedCaseMessageCount : item.resolvedHandoverCustomerUpdateCount,
+    resolvedFollowUpRequiredCount: item.resolvedFollowUpRequiredCount,
+    resolvedHandoverCustomerUpdateCount: item.resolvedHandoverCustomerUpdateCount
+  }));
+}
+
+function filterGovernanceRecentEvents(report: PersistedGovernanceSummary | null, kind: GovernanceSignalCount["kind"]) {
+  return (report?.recentEvents ?? []).filter((event) => event.kind === kind);
+}
+
+function getGovernanceRecentEventSummary(
+  locale: SupportedLocale,
+  event: PersistedGovernanceSummary["recentEvents"][number]
+) {
+  if (event.kind === "handover_customer_update") {
+    if (event.action === "opened") {
+      return locale === "ar"
+        ? "فُتحت بوابة جودة لمسودة تحديث عميل بسبب إشارة سياسة أو وعد حساس."
+        : "A QA gate opened on a prepared customer update after a policy or promise-sensitive trigger.";
+    }
+
+    return event.status === "approved"
+      ? locale === "ar"
+        ? "تم اعتماد مسودة التحديث ويمكنها التقدم نحو الإرسال الجاهز."
+        : "The prepared update was approved and can continue toward dispatch readiness."
+      : locale === "ar"
+        ? "أعادت الجودة المسودة للمراجعة مع طلب متابعة أو تعديل."
+        : "QA sent the prepared draft back for corrective follow-up.";
+  }
+
+  if (event.action === "opened") {
+    return event.triggerSource === "policy_rule"
+      ? locale === "ar"
+        ? "فُتحت مراجعة جودة تلقائية بسبب إشارات سياسة داخل رسالة الحالة."
+        : "An automatic QA review opened after policy signals matched in the case message."
+      : locale === "ar"
+        ? "طلبت الإدارة مراجعة جودة صريحة قبل متابعة المحادثة."
+        : "A manager explicitly requested QA review before the conversation continues.";
+  }
+
+  return event.status === "approved"
+    ? locale === "ar"
+      ? "اعتمدت الجودة هذه الحالة ويمكن متابعة المسار التجاري دون عائق إضافي."
+      : "QA approved the case and the commercial workflow can continue without an extra hold."
+    : locale === "ar"
+      ? "أعادت الجودة هذه الحالة إلى متابعة بشرية أو تصحيح مباشر."
+      : "QA marked the case for direct human follow-up or corrective action.";
 }
 
 function getGovernanceSignalLabel(locale: SupportedLocale, signalCount: GovernanceSignalCount) {

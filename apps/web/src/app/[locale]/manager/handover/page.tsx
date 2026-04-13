@@ -1,7 +1,7 @@
 import { canOperatorRoleAccessWorkspace, type SupportedLocale } from "@real-estate-ai/contracts";
 
 import { HandoverManagerCommandCenter, ManagerWorkspaceUnavailable } from "@/components/manager-command-center";
-import { tryListPersistedCases } from "@/lib/live-api";
+import { tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,14 @@ export default async function HandoverManagerPage(props: PageProps) {
     return <ManagerWorkspaceUnavailable currentOperatorRole={currentOperatorRole} locale={locale} workspace="manager_handover" />;
   }
 
-  const persistedCases = await tryListPersistedCases();
+  const [persistedCases, governanceReport] = await Promise.all([tryListPersistedCases(), tryGetPersistedGovernanceSummary()]);
 
-  return <HandoverManagerCommandCenter currentOperatorRole={currentOperatorRole} locale={locale} persistedCases={persistedCases} />;
+  return (
+    <HandoverManagerCommandCenter
+      currentOperatorRole={currentOperatorRole}
+      governanceReport={governanceReport}
+      locale={locale}
+      persistedCases={persistedCases}
+    />
+  );
 }

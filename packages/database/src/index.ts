@@ -21,6 +21,7 @@ import type {
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
+  GovernancePolicySignal,
   HandoverAppointmentStatus,
   HandoverBlockerSeverity,
   HandoverBlockerStatus,
@@ -44,6 +45,7 @@ import type {
   PersistedCaseSummary,
   PersistedCurrentHandoverCustomerUpdateQaReview,
   PersistedDocumentRequest,
+  PersistedGovernanceSummary,
   PersistedHandoverAppointment,
   PersistedHandoverArchiveReview,
   PersistedHandoverArchiveStatus,
@@ -75,7 +77,7 @@ import type {
   UpdateHandoverBlockerInput,
   UpdateHandoverTaskStatusInput
 } from "@real-estate-ai/contracts";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
@@ -388,6 +390,7 @@ export interface LeadCaptureStore {
   requestCaseQaReview(caseId: string, input: RequestCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   resolveCaseQaReview(caseId: string, qaReviewId: string, input: ResolveCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   getCaseDetail(caseId: string): Promise<PersistedCaseDetail | null>;
+  getGovernanceSummary(): Promise<PersistedGovernanceSummary>;
   getHandoverCaseDetail(handoverCaseId: string): Promise<PersistedHandoverCaseDetail | null>;
   listCases(): Promise<PersistedCaseSummary[]>;
   manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail | null>;
@@ -1285,6 +1288,255 @@ export async function createAlphaLeadCaptureStore(options?: {
     return latestReviews;
   };
 
+  const getGovernanceSummary = async (): Promise<PersistedGovernanceSummary> => {
+    const now = new Date();
+    const windowStartDate = new Date(now);
+    windowStartDate.setUTCHours(0, 0, 0, 0);
+    windowStartDate.setUTCDate(windowStartDate.getUTCDate() - 6);
+
+    const windowStart = windowStartDate.toISOString();
+    const windowEnd = now.toISOString();
+
+    const caseIdRecords = await db.select({ caseId: cases.id }).from(cases);
+    const caseIds = caseIdRecords.map((record) => record.caseId);
+    const [currentQaReviews, currentHandoverCustomerUpdateQaReviews, governanceEventRecords] = await Promise.all([
+      listCurrentQaReviews(caseIds),
+      listCurrentHandoverCustomerUpdateQaReviews(caseIds),
+      db
+        .select({
+          caseId: auditEvents.caseId,
+          createdAt: auditEvents.createdAt,
+          customerName: leads.customerName,
+          eventType: auditEvents.eventType,
+          payload: auditEvents.payload
+        })
+        .from(auditEvents)
+        .innerJoin(cases, eq(auditEvents.caseId, cases.id))
+        .innerJoin(leads, eq(cases.leadId, leads.id))
+        .where(
+          and(
+            gte(auditEvents.createdAt, windowStart),
+            inArray(auditEvents.eventType, [
+              "qa_review_requested",
+              "qa_review_policy_opened",
+              "qa_review_resolved",
+              "handover_customer_update_qa_review_requested",
+              "handover_customer_update_qa_review_resolved"
+            ])
+          )
+        )
+        .orderBy(desc(auditEvents.createdAt))
+    ]);
+
+    const currentOpenItems = {
+      caseMessageCount: 0,
+      followUpRequiredCount: 0,
+      handoverCustomerUpdateCount: 0,
+      pendingCount: 0,
+      stalePendingCount: 0,
+      totalCount: 0
+    };
+    const openedItems = {
+      caseMessageCount: 0,
+      handoverCustomerUpdateCount: 0,
+      manualCaseMessageCount: 0,
+      policyTriggeredCaseMessageCount: 0,
+      totalCount: 0
+    };
+    const resolvedItems = {
+      approvedCount: 0,
+      caseMessageCount: 0,
+      followUpRequiredCount: 0,
+      handoverCustomerUpdateCount: 0,
+      totalCount: 0
+    };
+    const dailyActivityMap = new Map<
+      string,
+      {
+        date: string;
+        openedCaseMessageCount: number;
+        openedCount: number;
+        openedHandoverCustomerUpdateCount: number;
+        resolvedApprovedCount: number;
+        resolvedCaseMessageCount: number;
+        resolvedCount: number;
+        resolvedFollowUpRequiredCount: number;
+        resolvedHandoverCustomerUpdateCount: number;
+      }
+    >();
+    const recentEvents: PersistedGovernanceSummary["recentEvents"] = [];
+    const signalCounts = new Map<string, PersistedGovernanceSummary["topPolicySignals"][number]>();
+
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const date = new Date(now);
+      date.setUTCHours(0, 0, 0, 0);
+      date.setUTCDate(date.getUTCDate() - offset);
+
+      const dateKey = date.toISOString().slice(0, 10);
+
+      dailyActivityMap.set(dateKey, {
+        date: dateKey,
+        openedCaseMessageCount: 0,
+        openedCount: 0,
+        openedHandoverCustomerUpdateCount: 0,
+        resolvedApprovedCount: 0,
+        resolvedCaseMessageCount: 0,
+        resolvedCount: 0,
+        resolvedFollowUpRequiredCount: 0,
+        resolvedHandoverCustomerUpdateCount: 0
+      });
+    }
+
+    for (const qaReview of currentQaReviews.values()) {
+      if (qaReview.status !== "pending_review" && qaReview.status !== "follow_up_required") {
+        continue;
+      }
+
+      currentOpenItems.caseMessageCount += 1;
+      currentOpenItems.totalCount += 1;
+
+      if (qaReview.status === "pending_review") {
+        currentOpenItems.pendingCount += 1;
+
+        if (now.getTime() - new Date(qaReview.updatedAt).getTime() >= 24 * 60 * 60 * 1000) {
+          currentOpenItems.stalePendingCount += 1;
+        }
+      } else {
+        currentOpenItems.followUpRequiredCount += 1;
+      }
+    }
+
+    for (const qaReview of currentHandoverCustomerUpdateQaReviews.values()) {
+      if (qaReview.reviewStatus !== "pending_review" && qaReview.reviewStatus !== "follow_up_required") {
+        continue;
+      }
+
+      currentOpenItems.handoverCustomerUpdateCount += 1;
+      currentOpenItems.totalCount += 1;
+
+      if (qaReview.reviewStatus === "pending_review") {
+        currentOpenItems.pendingCount += 1;
+
+        if (now.getTime() - new Date(qaReview.updatedAt).getTime() >= 24 * 60 * 60 * 1000) {
+          currentOpenItems.stalePendingCount += 1;
+        }
+      } else {
+        currentOpenItems.followUpRequiredCount += 1;
+      }
+    }
+
+    for (const record of governanceEventRecords) {
+      const normalizedEvent = hydrateGovernanceRecentEvent(record);
+
+      if (!normalizedEvent) {
+        continue;
+      }
+
+      if (recentEvents.length < 8) {
+        recentEvents.push(normalizedEvent);
+      }
+
+      const dailyActivity = dailyActivityMap.get(normalizedEvent.createdAt.slice(0, 10));
+
+      if (normalizedEvent.action === "opened") {
+        openedItems.totalCount += 1;
+
+        if (normalizedEvent.kind === "case_message") {
+          openedItems.caseMessageCount += 1;
+
+          if (normalizedEvent.triggerSource === "policy_rule") {
+            openedItems.policyTriggeredCaseMessageCount += 1;
+          } else {
+            openedItems.manualCaseMessageCount += 1;
+          }
+        } else {
+          openedItems.handoverCustomerUpdateCount += 1;
+        }
+
+        if (dailyActivity) {
+          dailyActivity.openedCount += 1;
+
+          if (normalizedEvent.kind === "case_message") {
+            dailyActivity.openedCaseMessageCount += 1;
+          } else {
+            dailyActivity.openedHandoverCustomerUpdateCount += 1;
+          }
+        }
+
+        for (const signal of normalizedEvent.policySignals) {
+          const key = `${normalizedEvent.kind}:${signal}`;
+          const currentSignalCount = signalCounts.get(key);
+
+          signalCounts.set(key, {
+            count: (currentSignalCount?.count ?? 0) + 1,
+            kind: normalizedEvent.kind,
+            signal
+          });
+        }
+
+        continue;
+      }
+
+      resolvedItems.totalCount += 1;
+
+      if (normalizedEvent.kind === "case_message") {
+        resolvedItems.caseMessageCount += 1;
+        if (dailyActivity) {
+          dailyActivity.resolvedCaseMessageCount += 1;
+        }
+      } else {
+        resolvedItems.handoverCustomerUpdateCount += 1;
+        if (dailyActivity) {
+          dailyActivity.resolvedHandoverCustomerUpdateCount += 1;
+        }
+      }
+
+      if (normalizedEvent.status === "approved") {
+        resolvedItems.approvedCount += 1;
+      }
+
+      if (normalizedEvent.status === "follow_up_required") {
+        resolvedItems.followUpRequiredCount += 1;
+      }
+
+      if (dailyActivity) {
+        dailyActivity.resolvedCount += 1;
+
+        if (normalizedEvent.status === "approved") {
+          dailyActivity.resolvedApprovedCount += 1;
+        }
+
+        if (normalizedEvent.status === "follow_up_required") {
+          dailyActivity.resolvedFollowUpRequiredCount += 1;
+        }
+      }
+    }
+
+    return {
+      currentOpenItems,
+      dailyActivity: [...dailyActivityMap.values()],
+      generatedAt: windowEnd,
+      openedItems,
+      recentEvents,
+      resolvedItems,
+      topPolicySignals: [...signalCounts.values()]
+        .sort((left, right) => {
+          if (left.count !== right.count) {
+            return right.count - left.count;
+          }
+
+          if (left.kind !== right.kind) {
+            return left.kind.localeCompare(right.kind);
+          }
+
+          return left.signal.localeCompare(right.signal);
+        })
+        .slice(0, 5),
+      windowEnd,
+      windowStart
+    };
+  };
+
   const getPersistedCaseDetail = async (caseId: string): Promise<PersistedCaseDetail | null> => {
     const persistedCase = await db
       .select({
@@ -1905,6 +2157,9 @@ export async function createAlphaLeadCaptureStore(options?: {
     },
     async getCaseDetail(caseId) {
       return getPersistedCaseDetail(caseId);
+    },
+    async getGovernanceSummary() {
+      return getGovernanceSummary();
     },
     async getHandoverCaseDetail(handoverCaseId) {
       return getHandoverCaseDetail(handoverCaseId);
@@ -4483,6 +4738,97 @@ function hydrateCaseQaReview(value: {
   };
 }
 
+function hydrateGovernanceRecentEvent(value: {
+  caseId: string;
+  createdAt: string;
+  customerName: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+}): PersistedGovernanceSummary["recentEvents"][number] | null {
+  const payload = value.payload ?? {};
+
+  if (value.eventType === "qa_review_requested" || value.eventType === "qa_review_policy_opened") {
+    return {
+      action: "opened",
+      actorName: readPayloadString(payload, "requestedByName"),
+      caseId: value.caseId,
+      createdAt: value.createdAt,
+      customerName: value.customerName,
+      handoverCaseId: null,
+      kind: "case_message",
+      policySignals: readPayloadStringArray(payload, "policySignals").map((signal) => toGovernancePolicySignal(signal)),
+      status: "pending_review",
+      subjectType: null,
+      triggerSource: value.eventType === "qa_review_policy_opened" ? "policy_rule" : toCaseQaReviewTriggerSource(readPayloadString(payload, "triggerSource") ?? "manual_request")
+    };
+  }
+
+  if (value.eventType === "qa_review_resolved") {
+    return {
+      action: "resolved",
+      actorName: readPayloadString(payload, "reviewerName"),
+      caseId: value.caseId,
+      createdAt: value.createdAt,
+      customerName: value.customerName,
+      handoverCaseId: null,
+      kind: "case_message",
+      policySignals: [],
+      status: toCaseQaReviewStatus(readPayloadString(payload, "status") ?? "follow_up_required"),
+      subjectType: null,
+      triggerSource: null
+    };
+  }
+
+  if (value.eventType === "handover_customer_update_qa_review_requested") {
+    return {
+      action: "opened",
+      actorName: null,
+      caseId: value.caseId,
+      createdAt: value.createdAt,
+      customerName: value.customerName,
+      handoverCaseId: readPayloadString(payload, "handoverCaseId"),
+      kind: "handover_customer_update",
+      policySignals: readPayloadStringArray(payload, "policySignals").map((signal) => toGovernancePolicySignal(signal)),
+      status: "pending_review",
+      subjectType: readPayloadString(payload, "type"),
+      triggerSource: "policy_rule"
+    };
+  }
+
+  if (value.eventType === "handover_customer_update_qa_review_resolved") {
+    return {
+      action: "resolved",
+      actorName: readPayloadString(payload, "reviewerName"),
+      caseId: value.caseId,
+      createdAt: value.createdAt,
+      customerName: value.customerName,
+      handoverCaseId: readPayloadString(payload, "handoverCaseId"),
+      kind: "handover_customer_update",
+      policySignals: [],
+      status: toHandoverCustomerUpdateQaReviewStatus(readPayloadString(payload, "status") ?? "follow_up_required"),
+      subjectType: readPayloadString(payload, "type"),
+      triggerSource: null
+    };
+  }
+
+  return null;
+}
+
+function readPayloadString(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+  return typeof value === "string" ? value : null;
+}
+
+function readPayloadStringArray(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string");
+}
+
 function toAutomationStatus(value: string): AutomationStatus {
   if (value === "active" || value === "paused") {
     return value;
@@ -4526,6 +4872,14 @@ function toCaseQaPolicySignal(value: string): CaseQaPolicySignal {
   }
 
   throw new Error(`unsupported_case_qa_policy_signal:${value}`);
+}
+
+function toGovernancePolicySignal(value: string): GovernancePolicySignal {
+  try {
+    return toCaseQaPolicySignal(value);
+  } catch {
+    return toHandoverCustomerUpdateQaPolicySignal(value);
+  }
 }
 
 function toDocumentRequestStatus(value: string): DocumentRequestStatus {

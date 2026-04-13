@@ -79,6 +79,30 @@ export function requireOperatorWorkspace(
   return operatorRole;
 }
 
+export function requireAnyOperatorWorkspace(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  workspaces: OperatorWorkspace[]
+): OperatorRole | null {
+  const operatorRole = requireOperatorSession(request, reply);
+
+  if (!operatorRole) {
+    return null;
+  }
+
+  if (!workspaces.some((workspace) => canOperatorRoleAccessWorkspace(workspace, operatorRole))) {
+    reply.status(403).send({
+      error: "insufficient_workspace",
+      requiredWorkspaces: workspaces,
+      workspace: workspaces[0]
+    });
+
+    return null;
+  }
+
+  return operatorRole;
+}
+
 function readSignedOperatorSessionHeader(request: FastifyRequest) {
   const headerValue = request.headers[operatorSessionHeaderName];
   const normalizedHeaderValue = Array.isArray(headerValue) ? headerValue[0] : headerValue;

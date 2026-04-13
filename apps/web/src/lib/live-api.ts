@@ -15,6 +15,7 @@ import type {
   PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
+  PersistedGovernanceSummary,
   PersistedHandoverCaseDetail,
   QualifyCaseInput,
   RequestCaseQaReviewInput,
@@ -94,6 +95,13 @@ export async function listPersistedCasesFromApi() {
   return payload.cases;
 }
 
+export async function getPersistedGovernanceSummaryFromApi(operatorRole?: OperatorRole) {
+  return requestJson<PersistedGovernanceSummary>("/v1/governance/summary", {
+    cache: "no-store",
+    headers: await getOperatorSessionHeaders(operatorRole)
+  });
+}
+
 export async function manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput, operatorRole?: OperatorRole) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/follow-up-plan`, {
     headers: await getOperatorSessionHeaders(operatorRole),
@@ -166,6 +174,14 @@ export async function tryListPersistedCases() {
     return await listPersistedCasesFromApi();
   } catch {
     return [];
+  }
+}
+
+export async function tryGetPersistedGovernanceSummary(operatorRole?: OperatorRole) {
+  try {
+    return await getPersistedGovernanceSummaryFromApi(operatorRole);
+  } catch {
+    return null;
   }
 }
 

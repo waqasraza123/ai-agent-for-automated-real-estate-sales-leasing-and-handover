@@ -55,6 +55,7 @@
 - The next persisted Phase 5 QA-policy boundary is now live locally: inbound website lead messages are automatically sampled into QA review when policy signals match, with localized summaries and persisted trigger evidence visible in queue and case detail surfaces
 - The next persisted Phase 5 outbound-QA boundary is now live locally: prepared handover customer updates can automatically open a draft QA approval gate from policy-pack matches, the QA workspace can resolve those draft reviews, and dispatch readiness is blocked until the gate is cleared
 - The next persisted Phase 5 governance-analytics boundary is now live locally: manager gateway, revenue, and handover command surfaces now expose cross-surface QA pressure, stale pending counts, and policy hotspots from the persisted intake-review plus outbound-draft-review state
+- The next persisted Phase 5 governance-reporting boundary is now live locally: the API now exposes a trusted-session governance summary with 7-day activity and recent-event rollups across intake QA reviews and handover-draft QA gates, and manager routes render those historical trends alongside current pressure
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -90,6 +91,7 @@
 - Added the next persisted Phase 5 QA-policy slice with automatic intake-time QA trigger detection, localized policy-sample summaries, persisted trigger evidence and signal metadata, queue and case-detail visibility for manual vs policy-triggered reviews, and integration coverage for automatic review creation
 - Added the next persisted Phase 5 outbound-QA slice with policy-pack checks on prepared handover customer updates, persisted per-draft QA review state and evidence, reviewer-only QA resolution from the `/qa` case surface, blocked dispatch-ready promotion until QA approval, and integration coverage for the new gate
 - Added the next persisted Phase 5 governance-analytics slice with shared manager-side QA pressure derivation, revenue and handover governance attention queues, cross-surface policy hotspots, and manager-route smoke coverage for the new analytics surfaces
+- Added the next persisted Phase 5 governance-reporting slice with a dedicated governance-summary API, 7-day QA activity rollups, recent governance event history across both QA scopes, workspace-gated report access, manager-route history panels, and integration coverage for the new reporting contract
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -135,6 +137,7 @@
 - Automatic QA sampling now runs during website lead intake when the inbound message matches local policy heuristics, and the persisted review keeps explicit trigger source, signal list, and matched-evidence context
 - Prepared handover customer updates now carry their own persisted QA gate state, and dispatch-ready promotion is blocked whenever the latest draft review is pending or marked for follow-up
 - Manager governance analytics now derive directly from the existing case-summary QA fields so revenue and handover command centers can show governance pressure without a separate reporting backend
+- Historical governance reporting now comes from a dedicated summary endpoint aggregated from persisted QA records plus audit events, rather than expanding the case-list contract with trend data
 - Push verification now covers lint and API integration tests because the repo has meaningful backend behavior, not just shell code
 - Playwright smoke verification now runs against a production Next server because the dev-server path was intermittently unstable on the handover route in this environment
 - The repository uses a versioned `core.hooksPath` pointing to `.githooks`
@@ -150,7 +153,7 @@
 - Real provider integrations
 - Real AI execution and automation enforcement
 - Deeper qualification policy logic and approval boundaries beyond the current structured alpha form
-- Broader QA policy packs and message-level approval gates beyond the current intake sampling plus prepared handover customer-update draft gate
+- Broader QA policy packs and message-level approval gates beyond the current intake sampling plus prepared handover customer-update draft gate, and richer exportable governance reporting beyond the current manager-facing 7-day summary
 - Redis or BullMQ-backed durable job orchestration beyond the current local alpha worker
 - Leasing-specific rejection reasons and policy rules beyond the current shared document-request model
 - Real outbound customer communication, provider callbacks, external archive systems, broader post-completion workflows, and fully automated handover execution beyond the current planning, dispatch-ready, blocker, in-progress, controlled-completion, aftercare, and admin-closure boundaries

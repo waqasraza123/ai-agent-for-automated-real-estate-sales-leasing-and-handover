@@ -14,6 +14,7 @@ import type {
   PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
+  PersistedGovernanceSummary,
   PersistedHandoverCaseDetail,
   QualifyCaseInput,
   ResolveCaseQaReviewInput,
@@ -74,6 +75,10 @@ export async function getPersistedHandoverCaseDetail(
 
 export async function listPersistedCases(store: LeadCaptureStore): Promise<PersistedCaseSummary[]> {
   return store.listCases();
+}
+
+export async function getPersistedGovernanceSummary(store: LeadCaptureStore): Promise<PersistedGovernanceSummary> {
+  return store.getGovernanceSummary();
 }
 
 export async function managePersistedCaseFollowUp(
