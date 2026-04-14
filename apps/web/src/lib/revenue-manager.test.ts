@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { PersistedCaseDetail, PersistedCaseSummary } from "@real-estate-ai/contracts";
 
 import {
+  buildRevenueManagerBatchDriftReasonSummaries,
   buildRevenueManagerBatchHistory,
   buildRevenueManagerDriftedCaseIds,
   buildRevenueManagerBatchExportCsv,
@@ -495,5 +496,14 @@ describe("revenue manager filters", () => {
       postBatchFollowUpUpdateCount: 1
     });
     expect(buildRevenueManagerDriftedCaseIds(history)).toEqual(["batch-escalated"]);
+    expect(buildRevenueManagerBatchDriftReasonSummaries(history)).toEqual([
+      {
+        caseId: "batch-escalated",
+        laterBulkResetCount: 1,
+        latestDriftAt: "2026-04-13T10:00:00.000Z",
+        postBatchFollowUpUpdateCount: 1,
+        reasons: ["follow_up_update", "later_bulk_reset"]
+      }
+    ]);
   });
 });

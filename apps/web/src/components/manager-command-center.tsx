@@ -56,6 +56,7 @@ import {
   getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
 import {
+  buildRevenueManagerBatchDriftReasonSummaries,
   buildRevenueManagerExportHref,
   buildRevenueManagerHref,
   buildRevenueManagerScope,
@@ -771,6 +772,9 @@ export function RevenueManagerCommandCenter(props: {
     revenueScope.focusedCases.length > 1;
   const clearScopeHref = buildRevenueManagerHref(props.locale);
   const batchExportHref = hasScopedBatchView ? buildRevenueManagerExportHref(props.locale, props.filters) : null;
+  const batchDriftReasonSummaryByCaseId = new Map(
+    buildRevenueManagerBatchDriftReasonSummaries(props.batchHistory).map((summary) => [summary.caseId, summary])
+  );
   const fullBatchScopeHref =
     hasChangedLaterBatchView && props.filters.bulkBatchId
       ? buildRevenueManagerHref(
@@ -1340,6 +1344,7 @@ export function RevenueManagerCommandCenter(props: {
                   caseItem.ownerName,
                   caseItem.latestHumanReply
                 );
+                const batchDriftReasonSummary = hasChangedLaterBatchView ? batchDriftReasonSummaryByCaseId.get(caseItem.caseId) : undefined;
                 const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
                   props.locale,
                   caseItem.ownerName,
@@ -1378,6 +1383,39 @@ export function RevenueManagerCommandCenter(props: {
                     </div>
                     <p>{caseItem.nextAction}</p>
                     <div className="stack-tight">
+                      {hasChangedLaterBatchView && batchDriftReasonSummary ? (
+                        <>
+                          <div className="status-row-wrap">
+                            {batchDriftReasonSummary.postBatchFollowUpUpdateCount > 0 ? (
+                              <StatusBadge tone="warning">
+                                {props.locale === "ar"
+                                  ? batchDriftReasonSummary.postBatchFollowUpUpdateCount === 1
+                                    ? "تحديث متابعة لاحق"
+                                    : `${batchDriftReasonSummary.postBatchFollowUpUpdateCount} تحديثات متابعة لاحقة`
+                                  : batchDriftReasonSummary.postBatchFollowUpUpdateCount === 1
+                                    ? "Later follow-up update"
+                                    : `${batchDriftReasonSummary.postBatchFollowUpUpdateCount} later follow-up updates`}
+                              </StatusBadge>
+                            ) : null}
+                            {batchDriftReasonSummary.laterBulkResetCount > 0 ? (
+                              <StatusBadge tone="warning">
+                                {props.locale === "ar"
+                                  ? batchDriftReasonSummary.laterBulkResetCount === 1
+                                    ? "دفعة جماعية لاحقة"
+                                    : `${batchDriftReasonSummary.laterBulkResetCount} دفعات جماعية لاحقة`
+                                  : batchDriftReasonSummary.laterBulkResetCount === 1
+                                    ? "Later bulk reset"
+                                    : `${batchDriftReasonSummary.laterBulkResetCount} later bulk resets`}
+                              </StatusBadge>
+                            ) : null}
+                          </div>
+                          <p className="case-link-meta">
+                            {props.locale === "ar"
+                              ? `آخر سبب انجراف سُجّل ${new Date(batchDriftReasonSummary.latestDriftAt).toLocaleString(props.locale)}.`
+                              : `Latest drift reason was recorded ${new Date(batchDriftReasonSummary.latestDriftAt).toLocaleString(props.locale)}.`}
+                          </p>
+                        </>
+                      ) : null}
                       <p className="case-link-meta">
                         {caseItem.latestHumanReply?.sentByName}
                         {" · "}

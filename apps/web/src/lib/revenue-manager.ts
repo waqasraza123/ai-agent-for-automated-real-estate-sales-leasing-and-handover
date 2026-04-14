@@ -79,6 +79,14 @@ export interface RevenueManagerBatchHistorySummary {
   postBatchFollowUpUpdateCount: number;
 }
 
+export interface RevenueManagerBatchDriftReasonSummary {
+  caseId: string;
+  laterBulkResetCount: number;
+  latestDriftAt: string;
+  postBatchFollowUpUpdateCount: number;
+  reasons: Array<"follow_up_update" | "later_bulk_reset">;
+}
+
 interface RevenueManagerScopeOptions {
   changedCaseIds?: ReadonlySet<string>;
 }
@@ -341,6 +349,40 @@ export function buildRevenueManagerDriftedCaseIds(batchHistory: RevenueManagerBa
   return batchHistory.historyCases
     .filter((historyCase) => historyCase.entries.some((entry) => entry.type !== "scoped_batch_reset"))
     .map((historyCase) => historyCase.caseId);
+}
+
+export function buildRevenueManagerBatchDriftReasonSummaries(batchHistory: RevenueManagerBatchHistorySummary | null) {
+  if (!batchHistory) {
+    return [];
+  }
+
+  return batchHistory.historyCases.flatMap((historyCase) => {
+    const laterBulkResetCount = historyCase.entries.filter((entry) => entry.type === "later_bulk_reset").length;
+    const postBatchFollowUpUpdateCount = historyCase.entries.filter((entry) => entry.type === "follow_up_update").length;
+
+    if (laterBulkResetCount === 0 && postBatchFollowUpUpdateCount === 0) {
+      return [];
+    }
+
+    const latestDriftEntry = historyCase.entries.find((entry) => entry.type !== "scoped_batch_reset");
+
+    if (!latestDriftEntry) {
+      return [];
+    }
+
+    return [
+      {
+        caseId: historyCase.caseId,
+        laterBulkResetCount,
+        latestDriftAt: latestDriftEntry.createdAt,
+        postBatchFollowUpUpdateCount,
+        reasons: [
+          ...(postBatchFollowUpUpdateCount > 0 ? (["follow_up_update"] as const) : []),
+          ...(laterBulkResetCount > 0 ? (["later_bulk_reset"] as const) : [])
+        ]
+      }
+    ];
+  });
 }
 
 function normalizeSearchParamRecord(searchParams: SearchParamsInput) {
