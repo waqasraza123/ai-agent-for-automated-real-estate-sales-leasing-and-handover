@@ -84,10 +84,14 @@ export function buildManagerWorkspaceQueues(persistedCases: PersistedManagerCase
   const postReplyHandoffCases = persistedCases.filter((caseItem) =>
     hasPersistedLatestHumanReplyHandoff(caseItem.ownerName, caseItem.latestHumanReply)
   );
+  const escalatedPostReplyHandoffCases = postReplyHandoffCases.filter(
+    (caseItem) => caseItem.followUpStatus === "attention" || caseItem.openInterventionsCount > 0
+  );
   const openInterventionsCount = persistedCases.reduce((total, caseItem) => total + caseItem.openInterventionsCount, 0);
 
   return {
     closureCases,
+    escalatedPostReplyHandoffCases,
     executionCases,
     governanceHeldAutomationCases,
     openInterventionsCount,

@@ -41,6 +41,7 @@ import {
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
   getPersistedHandoverCustomerUpdateQaReviewDisplay,
+  getPersistedLatestHumanReplyEscalationLabel,
   getPersistedHandoverWorkspaceDisplay,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
@@ -721,8 +722,14 @@ export function RevenueManagerCommandCenter(props: {
   const messages = getMessages(props.locale);
   const workspaceCopy = getManagerWorkspaceCopy(props.locale, "manager_revenue");
   const managerCapabilities = getManagerWorkspaceCapabilities(props.currentOperatorRole);
-  const { governanceHeldAutomationCases, openInterventionsCount, pausedAutomationCases, postReplyHandoffCases, revenueAttentionCases } =
-    buildManagerWorkspaceQueues(props.persistedCases);
+  const {
+    escalatedPostReplyHandoffCases,
+    governanceHeldAutomationCases,
+    openInterventionsCount,
+    pausedAutomationCases,
+    postReplyHandoffCases,
+    revenueAttentionCases
+  } = buildManagerWorkspaceQueues(props.persistedCases);
   const governanceSummary = buildManagerGovernanceSummary(props.persistedCases);
   const canAccessHandoverManagerWorkspace = canOperatorRoleAccessWorkspace("manager_handover", props.currentOperatorRole);
   const canAccessHandoverWorkspace = canOperatorRoleAccessWorkspace("handover", props.currentOperatorRole);
@@ -968,6 +975,15 @@ export function RevenueManagerCommandCenter(props: {
               : "Cases where the latest human reply was sent by one operator and the active follow-up now sits with a different owner."}
           </p>
         </article>
+        <article className="metric-tile metric-tile-rose">
+          <p className="metric-label">{props.locale === "ar" ? "تسليمات متصاعدة" : "Escalated handoffs"}</p>
+          <p className="metric-value">{escalatedPostReplyHandoffCases.length}</p>
+          <p className="metric-detail">
+            {props.locale === "ar"
+              ? "تسليمات بعد الرد أصبحت الآن متأخرة أو عليها تدخل إداري مفتوح."
+              : "Post-reply handoffs that are already overdue or carrying open managerial intervention pressure."}
+          </p>
+        </article>
       </div>
 
       <div className="two-column-grid">
@@ -986,6 +1002,13 @@ export function RevenueManagerCommandCenter(props: {
                 props.locale,
                 caseItem.ownerName,
                 caseItem.latestHumanReply
+              );
+              const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
+                props.locale,
+                caseItem.ownerName,
+                caseItem.latestHumanReply,
+                caseItem.followUpStatus,
+                caseItem.openInterventionsCount
               );
 
               return (
@@ -1017,6 +1040,7 @@ export function RevenueManagerCommandCenter(props: {
                         {latestHumanReplySentAt}
                       </p>
                       {latestHumanReplyOwnershipLabel ? <p className="case-link-meta">{latestHumanReplyOwnershipLabel}</p> : null}
+                      {latestHumanReplyEscalationLabel ? <p className="case-link-meta">{latestHumanReplyEscalationLabel}</p> : null}
                     </div>
                   ) : null}
                   <p className="case-link-meta">{formatCaseLastChange(caseItem, props.locale)}</p>
@@ -1057,6 +1081,13 @@ export function RevenueManagerCommandCenter(props: {
                 caseItem.ownerName,
                 caseItem.latestHumanReply
               );
+              const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
+                props.locale,
+                caseItem.ownerName,
+                caseItem.latestHumanReply,
+                caseItem.followUpStatus,
+                caseItem.openInterventionsCount
+              );
 
               return (
                 <Link key={caseItem.caseId} className="case-link-card" href={`/${props.locale}/leads/${caseItem.caseId}`}>
@@ -1074,6 +1105,7 @@ export function RevenueManagerCommandCenter(props: {
                           {latestHumanReplySentAt}
                         </p>
                         {latestHumanReplyOwnershipLabel ? <p className="case-link-meta">{latestHumanReplyOwnershipLabel}</p> : null}
+                        {latestHumanReplyEscalationLabel ? <p className="case-link-meta">{latestHumanReplyEscalationLabel}</p> : null}
                       </div>
                     ) : null}
                   </div>
@@ -1096,6 +1128,65 @@ export function RevenueManagerCommandCenter(props: {
           />
         </Panel>
       </div>
+
+      <Panel title={props.locale === "ar" ? "تسليمات متصاعدة بعد الرد" : "Escalated post-reply handoffs"}>
+        <StatefulStack
+          emptySummary={
+            props.locale === "ar"
+              ? "لا توجد حالياً تسليمات بعد الرد متأخرة أو مدعومة بتدخلات مفتوحة."
+              : "No post-reply handoffs are currently overdue or carrying open intervention pressure."
+          }
+          emptyTitle={props.locale === "ar" ? "لا توجد تسليمات متصاعدة" : "No escalated handoffs"}
+          items={escalatedPostReplyHandoffCases}
+          renderItem={(caseItem) => {
+            const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, props.locale);
+            const latestHumanReplyOwnershipLabel = getPersistedLatestHumanReplyOwnershipLabel(
+              props.locale,
+              caseItem.ownerName,
+              caseItem.latestHumanReply
+            );
+            const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
+              props.locale,
+              caseItem.ownerName,
+              caseItem.latestHumanReply,
+              caseItem.followUpStatus,
+              caseItem.openInterventionsCount
+            );
+
+            return (
+              <article key={caseItem.caseId} className="alert-row alert-row-high">
+                <div className="row-between">
+                  <div className="stack-tight">
+                    <h3>{caseItem.customerName}</h3>
+                    <p className="case-link-meta">{buildCaseReferenceCode(caseItem.caseId)}</p>
+                  </div>
+                  <div className="status-row-wrap">
+                    <StatusBadge tone="warning">{getPersistedFollowUpLabel(props.locale, caseItem)}</StatusBadge>
+                    {caseItem.openInterventionsCount > 0 ? (
+                      <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
+                    ) : null}
+                  </div>
+                </div>
+                <p>{caseItem.nextAction}</p>
+                <div className="stack-tight">
+                  <p className="case-link-meta">
+                    {caseItem.latestHumanReply?.sentByName}
+                    {" · "}
+                    {latestHumanReplySentAt}
+                  </p>
+                  {latestHumanReplyOwnershipLabel ? <p className="case-link-meta">{latestHumanReplyOwnershipLabel}</p> : null}
+                  {latestHumanReplyEscalationLabel ? <p className="case-link-meta">{latestHumanReplyEscalationLabel}</p> : null}
+                </div>
+                <div className="status-row-wrap">
+                  <Link className="inline-link" href={`/${props.locale}/leads/${caseItem.caseId}`}>
+                    {props.locale === "ar" ? "فتح الحالة" : "Open case"}
+                  </Link>
+                </div>
+              </article>
+            );
+          }}
+        />
+      </Panel>
 
       <div className="two-column-grid">
         <Panel title={props.locale === "ar" ? "طابور حوكمة الإيرادات" : "Revenue governance queue"}>

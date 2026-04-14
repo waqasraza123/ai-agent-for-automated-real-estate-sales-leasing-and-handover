@@ -17,6 +17,7 @@ import {
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
   getPersistedHandoverWorkspaceDisplay,
+  getPersistedLatestHumanReplyEscalationLabel,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
   getPersistedQaReviewDisplay
@@ -104,6 +105,13 @@ export default async function LeadsPage(props: PageProps) {
                       caseItem.ownerName,
                       caseItem.latestHumanReply
                     );
+                    const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
+                      locale,
+                      caseItem.ownerName,
+                      caseItem.latestHumanReply,
+                      caseItem.followUpStatus,
+                      caseItem.openInterventionsCount
+                    );
 
                     return (
                       <tr key={caseItem.caseId}>
@@ -148,6 +156,9 @@ export default async function LeadsPage(props: PageProps) {
                                 </span>
                                 {latestHumanReplyOwnershipLabel ? (
                                   <span className="case-link-meta">{latestHumanReplyOwnershipLabel}</span>
+                                ) : null}
+                                {latestHumanReplyEscalationLabel ? (
+                                  <span className="case-link-meta">{latestHumanReplyEscalationLabel}</span>
                                 ) : null}
                               </div>
                             ) : null}

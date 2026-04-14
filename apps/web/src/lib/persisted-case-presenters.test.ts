@@ -5,9 +5,11 @@ import type { PersistedCaseDetail } from "@real-estate-ai/contracts";
 import {
   buildPersistedConversation,
   formatLatestHumanReplySentAt,
+  getPersistedLatestHumanReplyEscalationLabel,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
   getPersistedLatestHumanReplyOwnershipNote,
+  hasPersistedLatestHumanReplyEscalation,
   hasPersistedLatestHumanReplyHandoff
 } from "./persisted-case-presenters";
 
@@ -151,5 +153,39 @@ describe("buildPersistedConversation", () => {
     expect(getPersistedLatestHumanReplyOwnershipNote("en", caseDetail.ownerName, caseDetail.latestHumanReply)).toBe(
       "Amina Rahman sent the latest reply, but Manager Desk North now owns the active follow-up."
     );
+  });
+
+  it("flags escalated handoffs when the handed-off follow-up is overdue or intervention-backed", () => {
+    const caseDetail = buildCaseDetail([]);
+
+    caseDetail.ownerName = "Manager Desk North";
+    caseDetail.followUpStatus = "attention";
+    caseDetail.openInterventionsCount = 1;
+    caseDetail.latestHumanReply = {
+      approvedFromQa: false,
+      message: "I have shared the visit options.",
+      nextAction: "Confirm the preferred slot",
+      nextActionDueAt: "2026-04-14T09:00:00.000Z",
+      sentAt: "2026-04-13T09:12:00.000Z",
+      sentByName: "Amina Rahman"
+    };
+
+    expect(
+      hasPersistedLatestHumanReplyEscalation(
+        caseDetail.ownerName,
+        caseDetail.latestHumanReply,
+        caseDetail.followUpStatus,
+        caseDetail.openInterventionsCount
+      )
+    ).toBe(true);
+    expect(
+      getPersistedLatestHumanReplyEscalationLabel(
+        "en",
+        caseDetail.ownerName,
+        caseDetail.latestHumanReply,
+        caseDetail.followUpStatus,
+        caseDetail.openInterventionsCount
+      )
+    ).toBe("Handed-off follow-up is overdue with an open intervention");
   });
 });

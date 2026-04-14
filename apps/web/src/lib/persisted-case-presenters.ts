@@ -272,6 +272,37 @@ export function getPersistedLatestHumanReplyOwnershipNote(
       : `The latest reply and the active follow-up both remain with ${ownerName}.`;
 }
 
+export function hasPersistedLatestHumanReplyEscalation(
+  ownerName: PersistedCaseDetail["ownerName"] | PersistedCaseSummary["ownerName"],
+  latestHumanReply: PersistedCaseDetail["latestHumanReply"] | PersistedCaseSummary["latestHumanReply"],
+  followUpStatus: PersistedCaseDetail["followUpStatus"] | PersistedCaseSummary["followUpStatus"],
+  openInterventionsCount: PersistedCaseDetail["openInterventionsCount"] | PersistedCaseSummary["openInterventionsCount"]
+) {
+  return hasPersistedLatestHumanReplyHandoff(ownerName, latestHumanReply) && (followUpStatus === "attention" || openInterventionsCount > 0);
+}
+
+export function getPersistedLatestHumanReplyEscalationLabel(
+  locale: SupportedLocale,
+  ownerName: PersistedCaseDetail["ownerName"] | PersistedCaseSummary["ownerName"],
+  latestHumanReply: PersistedCaseDetail["latestHumanReply"] | PersistedCaseSummary["latestHumanReply"],
+  followUpStatus: PersistedCaseDetail["followUpStatus"] | PersistedCaseSummary["followUpStatus"],
+  openInterventionsCount: PersistedCaseDetail["openInterventionsCount"] | PersistedCaseSummary["openInterventionsCount"]
+) {
+  if (!hasPersistedLatestHumanReplyEscalation(ownerName, latestHumanReply, followUpStatus, openInterventionsCount)) {
+    return null;
+  }
+
+  if (openInterventionsCount > 0 && followUpStatus === "attention") {
+    return locale === "ar" ? "تسليم متأخر مع تدخل مفتوح" : "Handed-off follow-up is overdue with an open intervention";
+  }
+
+  if (openInterventionsCount > 0) {
+    return locale === "ar" ? "تسليم عليه تدخل مفتوح" : "Handed-off follow-up has an open intervention";
+  }
+
+  return locale === "ar" ? "تسليم متأخر يحتاج تدخلاً" : "Handed-off follow-up is overdue";
+}
+
 export function getPersistedAutomationLabel(locale: SupportedLocale, automationStatus: PersistedCaseDetail["automationStatus"]) {
   return getAutomationStatusLabel(locale, automationStatus);
 }

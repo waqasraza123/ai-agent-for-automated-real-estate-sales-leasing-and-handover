@@ -123,6 +123,7 @@ describe("manager workspace routing", () => {
         }
       }),
       buildCase("handoff", {
+        followUpStatus: "attention",
         latestHumanReply: {
           approvedFromQa: true,
           message: "Shared the approved availability update.",
@@ -136,5 +137,6 @@ describe("manager workspace routing", () => {
     ]);
 
     expect(queues.postReplyHandoffCases.map((caseItem) => caseItem.caseId)).toEqual(["handoff"]);
+    expect(queues.escalatedPostReplyHandoffCases.map((caseItem) => caseItem.caseId)).toEqual(["handoff"]);
   });
 });

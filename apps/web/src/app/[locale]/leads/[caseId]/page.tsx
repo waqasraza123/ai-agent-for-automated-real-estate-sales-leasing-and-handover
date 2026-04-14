@@ -31,6 +31,7 @@ import {
   getPersistedFollowUpLabel,
   getPersistedHandoverStatusLabel,
   getPersistedInterventionDisplay,
+  getPersistedLatestHumanReplyEscalationLabel,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
   getPersistedLatestHumanReplyOwnershipNote,
@@ -107,6 +108,13 @@ export default async function LeadProfilePage(props: PageProps) {
       locale,
       persistedCase.ownerName,
       persistedCase.latestHumanReply
+    );
+    const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
+      locale,
+      persistedCase.ownerName,
+      persistedCase.latestHumanReply,
+      persistedCase.followUpStatus,
+      persistedCase.openInterventionsCount
     );
 
     return (
@@ -220,6 +228,7 @@ export default async function LeadProfilePage(props: PageProps) {
                   {latestHumanReplyLabel ? <StatusBadge tone="success">{latestHumanReplyLabel}</StatusBadge> : null}
                 </div>
                 {latestHumanReplyOwnershipLabel ? <StatusBadge>{latestHumanReplyOwnershipLabel}</StatusBadge> : null}
+                {latestHumanReplyEscalationLabel ? <StatusBadge tone="warning">{latestHumanReplyEscalationLabel}</StatusBadge> : null}
                 <p>{persistedCase.latestHumanReply.message}</p>
                 <dl className="detail-list">
                   <div>
