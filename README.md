@@ -2,7 +2,18 @@
 
 Premium bilingual real-estate operations software for AI-assisted lead response, qualification, visit scheduling, document readiness, manager oversight, and handover coordination.
 
-**Tags:** `ai-agents` `real-estate` `proptech` `sales-automation` `leasing` `handover` `bilingual` `arabic` `rtl` `nextjs` `typescript` `monorepo`
+<p align="left">
+  <img alt="Premium real-estate ops" src="https://img.shields.io/badge/Premium-Real_Estate_Ops-111111?style=for-the-badge" />
+  <img alt="English and Arabic" src="https://img.shields.io/badge/English_%2B_Arabic-First_Class-0F766E?style=for-the-badge" />
+  <img alt="RTL first" src="https://img.shields.io/badge/RTL-First_Class-1D4ED8?style=for-the-badge" />
+  <img alt="TypeScript monorepo" src="https://img.shields.io/badge/TypeScript-Monorepo-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
+  <img alt="Next.js web" src="https://img.shields.io/badge/Next.js-Web_App-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />
+  <img alt="Fastify API" src="https://img.shields.io/badge/Fastify-API-000000?style=for-the-badge&logo=fastify&logoColor=white" />
+  <img alt="QA governed workflows" src="https://img.shields.io/badge/QA-Governed_Workflows-7C3AED?style=for-the-badge" />
+  <img alt="Safe push verification" src="https://img.shields.io/badge/Safe_Push-Verified-166534?style=for-the-badge" />
+</p>
+
+**Tags:** `ai-agents` `real-estate` `proptech` `sales-automation` `leasing` `handover` `bilingual` `arabic` `rtl` `governance` `nextjs` `typescript` `monorepo`
 
 ## Overview
 
