@@ -755,6 +755,7 @@ export function RevenueManagerCommandCenter(props: {
   const followUpGuardNote = getOperatorPermissionGuardNote(props.locale, "manage_case_follow_up");
   const hasScopedBatchView = Boolean(revenueScope.batchScope);
   const batchScopeSavedAt = revenueScope.batchScope ? new Date(revenueScope.batchScope.savedAt).toLocaleString(props.locale) : null;
+  const batchOwnerGroups = revenueScope.batchOwnerGroups;
   const hasScopedView = props.filters.queue !== "all" || Boolean(props.filters.ownerName) || hasScopedBatchView;
   const canShowBulkOperationalRiskActioning =
     props.filters.queue === "escalated_handoffs" &&
@@ -1021,6 +1022,100 @@ export function RevenueManagerCommandCenter(props: {
                   ? "يمكن لمدير الإيرادات إعادة تعيين المالك أو حفظ خطوة المتابعة التالية مباشرة من هذا النطاق لتصفية التدخل المفتوح."
                   : "Revenue managers can reassign the owner or save the next follow-up directly from this scope to clear the open intervention."}
             </p>
+            {hasScopedBatchView && batchOwnerGroups.length > 0 ? (
+              <div className="page-stack">
+                <p className="case-link-meta">
+                  {props.locale === "ar"
+                    ? "يتم تجميع الدفعة حسب المالك الحالي حتى يظهر أين انجرفت الحالات بعد إعادة الضبط الجماعي وأين ما زالت تحتاج إجراءً مشتركاً."
+                    : "The batch is grouped by current owner so managers can see where cases drifted after the bulk reset and where shared action is still possible."}
+                </p>
+                {batchOwnerGroups.map((ownerGroup) => {
+                  const stillEscalatedCases = ownerGroup.cases.filter((caseItem) =>
+                    hasPersistedLatestHumanReplyEscalation(
+                      caseItem.ownerName,
+                      caseItem.latestHumanReply,
+                      caseItem.followUpStatus,
+                      caseItem.openInterventionsCount
+                    )
+                  );
+
+                  return (
+                    <article key={`${revenueScope.batchScope?.batchId}:${ownerGroup.ownerName}`} className="alert-row alert-row-high">
+                      <div className="row-between">
+                        <div className="stack-tight">
+                          <h3>{ownerGroup.ownerName}</h3>
+                          <p className="case-link-meta">
+                            {props.locale === "ar"
+                              ? `${ownerGroup.caseCount} حالات من هذه الدفعة تحت هذا المالك الآن`
+                              : `${ownerGroup.caseCount} batch cases now sit with this owner`}
+                          </p>
+                        </div>
+                        <div className="status-row-wrap">
+                          <StatusBadge tone={ownerGroup.stillEscalatedCaseCount > 0 ? "warning" : "success"}>
+                            {props.locale === "ar"
+                              ? `${ownerGroup.stillEscalatedCaseCount} ما زالت متصاعدة`
+                              : `${ownerGroup.stillEscalatedCaseCount} still escalated`}
+                          </StatusBadge>
+                          <StatusBadge tone={ownerGroup.clearedCaseCount > 0 ? "success" : "warning"}>
+                            {props.locale === "ar"
+                              ? `${ownerGroup.clearedCaseCount} خرجت من الخطر`
+                              : `${ownerGroup.clearedCaseCount} now cleared`}
+                          </StatusBadge>
+                        </div>
+                      </div>
+                      <div className="status-row-wrap">
+                        <Link
+                          className="inline-link"
+                          href={buildRevenueManagerHref(
+                            props.locale,
+                            {
+                              ownerName: ownerGroup.ownerName,
+                              queue: "escalated_handoffs"
+                            },
+                            { hash: revenueManagerFocusedQueueId }
+                          )}
+                        >
+                          {props.locale === "ar" ? "فتح طابور هذا المالك" : "Open this owner queue"}
+                        </Link>
+                      </div>
+                      {stillEscalatedCases.length > 1 ? (
+                        <div className="bulk-follow-up-shell">
+                          <p className="case-link-meta">
+                            {props.locale === "ar"
+                              ? "يمكن تطبيق إعادة ضبط جماعية جديدة فقط على الحالات المتصاعدة التي ما زالت تحت هذا المالك الحالي."
+                              : "A fresh bulk reset can be applied only to the still-escalated cases that currently sit with this owner."}
+                          </p>
+                          <ManagerBulkFollowUpForm
+                            canManage={canManageFollowUp}
+                            cases={stillEscalatedCases.map((caseItem) => ({
+                              caseId: caseItem.caseId,
+                              customerName: caseItem.customerName,
+                              nextAction: caseItem.nextAction
+                            }))}
+                            disabledLabel={props.locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
+                            locale={props.locale}
+                            ownerName={ownerGroup.ownerName}
+                            returnPath={scopedReturnPath}
+                          />
+                        </div>
+                      ) : stillEscalatedCases.length === 1 ? (
+                        <p className="case-link-meta">
+                          {props.locale === "ar"
+                            ? "تبقى حالة واحدة متصاعدة فقط تحت هذا المالك، لذا يظهر إجراء المتابعة الفردي في قائمة الحالات أدناه."
+                            : "Only one escalated case remains under this owner, so the individual follow-up form stays on the case list below."}
+                        </p>
+                      ) : (
+                        <p className="case-link-meta">
+                          {props.locale === "ar"
+                            ? "كل حالات هذه المجموعة خرجت من المخاطرة الحالية ولا تحتاج إعادة ضبط جماعية جديدة."
+                            : "Every case in this owner group is already clear of the current risk, so no new bulk reset is needed here."}
+                        </p>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
             {canShowBulkOperationalRiskActioning && props.filters.ownerName ? (
               <div className="bulk-follow-up-shell">
                 <p className="case-link-meta">

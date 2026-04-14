@@ -28,6 +28,14 @@ export interface RevenueManagerBulkBatchScope {
   stillEscalatedCaseCount: number;
 }
 
+export interface RevenueManagerBatchOwnerGroup {
+  cases: PersistedRevenueManagerCase[];
+  caseCount: number;
+  clearedCaseCount: number;
+  ownerName: string;
+  stillEscalatedCaseCount: number;
+}
+
 export const revenueManagerFocusedQueueId = "revenue-focused-queue";
 
 export function parseRevenueManagerFilters(searchParams: SearchParamsInput): RevenueManagerFilters {
@@ -88,6 +96,7 @@ export function buildRevenueManagerScope(persistedCases: PersistedRevenueManager
   const ownerScopedQueues = buildManagerWorkspaceQueues(ownerScopedCases);
 
   return {
+    batchOwnerGroups: batchScopedCases ? buildRevenueManagerBatchOwnerGroups(batchScopedCases) : [],
     batchScope: batchScopedCases ? buildRevenueManagerBulkBatchScope(batchScopedCases) : undefined,
     focusedCases:
       batchScopedCases ??
@@ -183,6 +192,47 @@ function buildRevenueManagerBulkBatchScope(batchScopedCases: PersistedRevenueMan
     scopedOwnerName: firstBulkAction.scopedOwnerName,
     stillEscalatedCaseCount
   };
+}
+
+function buildRevenueManagerBatchOwnerGroups(batchScopedCases: PersistedRevenueManagerCase[]): RevenueManagerBatchOwnerGroup[] {
+  const ownerGroups = new Map<string, RevenueManagerBatchOwnerGroup>();
+
+  for (const caseItem of batchScopedCases) {
+    const currentGroup = ownerGroups.get(caseItem.ownerName) ?? {
+      cases: [],
+      caseCount: 0,
+      clearedCaseCount: 0,
+      ownerName: caseItem.ownerName,
+      stillEscalatedCaseCount: 0
+    };
+
+    const isStillEscalated = hasPersistedLatestHumanReplyEscalation(
+      caseItem.ownerName,
+      caseItem.latestHumanReply,
+      caseItem.followUpStatus,
+      caseItem.openInterventionsCount
+    );
+
+    ownerGroups.set(caseItem.ownerName, {
+      ...currentGroup,
+      cases: [...currentGroup.cases, caseItem],
+      caseCount: currentGroup.caseCount + 1,
+      clearedCaseCount: currentGroup.clearedCaseCount + (isStillEscalated ? 0 : 1),
+      stillEscalatedCaseCount: currentGroup.stillEscalatedCaseCount + (isStillEscalated ? 1 : 0)
+    });
+  }
+
+  return [...ownerGroups.values()].sort((left, right) => {
+    if (left.stillEscalatedCaseCount !== right.stillEscalatedCaseCount) {
+      return right.stillEscalatedCaseCount - left.stillEscalatedCaseCount;
+    }
+
+    if (left.caseCount !== right.caseCount) {
+      return right.caseCount - left.caseCount;
+    }
+
+    return left.ownerName.localeCompare(right.ownerName);
+  });
 }
 
 function compareBatchScopedCases(left: PersistedRevenueManagerCase, right: PersistedRevenueManagerCase) {

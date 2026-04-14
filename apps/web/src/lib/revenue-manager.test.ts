@@ -192,5 +192,21 @@ describe("revenue manager filters", () => {
       scopedOwnerName: "Revenue Ops Queue",
       stillEscalatedCaseCount: 1
     });
+    expect(scope.batchOwnerGroups).toEqual([
+      {
+        cases: [scope.focusedCases[0]],
+        caseCount: 1,
+        clearedCaseCount: 0,
+        ownerName: "Manager Desk North",
+        stillEscalatedCaseCount: 1
+      },
+      {
+        cases: [scope.focusedCases[1]],
+        caseCount: 1,
+        clearedCaseCount: 1,
+        ownerName: "Manager Desk South",
+        stillEscalatedCaseCount: 0
+      }
+    ]);
   });
 });
