@@ -1,9 +1,9 @@
-import { canOperatorRoleAccessWorkspace, type SupportedLocale } from "@real-estate-ai/contracts";
+import { canOperatorRoleAccessWorkspace, type PersistedCaseDetail, type SupportedLocale } from "@real-estate-ai/contracts";
 
 import { ManagerWorkspaceUnavailable, RevenueManagerCommandCenter } from "@/components/manager-command-center";
-import { tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
+import { tryGetPersistedCaseDetail, tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
-import { parseRevenueManagerFilters } from "@/lib/revenue-manager";
+import { buildRevenueManagerBatchHistory, buildRevenueManagerScope, parseRevenueManagerFilters } from "@/lib/revenue-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +22,22 @@ export default async function RevenueManagerPage(props: PageProps) {
 
   const filters = parseRevenueManagerFilters(rawSearchParams);
   const [persistedCases, governanceReport] = await Promise.all([tryListPersistedCases(), tryGetPersistedGovernanceSummary()]);
+  const revenueScope = buildRevenueManagerScope(persistedCases, filters);
+  const batchCaseDetails =
+    filters.bulkBatchId && revenueScope.focusedCases.length > 0
+      ? await Promise.all(revenueScope.focusedCases.map((caseItem) => tryGetPersistedCaseDetail(caseItem.caseId)))
+      : [];
+  const batchHistory =
+    filters.bulkBatchId && revenueScope.batchScope
+      ? buildRevenueManagerBatchHistory(
+          revenueScope,
+          batchCaseDetails.filter((caseDetail): caseDetail is PersistedCaseDetail => caseDetail !== null)
+        )
+      : null;
 
   return (
     <RevenueManagerCommandCenter
+      batchHistory={batchHistory}
       currentOperatorRole={currentOperatorRole}
       filters={filters}
       governanceReport={governanceReport}

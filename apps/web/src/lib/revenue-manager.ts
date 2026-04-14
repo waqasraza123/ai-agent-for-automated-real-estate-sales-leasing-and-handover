@@ -44,6 +44,39 @@ export interface RevenueManagerScope {
   ownerScopedQueues: ReturnType<typeof buildManagerWorkspaceQueues>;
 }
 
+export type RevenueManagerBatchHistoryEntryType = "follow_up_update" | "later_bulk_reset" | "scoped_batch_reset";
+
+export interface RevenueManagerBatchHistoryEntry {
+  batchCaseCount?: number;
+  batchId?: string;
+  caseId: string;
+  createdAt: string;
+  currentOwnerName: string;
+  currentRiskStatus: "cleared" | "still_escalated";
+  customerName: string;
+  nextAction: string;
+  nextActionDueAt: string;
+  ownerName: string;
+  scopedOwnerName?: string;
+  type: RevenueManagerBatchHistoryEntryType;
+}
+
+export interface RevenueManagerBatchHistoryCase {
+  caseId: string;
+  currentOwnerName: string;
+  currentRiskStatus: "cleared" | "still_escalated";
+  customerName: string;
+  entries: RevenueManagerBatchHistoryEntry[];
+}
+
+export interface RevenueManagerBatchHistorySummary {
+  casesWithHistoryCount: number;
+  casesWithLaterChangesCount: number;
+  historyCases: RevenueManagerBatchHistoryCase[];
+  laterBulkResetCount: number;
+  postBatchFollowUpUpdateCount: number;
+}
+
 export const revenueManagerFocusedQueueId = "revenue-focused-queue";
 
 export function parseRevenueManagerFilters(searchParams: SearchParamsInput): RevenueManagerFilters {
@@ -196,6 +229,74 @@ export function buildRevenueManagerBatchExportCsv(scope: RevenueManagerScope) {
   });
 
   return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+}
+
+export function buildRevenueManagerBatchHistory(
+  scope: RevenueManagerScope,
+  caseDetails: PersistedCaseDetail[]
+): RevenueManagerBatchHistorySummary | null {
+  if (!scope.batchScope) {
+    return null;
+  }
+
+  const detailById = new Map(caseDetails.map((caseDetail) => [caseDetail.caseId, caseDetail]));
+  const batchSavedAt = new Date(scope.batchScope.savedAt).getTime();
+  const historyCases: RevenueManagerBatchHistoryCase[] = [];
+  let laterBulkResetCount = 0;
+  let postBatchFollowUpUpdateCount = 0;
+  let casesWithLaterChangesCount = 0;
+
+  for (const caseItem of scope.focusedCases) {
+    const caseDetail = detailById.get(caseItem.caseId);
+
+    if (!caseDetail) {
+      continue;
+    }
+
+    const currentRiskStatus = isStillEscalated(caseItem) ? "still_escalated" : "cleared";
+    const entries = caseDetail.auditEvents
+      .filter((event) => event.eventType === "manager_follow_up_updated")
+      .map((event) => hydrateBatchHistoryEntry(caseDetail, caseItem.ownerName, currentRiskStatus, scope.batchScope?.batchId, event))
+      .filter((entry): entry is RevenueManagerBatchHistoryEntry => {
+        if (!entry) {
+          return false;
+        }
+
+        if (entry.type === "scoped_batch_reset") {
+          return true;
+        }
+
+        return new Date(entry.createdAt).getTime() >= batchSavedAt;
+      })
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+
+    if (entries.length === 0) {
+      continue;
+    }
+
+    if (entries.some((entry) => entry.type !== "scoped_batch_reset")) {
+      casesWithLaterChangesCount += 1;
+    }
+
+    laterBulkResetCount += entries.filter((entry) => entry.type === "later_bulk_reset").length;
+    postBatchFollowUpUpdateCount += entries.filter((entry) => entry.type === "follow_up_update").length;
+
+    historyCases.push({
+      caseId: caseDetail.caseId,
+      currentOwnerName: caseItem.ownerName,
+      currentRiskStatus,
+      customerName: caseDetail.customerName,
+      entries
+    });
+  }
+
+  return {
+    casesWithHistoryCount: historyCases.length,
+    casesWithLaterChangesCount,
+    historyCases,
+    laterBulkResetCount,
+    postBatchFollowUpUpdateCount
+  };
 }
 
 function normalizeSearchParamRecord(searchParams: SearchParamsInput) {
@@ -370,8 +471,64 @@ function compareBatchScopedCases(left: PersistedRevenueManagerCase, right: Persi
   return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
 }
 
+function isStillEscalated(caseItem: PersistedRevenueManagerCase) {
+  return hasPersistedLatestHumanReplyEscalation(
+    caseItem.ownerName,
+    caseItem.latestHumanReply,
+    caseItem.followUpStatus,
+    caseItem.openInterventionsCount
+  );
+}
+
+function hydrateBatchHistoryEntry(
+  caseDetail: PersistedCaseDetail,
+  currentOwnerName: string,
+  currentRiskStatus: RevenueManagerBatchHistoryEntry["currentRiskStatus"],
+  scopedBatchId: string | undefined,
+  event: PersistedCaseDetail["auditEvents"][number]
+): RevenueManagerBatchHistoryEntry | null {
+  const nextAction = readPayloadString(event.payload, "nextAction");
+  const nextActionDueAt = readPayloadString(event.payload, "nextActionDueAt");
+  const ownerName = readPayloadString(event.payload, "ownerName");
+
+  if (!nextAction || !nextActionDueAt || !ownerName) {
+    return null;
+  }
+
+  const batchId = readPayloadString(event.payload, "bulkActionBatchId");
+  const batchCaseCount = readPayloadInteger(event.payload, "bulkActionCaseCount");
+  const scopedOwnerName = readPayloadString(event.payload, "bulkActionScopedOwnerName");
+
+  return {
+    ...(batchCaseCount !== null && batchCaseCount >= 2 ? { batchCaseCount } : {}),
+    ...(batchId ? { batchId } : {}),
+    caseId: caseDetail.caseId,
+    createdAt: event.createdAt,
+    currentOwnerName,
+    currentRiskStatus,
+    customerName: caseDetail.customerName,
+    nextAction,
+    nextActionDueAt,
+    ownerName,
+    ...(scopedOwnerName ? { scopedOwnerName } : {}),
+    type: batchId ? (batchId === scopedBatchId ? "scoped_batch_reset" : "later_bulk_reset") : "follow_up_update"
+  };
+}
+
 function buildCaseReferenceCode(caseId: string) {
   return `CASE-${caseId.slice(0, 8).toUpperCase()}`;
+}
+
+function readPayloadInteger(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
+
+function readPayloadString(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function escapeCsvValue(value: string) {

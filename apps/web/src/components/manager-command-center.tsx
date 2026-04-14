@@ -60,6 +60,7 @@ import {
   buildRevenueManagerHref,
   buildRevenueManagerScope,
   revenueManagerFocusedQueueId,
+  type RevenueManagerBatchHistorySummary,
   type RevenueManagerFilters
 } from "@/lib/revenue-manager";
 
@@ -729,6 +730,7 @@ export function ManagerWorkspaceUnavailable(props: {
 }
 
 export function RevenueManagerCommandCenter(props: {
+  batchHistory: RevenueManagerBatchHistorySummary | null;
   currentOperatorRole: OperatorRole;
   filters: RevenueManagerFilters;
   governanceReport: PersistedGovernanceSummary | null;
@@ -1121,6 +1123,109 @@ export function RevenueManagerCommandCenter(props: {
                     </article>
                   );
                 })}
+              </div>
+            ) : null}
+            {hasScopedBatchView && props.batchHistory && props.batchHistory.historyCases.length > 0 ? (
+              <div className="page-stack">
+                <div className="row-between">
+                  <div className="stack-tight">
+                    <p className="case-link-meta">{props.locale === "ar" ? "سجل الدفعة داخل المنتج" : "In-product batch history"}</p>
+                    <p className="field-note">
+                      {props.locale === "ar"
+                        ? "يعرض هذا السجل إعادة الضبط الجماعية الأصلية ثم أي تحديثات متابعة لاحقة على الحالات المتأثرة نفسها."
+                        : "This history shows the original bulk reset and any later follow-up saves on the same affected cases."}
+                    </p>
+                  </div>
+                  <div className="status-row-wrap">
+                    <StatusBadge>
+                      {props.locale === "ar"
+                        ? `${props.batchHistory.casesWithHistoryCount} حالات بسجل`
+                        : `${props.batchHistory.casesWithHistoryCount} cases with history`}
+                    </StatusBadge>
+                    <StatusBadge tone={props.batchHistory.casesWithLaterChangesCount > 0 ? "warning" : "success"}>
+                      {props.locale === "ar"
+                        ? `${props.batchHistory.casesWithLaterChangesCount} تغيّرت لاحقاً`
+                        : `${props.batchHistory.casesWithLaterChangesCount} changed later`}
+                    </StatusBadge>
+                    {props.batchHistory.postBatchFollowUpUpdateCount > 0 ? (
+                      <StatusBadge tone="warning">
+                        {props.locale === "ar"
+                          ? `${props.batchHistory.postBatchFollowUpUpdateCount} تحديثات لاحقة`
+                          : `${props.batchHistory.postBatchFollowUpUpdateCount} later updates`}
+                      </StatusBadge>
+                    ) : null}
+                    {props.batchHistory.laterBulkResetCount > 0 ? (
+                      <StatusBadge tone="warning">
+                        {props.locale === "ar"
+                          ? `${props.batchHistory.laterBulkResetCount} دفعات لاحقة`
+                          : `${props.batchHistory.laterBulkResetCount} later bulk resets`}
+                      </StatusBadge>
+                    ) : null}
+                  </div>
+                </div>
+                {props.batchHistory.historyCases.map((historyCase) => (
+                  <article key={`history:${historyCase.caseId}`} className="alert-row alert-row-medium">
+                    <div className="row-between">
+                      <div className="stack-tight">
+                        <h3>{historyCase.customerName}</h3>
+                        <p className="case-link-meta">{buildCaseReferenceCode(historyCase.caseId)}</p>
+                      </div>
+                      <div className="status-row-wrap">
+                        <StatusBadge>{historyCase.currentOwnerName}</StatusBadge>
+                        <StatusBadge tone={historyCase.currentRiskStatus === "still_escalated" ? "warning" : "success"}>
+                          {historyCase.currentRiskStatus === "still_escalated"
+                            ? props.locale === "ar"
+                              ? "ما زالت متصاعدة"
+                              : "Still escalated"
+                            : props.locale === "ar"
+                              ? "خرجت من الخطر"
+                              : "Now cleared"}
+                        </StatusBadge>
+                      </div>
+                    </div>
+                    <div className="page-stack">
+                      {historyCase.entries.map((entry) => {
+                        const savedAt = new Date(entry.createdAt).toLocaleString(props.locale);
+                        const dueAt = new Date(entry.nextActionDueAt).toLocaleString(props.locale);
+                        const entryLabel =
+                          entry.type === "scoped_batch_reset"
+                            ? props.locale === "ar"
+                              ? "إعادة الضبط الجماعية الأصلية"
+                              : "Original bulk reset"
+                            : entry.type === "later_bulk_reset"
+                              ? props.locale === "ar"
+                                ? "دفعة جماعية لاحقة"
+                                : "Later bulk reset"
+                              : props.locale === "ar"
+                                ? "تحديث متابعة لاحق"
+                                : "Later follow-up update";
+
+                        return (
+                          <div key={`${historyCase.caseId}:${entry.createdAt}:${entry.nextAction}`} className="page-stack">
+                            <div className="status-row-wrap">
+                              <StatusBadge tone={entry.type === "scoped_batch_reset" ? "success" : "warning"}>{entryLabel}</StatusBadge>
+                              <StatusBadge>{entry.ownerName}</StatusBadge>
+                              {entry.scopedOwnerName ? <StatusBadge>{entry.scopedOwnerName}</StatusBadge> : null}
+                              <StatusBadge>{savedAt}</StatusBadge>
+                            </div>
+                            <p>
+                              {props.locale === "ar"
+                                ? `حُفظت الخطوة التالية كـ "${entry.nextAction}" باستحقاق ${dueAt}.`
+                                : `Saved the next step as "${entry.nextAction}", due ${dueAt}.`}
+                            </p>
+                            {entry.type === "later_bulk_reset" && entry.batchCaseCount ? (
+                              <p className="case-link-meta">
+                                {props.locale === "ar"
+                                  ? `جاء هذا الحفظ من دفعة لاحقة على ${entry.batchCaseCount} حالات.`
+                                  : `This save came from a later ${entry.batchCaseCount}-case bulk action.`}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </article>
+                ))}
               </div>
             ) : null}
             {canShowBulkOperationalRiskActioning && props.filters.ownerName ? (

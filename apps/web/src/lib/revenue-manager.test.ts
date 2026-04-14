@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { PersistedCaseSummary } from "@real-estate-ai/contracts";
+import type { PersistedCaseDetail, PersistedCaseSummary } from "@real-estate-ai/contracts";
 
 import {
+  buildRevenueManagerBatchHistory,
   buildRevenueManagerBatchExportCsv,
   buildRevenueManagerExportHref,
   buildRevenueManagerHref,
@@ -35,6 +36,23 @@ function buildCase(caseId: string, overrides?: Partial<PersistedCaseSummary>) {
     updatedAt: "2026-04-11T08:00:00.000Z",
     ...overrides
   } satisfies PersistedCaseSummary;
+}
+
+function buildCaseDetail(caseSummary: PersistedCaseSummary, overrides?: Partial<PersistedCaseDetail>) {
+  return {
+    ...caseSummary,
+    auditEvents: [],
+    budget: null,
+    currentVisit: null,
+    documentRequests: [],
+    email: `${caseSummary.caseId}@example.com`,
+    managerInterventions: [],
+    message: `Message for ${caseSummary.caseId}`,
+    phone: null,
+    qaReviews: [],
+    qualificationSnapshot: null,
+    ...overrides
+  } satisfies PersistedCaseDetail;
 }
 
 describe("revenue manager filters", () => {
@@ -225,5 +243,186 @@ describe("revenue manager filters", () => {
     expect(buildRevenueManagerBatchExportCsv(scope)).toBe(`batchId,batchSavedAt,batchScopedOwnerName,batchVisibleCaseCount,batchStillEscalatedCaseCount,batchClearedCaseCount,currentOwnerName,currentOwnerGroupCaseCount,currentOwnerGroupStillEscalatedCaseCount,currentOwnerGroupClearedCaseCount,riskStatus,customerName,caseReference,caseId,projectInterest,preferredLocale,nextAction,nextActionDueAt,followUpStatus,openInterventionsCount,latestHumanReplySentBy,latestHumanReplySentAt,latestHumanReplyApprovedFromQa,latestManagerFollowUpSavedAt,latestManagerFollowUpOwnerName,latestManagerFollowUpNextAction
 33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk North,1,1,0,still_escalated,Customer batch-escalated,CASE-BATCH-ES,batch-escalated,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,attention,1,Amina Rahman,2026-04-11T10:00:00.000Z,true,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up
 33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk South,1,0,1,cleared,Customer batch-cleared,CASE-BATCH-CL,batch-cleared,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,on_track,0,Omar Saleh,2026-04-11T09:30:00.000Z,false,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up`);
+  });
+
+  it("derives in-product batch history from case detail audit events", () => {
+    const batchId = "33333333-3333-4333-8333-333333333333";
+    const laterBatchId = "55555555-5555-4555-8555-555555555555";
+    const batchEscalated = buildCase("batch-escalated", {
+      followUpStatus: "attention",
+      latestHumanReply: {
+        approvedFromQa: true,
+        message: "Sent the approved update.",
+        nextAction: "Confirm callback timing",
+        nextActionDueAt: "2026-04-12T09:00:00.000Z",
+        sentAt: "2026-04-11T10:00:00.000Z",
+        sentByName: "Amina Rahman"
+      },
+      latestManagerFollowUp: {
+        bulkAction: {
+          batchId,
+          caseCount: 3,
+          scopedOwnerName: "Revenue Ops Queue"
+        },
+        nextAction: "Reset the desk follow-up",
+        nextActionDueAt: "2026-04-12T11:00:00.000Z",
+        ownerName: "Manager Desk North",
+        savedAt: "2026-04-11T11:30:00.000Z"
+      },
+      openInterventionsCount: 1,
+      ownerName: "Manager Desk North"
+    });
+    const batchCleared = buildCase("batch-cleared", {
+      latestManagerFollowUp: {
+        bulkAction: {
+          batchId,
+          caseCount: 3,
+          scopedOwnerName: "Revenue Ops Queue"
+        },
+        nextAction: "Reset the desk follow-up",
+        nextActionDueAt: "2026-04-12T11:00:00.000Z",
+        ownerName: "Manager Desk North",
+        savedAt: "2026-04-11T11:30:00.000Z"
+      },
+      ownerName: "Manager Desk South"
+    });
+    const scope = buildRevenueManagerScope([batchEscalated, batchCleared], {
+      bulkBatchId: batchId,
+      queue: "escalated_handoffs"
+    });
+
+    const history = buildRevenueManagerBatchHistory(scope, [
+      buildCaseDetail(batchEscalated, {
+        auditEvents: [
+          {
+            createdAt: "2026-04-11T11:30:00.000Z",
+            eventType: "manager_follow_up_updated",
+            payload: {
+              bulkActionBatchId: batchId,
+              bulkActionCaseCount: 3,
+              bulkActionScopedOwnerName: "Revenue Ops Queue",
+              nextAction: "Reset the desk follow-up",
+              nextActionDueAt: "2026-04-12T11:00:00.000Z",
+              ownerName: "Manager Desk North"
+            }
+          },
+          {
+            createdAt: "2026-04-12T09:00:00.000Z",
+            eventType: "manager_follow_up_updated",
+            payload: {
+              nextAction: "Call again after finance check",
+              nextActionDueAt: "2026-04-13T09:00:00.000Z",
+              ownerName: "Manager Desk North"
+            }
+          },
+          {
+            createdAt: "2026-04-13T10:00:00.000Z",
+            eventType: "manager_follow_up_updated",
+            payload: {
+              bulkActionBatchId: laterBatchId,
+              bulkActionCaseCount: 2,
+              bulkActionScopedOwnerName: "Manager Desk North",
+              nextAction: "Re-arm this owner cluster",
+              nextActionDueAt: "2026-04-14T10:00:00.000Z",
+              ownerName: "Manager Desk South"
+            }
+          }
+        ]
+      }),
+      buildCaseDetail(batchCleared, {
+        auditEvents: [
+          {
+            createdAt: "2026-04-11T11:30:00.000Z",
+            eventType: "manager_follow_up_updated",
+            payload: {
+              bulkActionBatchId: batchId,
+              bulkActionCaseCount: 3,
+              bulkActionScopedOwnerName: "Revenue Ops Queue",
+              nextAction: "Reset the desk follow-up",
+              nextActionDueAt: "2026-04-12T11:00:00.000Z",
+              ownerName: "Manager Desk North"
+            }
+          }
+        ]
+      })
+    ]);
+
+    expect(history).toEqual({
+      casesWithHistoryCount: 2,
+      casesWithLaterChangesCount: 1,
+      historyCases: [
+        {
+          caseId: "batch-escalated",
+          currentOwnerName: "Manager Desk North",
+          currentRiskStatus: "still_escalated",
+          customerName: "Customer batch-escalated",
+          entries: [
+            {
+              batchCaseCount: 2,
+              batchId: laterBatchId,
+              caseId: "batch-escalated",
+              createdAt: "2026-04-13T10:00:00.000Z",
+              currentOwnerName: "Manager Desk North",
+              currentRiskStatus: "still_escalated",
+              customerName: "Customer batch-escalated",
+              nextAction: "Re-arm this owner cluster",
+              nextActionDueAt: "2026-04-14T10:00:00.000Z",
+              ownerName: "Manager Desk South",
+              scopedOwnerName: "Manager Desk North",
+              type: "later_bulk_reset"
+            },
+            {
+              caseId: "batch-escalated",
+              createdAt: "2026-04-12T09:00:00.000Z",
+              currentOwnerName: "Manager Desk North",
+              currentRiskStatus: "still_escalated",
+              customerName: "Customer batch-escalated",
+              nextAction: "Call again after finance check",
+              nextActionDueAt: "2026-04-13T09:00:00.000Z",
+              ownerName: "Manager Desk North",
+              type: "follow_up_update"
+            },
+            {
+              batchCaseCount: 3,
+              batchId,
+              caseId: "batch-escalated",
+              createdAt: "2026-04-11T11:30:00.000Z",
+              currentOwnerName: "Manager Desk North",
+              currentRiskStatus: "still_escalated",
+              customerName: "Customer batch-escalated",
+              nextAction: "Reset the desk follow-up",
+              nextActionDueAt: "2026-04-12T11:00:00.000Z",
+              ownerName: "Manager Desk North",
+              scopedOwnerName: "Revenue Ops Queue",
+              type: "scoped_batch_reset"
+            }
+          ]
+        },
+        {
+          caseId: "batch-cleared",
+          currentOwnerName: "Manager Desk South",
+          currentRiskStatus: "cleared",
+          customerName: "Customer batch-cleared",
+          entries: [
+            {
+              batchCaseCount: 3,
+              batchId,
+              caseId: "batch-cleared",
+              createdAt: "2026-04-11T11:30:00.000Z",
+              currentOwnerName: "Manager Desk South",
+              currentRiskStatus: "cleared",
+              customerName: "Customer batch-cleared",
+              nextAction: "Reset the desk follow-up",
+              nextActionDueAt: "2026-04-12T11:00:00.000Z",
+              ownerName: "Manager Desk North",
+              scopedOwnerName: "Revenue Ops Queue",
+              type: "scoped_batch_reset"
+            }
+          ]
+        }
+      ],
+      laterBulkResetCount: 1,
+      postBatchFollowUpUpdateCount: 1
+    });
   });
 });
