@@ -11,9 +11,11 @@ type SearchParamsInput =
 type PersistedRevenueManagerCase = PersistedCaseDetail | PersistedCaseSummary;
 
 export type RevenueManagerQueueFilter = "all" | "escalated_handoffs";
+export type RevenueManagerBatchDriftFilter = "changed_later";
 
 export interface RevenueManagerFilters {
   bulkBatchId?: string;
+  batchDrift?: RevenueManagerBatchDriftFilter;
   ownerName?: string;
   queue: RevenueManagerQueueFilter;
 }
@@ -77,12 +79,17 @@ export interface RevenueManagerBatchHistorySummary {
   postBatchFollowUpUpdateCount: number;
 }
 
+interface RevenueManagerScopeOptions {
+  changedCaseIds?: ReadonlySet<string>;
+}
+
 export const revenueManagerFocusedQueueId = "revenue-focused-queue";
 
 export function parseRevenueManagerFilters(searchParams: SearchParamsInput): RevenueManagerFilters {
   const rawSearchParams =
     searchParams instanceof URLSearchParams ? Object.fromEntries(searchParams.entries()) : normalizeSearchParamRecord(searchParams);
   const bulkBatchId = sanitizeBatchId(rawSearchParams.bulkBatchId);
+  const batchDrift = sanitizeBatchDrift(rawSearchParams.batchDrift);
   const ownerName = sanitizeOwnerName(rawSearchParams.ownerName);
   const filters: RevenueManagerFilters = {
     queue: rawSearchParams.queue === "escalated_handoffs" ? "escalated_handoffs" : "all"
@@ -94,6 +101,10 @@ export function parseRevenueManagerFilters(searchParams: SearchParamsInput): Rev
 
   if (ownerName) {
     filters.ownerName = ownerName;
+  }
+
+  if (batchDrift && bulkBatchId) {
+    filters.batchDrift = batchDrift;
   }
 
   return filters;
@@ -118,6 +129,10 @@ export function buildRevenueManagerHref(
     searchParams.set("bulkBatchId", filters.bulkBatchId);
   }
 
+  if (filters.batchDrift) {
+    searchParams.set("batchDrift", filters.batchDrift);
+  }
+
   const serialized = searchParams.toString();
   const hash = options.hash ? `#${options.hash}` : "";
   const path = serialized.length > 0 ? `/${locale}/manager/revenue?${serialized}` : `/${locale}/manager/revenue`;
@@ -132,17 +147,36 @@ export function buildRevenueManagerExportHref(locale: SupportedLocale, filters: 
   return serialized.length > 0 ? `/${locale}/manager/revenue/export?${serialized}` : `/${locale}/manager/revenue/export`;
 }
 
-export function buildRevenueManagerScope(persistedCases: PersistedRevenueManagerCase[], filters: RevenueManagerFilters): RevenueManagerScope {
+export function buildRevenueManagerScope(
+  persistedCases: PersistedRevenueManagerCase[],
+  filters: RevenueManagerFilters,
+  options: RevenueManagerScopeOptions = {}
+): RevenueManagerScope {
   const ownerScopedCases = filters.ownerName
     ? persistedCases.filter((caseItem) => caseItem.ownerName === filters.ownerName)
     : persistedCases;
-  const batchScopedCases = filters.bulkBatchId
+  const allBatchScopedCases = filters.bulkBatchId
     ? [...ownerScopedCases]
         .filter((caseItem) => caseItem.latestManagerFollowUp?.bulkAction?.batchId === filters.bulkBatchId)
         .sort((left, right) => compareBatchScopedCases(left, right))
     : null;
+  const batchScopedCases =
+    filters.batchDrift === "changed_later" && allBatchScopedCases && options.changedCaseIds
+      ? allBatchScopedCases.filter((caseItem) => options.changedCaseIds?.has(caseItem.caseId) ?? false)
+      : allBatchScopedCases;
   const ownerScopedQueues = buildManagerWorkspaceQueues(ownerScopedCases);
-  const batchScope = batchScopedCases ? buildRevenueManagerBulkBatchScope(batchScopedCases) : undefined;
+  const fullBatchScope = allBatchScopedCases ? buildRevenueManagerBulkBatchScope(allBatchScopedCases) : undefined;
+  const batchScope =
+    batchScopedCases && batchScopedCases.length > 0
+      ? buildRevenueManagerBulkBatchScope(batchScopedCases)
+      : filters.batchDrift === "changed_later" && fullBatchScope
+        ? {
+            ...fullBatchScope,
+            clearedCaseCount: 0,
+            currentOwnerNames: [],
+            stillEscalatedCaseCount: 0
+          }
+        : undefined;
 
   return {
     batchOwnerGroups: batchScopedCases ? buildRevenueManagerBatchOwnerGroups(batchScopedCases) : [],
@@ -299,6 +333,16 @@ export function buildRevenueManagerBatchHistory(
   };
 }
 
+export function buildRevenueManagerDriftedCaseIds(batchHistory: RevenueManagerBatchHistorySummary | null) {
+  if (!batchHistory) {
+    return [];
+  }
+
+  return batchHistory.historyCases
+    .filter((historyCase) => historyCase.entries.some((entry) => entry.type !== "scoped_batch_reset"))
+    .map((historyCase) => historyCase.caseId);
+}
+
 function normalizeSearchParamRecord(searchParams: SearchParamsInput) {
   if (!searchParams) {
     return {};
@@ -334,6 +378,10 @@ function buildRevenueManagerSearchParams(filters: Partial<RevenueManagerFilters>
     searchParams.set("bulkBatchId", filters.bulkBatchId);
   }
 
+  if (filters.batchDrift) {
+    searchParams.set("batchDrift", filters.batchDrift);
+  }
+
   return searchParams;
 }
 
@@ -347,6 +395,10 @@ function sanitizeBatchId(batchId: string | undefined) {
   const trimmedBatchId = batchId?.trim();
 
   return trimmedBatchId && isUuid(trimmedBatchId) ? trimmedBatchId : undefined;
+}
+
+function sanitizeBatchDrift(batchDrift: string | undefined): RevenueManagerBatchDriftFilter | undefined {
+  return batchDrift === "changed_later" ? "changed_later" : undefined;
 }
 
 function isUuid(value: string) {

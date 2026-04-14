@@ -484,18 +484,35 @@ export function ManagerGovernanceReport(props: {
                       )}
                     </td>
                     <td data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
-                      <Link
-                        className="inline-link"
-                        href={buildRevenueManagerHref(
-                          props.locale,
-                          {
-                            bulkBatchId: batch.batchId
-                          },
-                          { hash: revenueManagerFocusedQueueId }
-                        )}
-                      >
-                        {props.locale === "ar" ? "فتح الحالات المتأثرة" : "Open affected cases"}
-                      </Link>
+                      <div className="stack-tight">
+                        {batch.drift && batch.drift.casesWithLaterChangesCount > 0 ? (
+                          <Link
+                            className="inline-link"
+                            href={buildRevenueManagerHref(
+                              props.locale,
+                              {
+                                batchDrift: "changed_later",
+                                bulkBatchId: batch.batchId
+                              },
+                              { hash: revenueManagerFocusedQueueId }
+                            )}
+                          >
+                            {props.locale === "ar" ? "فتح الحالات التي تغيّرت لاحقاً" : "Open changed-later cases"}
+                          </Link>
+                        ) : null}
+                        <Link
+                          className="inline-link"
+                          href={buildRevenueManagerHref(
+                            props.locale,
+                            {
+                              bulkBatchId: batch.batchId
+                            },
+                            { hash: revenueManagerFocusedQueueId }
+                          )}
+                        >
+                          {props.locale === "ar" ? "فتح كامل الحالات المتأثرة" : "Open full affected cases"}
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -732,6 +732,7 @@ export function ManagerWorkspaceUnavailable(props: {
 export function RevenueManagerCommandCenter(props: {
   batchHistory: RevenueManagerBatchHistorySummary | null;
   currentOperatorRole: OperatorRole;
+  driftedBatchCaseIds: string[];
   filters: RevenueManagerFilters;
   governanceReport: PersistedGovernanceSummary | null;
   locale: SupportedLocale;
@@ -740,7 +741,9 @@ export function RevenueManagerCommandCenter(props: {
   const messages = getMessages(props.locale);
   const workspaceCopy = getManagerWorkspaceCopy(props.locale, "manager_revenue");
   const managerCapabilities = getManagerWorkspaceCapabilities(props.currentOperatorRole);
-  const revenueScope = buildRevenueManagerScope(props.persistedCases, props.filters);
+  const revenueScope = buildRevenueManagerScope(props.persistedCases, props.filters, {
+    changedCaseIds: new Set(props.driftedBatchCaseIds)
+  });
   const {
     escalatedPostReplyHandoffCases,
     governanceHeldAutomationCases,
@@ -757,6 +760,7 @@ export function RevenueManagerCommandCenter(props: {
   const followUpManagerCopy = getFollowUpManagerCopy(props.locale);
   const followUpGuardNote = getOperatorPermissionGuardNote(props.locale, "manage_case_follow_up");
   const hasScopedBatchView = Boolean(revenueScope.batchScope);
+  const hasChangedLaterBatchView = hasScopedBatchView && props.filters.batchDrift === "changed_later";
   const batchScopeSavedAt = revenueScope.batchScope ? new Date(revenueScope.batchScope.savedAt).toLocaleString(props.locale) : null;
   const batchOwnerGroups = revenueScope.batchOwnerGroups;
   const hasScopedView = props.filters.queue !== "all" || Boolean(props.filters.ownerName) || hasScopedBatchView;
@@ -767,6 +771,16 @@ export function RevenueManagerCommandCenter(props: {
     revenueScope.focusedCases.length > 1;
   const clearScopeHref = buildRevenueManagerHref(props.locale);
   const batchExportHref = hasScopedBatchView ? buildRevenueManagerExportHref(props.locale, props.filters) : null;
+  const fullBatchScopeHref =
+    hasChangedLaterBatchView && props.filters.bulkBatchId
+      ? buildRevenueManagerHref(
+          props.locale,
+          {
+            bulkBatchId: props.filters.bulkBatchId
+          },
+          { hash: revenueManagerFocusedQueueId }
+        )
+      : null;
   const operationalRiskReportHref = buildGovernanceReportHref(props.locale, { windowDays: 30 }, "operational_risk");
   const scopedReturnPath = buildRevenueManagerHref(props.locale, props.filters, { hash: revenueManagerFocusedQueueId });
 
@@ -952,8 +966,12 @@ export function RevenueManagerCommandCenter(props: {
             <p className="panel-summary">
               {hasScopedBatchView && revenueScope.batchScope
                 ? props.locale === "ar"
-                  ? `يعرض هذا النطاق الحالات الحية المتأثرة مباشرة بالدفعة الجماعية المحفوظة ${batchScopeSavedAt} من نطاق ${revenueScope.batchScope.scopedOwnerName}.`
-                  : `This scope shows the exact live cases affected by the bulk follow-up batch saved ${batchScopeSavedAt} from ${revenueScope.batchScope.scopedOwnerName}.`
+                  ? hasChangedLaterBatchView
+                    ? `يعرض هذا النطاق فقط الحالات المتأثرة من الدفعة الجماعية المحفوظة ${batchScopeSavedAt} التي تغيّرت لاحقاً بعد إعادة الضبط الأصلية من نطاق ${revenueScope.batchScope.scopedOwnerName}.`
+                    : `يعرض هذا النطاق الحالات الحية المتأثرة مباشرة بالدفعة الجماعية المحفوظة ${batchScopeSavedAt} من نطاق ${revenueScope.batchScope.scopedOwnerName}.`
+                  : hasChangedLaterBatchView
+                    ? `This scope shows only the affected cases from the bulk follow-up batch saved ${batchScopeSavedAt} that changed later after the original reset from ${revenueScope.batchScope.scopedOwnerName}.`
+                    : `This scope shows the exact live cases affected by the bulk follow-up batch saved ${batchScopeSavedAt} from ${revenueScope.batchScope.scopedOwnerName}.`
                 : props.filters.queue === "escalated_handoffs"
                 ? props.locale === "ar"
                   ? props.filters.ownerName
@@ -970,8 +988,12 @@ export function RevenueManagerCommandCenter(props: {
               <StatusBadge>
                 {hasScopedBatchView
                   ? props.locale === "ar"
-                    ? "نطاق نتيجة الدفعة"
-                    : "Bulk-result scope"
+                    ? hasChangedLaterBatchView
+                      ? "نطاق الانجراف اللاحق"
+                      : "نطاق نتيجة الدفعة"
+                    : hasChangedLaterBatchView
+                      ? "Later-drift scope"
+                      : "Bulk-result scope"
                   : props.filters.queue === "escalated_handoffs"
                     ? props.locale === "ar"
                       ? "طابور المخاطر التشغيلية"
@@ -982,6 +1004,11 @@ export function RevenueManagerCommandCenter(props: {
               </StatusBadge>
               {props.filters.ownerName ? <StatusBadge>{props.filters.ownerName}</StatusBadge> : null}
               {hasScopedBatchView && revenueScope.batchScope ? <StatusBadge>{revenueScope.batchScope.scopedOwnerName}</StatusBadge> : null}
+              {hasChangedLaterBatchView ? (
+                <StatusBadge tone={revenueScope.focusedCases.length > 0 ? "warning" : "success"}>
+                  {props.locale === "ar" ? "الحالات التي تغيّرت لاحقاً فقط" : "Changed-later cases only"}
+                </StatusBadge>
+              ) : null}
               <StatusBadge tone={revenueScope.focusedCases.length > 0 ? "warning" : "success"}>
                 {props.locale === "ar"
                   ? `${revenueScope.focusedCases.length} حالات مطابقة`
@@ -1016,17 +1043,32 @@ export function RevenueManagerCommandCenter(props: {
               <Link className="inline-link" href={operationalRiskReportHref}>
                 {props.locale === "ar" ? "العودة إلى تقرير المخاطر التشغيلية" : "Return to operational-risk report"}
               </Link>
+              {fullBatchScopeHref ? (
+                <Link className="inline-link" href={fullBatchScopeHref}>
+                  {props.locale === "ar" ? "فتح كامل الحالات المتأثرة" : "Open full affected-case scope"}
+                </Link>
+              ) : null}
               {batchExportHref ? (
                 <Link className="inline-link" href={batchExportHref}>
-                  {props.locale === "ar" ? "تنزيل CSV للحالات المتأثرة" : "Download affected-case CSV"}
+                  {hasChangedLaterBatchView
+                    ? props.locale === "ar"
+                      ? "تنزيل CSV للحالات التي تغيّرت لاحقاً"
+                      : "Download changed-case CSV"
+                    : props.locale === "ar"
+                      ? "تنزيل CSV للحالات المتأثرة"
+                      : "Download affected-case CSV"}
                 </Link>
               ) : null}
             </div>
             <p className="field-note">
               {hasScopedBatchView
                 ? props.locale === "ar"
-                  ? "يعرض هذا المسار الأثر الكامل للدفعة عبر الحالات المصعّدة والمصفّاة مع إبقاء التحويل إلى طابور المالك الحالي وتصدير CSV للحالات المتأثرة متاحين عندما تحتاج المراجعة التشغيلية إلى أثر قابل للمشاركة."
-                  : "This route shows the full batch outcome across both escalated and cleared cases, while still letting managers jump into the current owner queue and export the affected-case CSV for operational review."
+                  ? hasChangedLaterBatchView
+                    ? "يعرض هذا المسار فقط الحالات التي انجرفت بعد إعادة الضبط الجماعية الأصلية، مع إبقاء المسار إلى كامل الدفعة وتصدير CSV لهذا النطاق الضيق متاحين عند الحاجة."
+                    : "يعرض هذا المسار الأثر الكامل للدفعة عبر الحالات المصعّدة والمصفّاة مع إبقاء التحويل إلى طابور المالك الحالي وتصدير CSV للحالات المتأثرة متاحين عندما تحتاج المراجعة التشغيلية إلى أثر قابل للمشاركة."
+                  : hasChangedLaterBatchView
+                    ? "This route narrows the batch to only the cases that drifted after the original bulk reset, while still keeping a path back to the full batch and a matching CSV export for that tighter scope."
+                    : "This route shows the full batch outcome across both escalated and cleared cases, while still letting managers jump into the current owner queue and export the affected-case CSV for operational review."
                 : props.locale === "ar"
                   ? "يمكن لمدير الإيرادات إعادة تعيين المالك أو حفظ خطوة المتابعة التالية مباشرة من هذا النطاق لتصفية التدخل المفتوح."
                   : "Revenue managers can reassign the owner or save the next follow-up directly from this scope to clear the open intervention."}

@@ -4,6 +4,7 @@ import type { PersistedCaseDetail, PersistedCaseSummary } from "@real-estate-ai/
 
 import {
   buildRevenueManagerBatchHistory,
+  buildRevenueManagerDriftedCaseIds,
   buildRevenueManagerBatchExportCsv,
   buildRevenueManagerExportHref,
   buildRevenueManagerHref,
@@ -66,11 +67,13 @@ describe("revenue manager filters", () => {
   it("keeps the first value when repeated params are present", () => {
     expect(
       parseRevenueManagerFilters({
+        batchDrift: ["changed_later"],
         bulkBatchId: ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"],
         ownerName: [" Manager Desk North ", "Revenue Ops"],
         queue: ["escalated_handoffs", "all"]
       })
     ).toEqual({
+      batchDrift: "changed_later",
       bulkBatchId: "33333333-3333-4333-8333-333333333333",
       ownerName: "Manager Desk North",
       queue: "escalated_handoffs"
@@ -84,6 +87,7 @@ describe("revenue manager filters", () => {
       buildRevenueManagerHref(
         "en",
         {
+          batchDrift: "changed_later",
           bulkBatchId: "33333333-3333-4333-8333-333333333333",
           ownerName: "Manager Desk North",
           queue: "escalated_handoffs"
@@ -91,14 +95,15 @@ describe("revenue manager filters", () => {
         { hash: "revenue-focused-queue" }
       )
     ).toBe(
-      "/en/manager/revenue?queue=escalated_handoffs&ownerName=Manager+Desk+North&bulkBatchId=33333333-3333-4333-8333-333333333333#revenue-focused-queue"
+      "/en/manager/revenue?queue=escalated_handoffs&ownerName=Manager+Desk+North&bulkBatchId=33333333-3333-4333-8333-333333333333&batchDrift=changed_later#revenue-focused-queue"
     );
     expect(
       buildRevenueManagerExportHref("en", {
+        batchDrift: "changed_later",
         bulkBatchId: "33333333-3333-4333-8333-333333333333",
         queue: "escalated_handoffs"
       })
-    ).toBe("/en/manager/revenue/export?queue=escalated_handoffs&bulkBatchId=33333333-3333-4333-8333-333333333333");
+    ).toBe("/en/manager/revenue/export?queue=escalated_handoffs&bulkBatchId=33333333-3333-4333-8333-333333333333&batchDrift=changed_later");
   });
 
   it("scopes operational-risk drill-downs to the selected owner and queue", () => {
@@ -243,6 +248,71 @@ describe("revenue manager filters", () => {
     expect(buildRevenueManagerBatchExportCsv(scope)).toBe(`batchId,batchSavedAt,batchScopedOwnerName,batchVisibleCaseCount,batchStillEscalatedCaseCount,batchClearedCaseCount,currentOwnerName,currentOwnerGroupCaseCount,currentOwnerGroupStillEscalatedCaseCount,currentOwnerGroupClearedCaseCount,riskStatus,customerName,caseReference,caseId,projectInterest,preferredLocale,nextAction,nextActionDueAt,followUpStatus,openInterventionsCount,latestHumanReplySentBy,latestHumanReplySentAt,latestHumanReplyApprovedFromQa,latestManagerFollowUpSavedAt,latestManagerFollowUpOwnerName,latestManagerFollowUpNextAction
 33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk North,1,1,0,still_escalated,Customer batch-escalated,CASE-BATCH-ES,batch-escalated,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,attention,1,Amina Rahman,2026-04-11T10:00:00.000Z,true,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up
 33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk South,1,0,1,cleared,Customer batch-cleared,CASE-BATCH-CL,batch-cleared,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,on_track,0,Omar Saleh,2026-04-11T09:30:00.000Z,false,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up`);
+  });
+
+  it("can narrow a batch scope to only the cases that changed later", () => {
+    const batchId = "33333333-3333-4333-8333-333333333333";
+    const scope = buildRevenueManagerScope(
+      [
+        buildCase("batch-escalated", {
+          followUpStatus: "attention",
+          latestHumanReply: {
+            approvedFromQa: true,
+            message: "Sent the approved update.",
+            nextAction: "Confirm callback timing",
+            nextActionDueAt: "2026-04-12T09:00:00.000Z",
+            sentAt: "2026-04-11T10:00:00.000Z",
+            sentByName: "Amina Rahman"
+          },
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId,
+              caseCount: 3,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-12T11:00:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-11T11:30:00.000Z"
+          },
+          openInterventionsCount: 1,
+          ownerName: "Manager Desk North"
+        }),
+        buildCase("batch-cleared", {
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId,
+              caseCount: 3,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-12T11:00:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-11T11:30:00.000Z"
+          },
+          ownerName: "Manager Desk South"
+        })
+      ],
+      {
+        batchDrift: "changed_later",
+        bulkBatchId: batchId,
+        queue: "escalated_handoffs"
+      },
+      {
+        changedCaseIds: new Set(["batch-escalated"])
+      }
+    );
+
+    expect(scope.focusedCases.map((caseItem) => caseItem.caseId)).toEqual(["batch-escalated"]);
+    expect(scope.batchScope).toEqual({
+      batchId,
+      caseCount: 3,
+      clearedCaseCount: 0,
+      currentOwnerNames: ["Manager Desk North"],
+      savedAt: "2026-04-11T11:30:00.000Z",
+      scopedOwnerName: "Revenue Ops Queue",
+      stillEscalatedCaseCount: 1
+    });
   });
 
   it("derives in-product batch history from case detail audit events", () => {
@@ -424,5 +494,6 @@ describe("revenue manager filters", () => {
       laterBulkResetCount: 1,
       postBatchFollowUpUpdateCount: 1
     });
+    expect(buildRevenueManagerDriftedCaseIds(history)).toEqual(["batch-escalated"]);
   });
 });

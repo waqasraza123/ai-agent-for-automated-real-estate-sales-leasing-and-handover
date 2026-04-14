@@ -3,7 +3,12 @@ import { canOperatorRoleAccessWorkspace, type PersistedCaseDetail, type Supporte
 import { ManagerWorkspaceUnavailable, RevenueManagerCommandCenter } from "@/components/manager-command-center";
 import { tryGetPersistedCaseDetail, tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
-import { buildRevenueManagerBatchHistory, buildRevenueManagerScope, parseRevenueManagerFilters } from "@/lib/revenue-manager";
+import {
+  buildRevenueManagerBatchHistory,
+  buildRevenueManagerDriftedCaseIds,
+  buildRevenueManagerScope,
+  parseRevenueManagerFilters
+} from "@/lib/revenue-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -22,16 +27,26 @@ export default async function RevenueManagerPage(props: PageProps) {
 
   const filters = parseRevenueManagerFilters(rawSearchParams);
   const [persistedCases, governanceReport] = await Promise.all([tryListPersistedCases(), tryGetPersistedGovernanceSummary()]);
-  const revenueScope = buildRevenueManagerScope(persistedCases, filters);
+  const baseRevenueScope = buildRevenueManagerScope(persistedCases, filters);
   const batchCaseDetails =
-    filters.bulkBatchId && revenueScope.focusedCases.length > 0
-      ? await Promise.all(revenueScope.focusedCases.map((caseItem) => tryGetPersistedCaseDetail(caseItem.caseId)))
+    filters.bulkBatchId && baseRevenueScope.focusedCases.length > 0
+      ? await Promise.all(baseRevenueScope.focusedCases.map((caseItem) => tryGetPersistedCaseDetail(caseItem.caseId)))
       : [];
+  const availableBatchCaseDetails = batchCaseDetails.filter((caseDetail): caseDetail is PersistedCaseDetail => caseDetail !== null);
+  const baseBatchHistory =
+    filters.bulkBatchId && baseRevenueScope.batchScope
+      ? buildRevenueManagerBatchHistory(baseRevenueScope, availableBatchCaseDetails)
+      : null;
+  const driftedBatchCaseIds = buildRevenueManagerDriftedCaseIds(baseBatchHistory);
+  const revenueScope =
+    filters.batchDrift === "changed_later"
+      ? buildRevenueManagerScope(persistedCases, filters, { changedCaseIds: new Set(driftedBatchCaseIds) })
+      : baseRevenueScope;
   const batchHistory =
     filters.bulkBatchId && revenueScope.batchScope
       ? buildRevenueManagerBatchHistory(
           revenueScope,
-          batchCaseDetails.filter((caseDetail): caseDetail is PersistedCaseDetail => caseDetail !== null)
+          availableBatchCaseDetails.filter((caseDetail) => revenueScope.focusedCases.some((caseItem) => caseItem.caseId === caseDetail.caseId))
         )
       : null;
 
@@ -39,6 +54,7 @@ export default async function RevenueManagerPage(props: PageProps) {
     <RevenueManagerCommandCenter
       batchHistory={batchHistory}
       currentOperatorRole={currentOperatorRole}
+      driftedBatchCaseIds={driftedBatchCaseIds}
       filters={filters}
       governanceReport={governanceReport}
       locale={locale}

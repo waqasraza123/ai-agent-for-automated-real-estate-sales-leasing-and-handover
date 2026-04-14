@@ -1,8 +1,14 @@
 import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 
-import { tryListPersistedCases } from "@/lib/live-api";
+import { tryGetPersistedCaseDetail, tryListPersistedCases } from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
-import { buildRevenueManagerBatchExportCsv, buildRevenueManagerScope, parseRevenueManagerFilters } from "@/lib/revenue-manager";
+import {
+  buildRevenueManagerBatchExportCsv,
+  buildRevenueManagerBatchHistory,
+  buildRevenueManagerDriftedCaseIds,
+  buildRevenueManagerScope,
+  parseRevenueManagerFilters
+} from "@/lib/revenue-manager";
 
 export async function GET(request: Request, context: { params: Promise<{ locale: string }> }) {
   const [{ locale }, currentOperatorRole] = await Promise.all([context.params, getCurrentOperatorRole()]);
@@ -23,7 +29,22 @@ export async function GET(request: Request, context: { params: Promise<{ locale:
   }
 
   const persistedCases = await tryListPersistedCases();
-  const revenueScope = buildRevenueManagerScope(persistedCases, filters);
+  const baseRevenueScope = buildRevenueManagerScope(persistedCases, filters);
+  const batchCaseDetails =
+    filters.bulkBatchId && baseRevenueScope.focusedCases.length > 0
+      ? await Promise.all(baseRevenueScope.focusedCases.map((caseItem) => tryGetPersistedCaseDetail(caseItem.caseId)))
+      : [];
+  const baseBatchHistory =
+    filters.bulkBatchId && baseRevenueScope.batchScope
+      ? buildRevenueManagerBatchHistory(
+          baseRevenueScope,
+          batchCaseDetails.flatMap((caseDetail) => (caseDetail ? [caseDetail] : []))
+        )
+      : null;
+  const revenueScope =
+    filters.batchDrift === "changed_later"
+      ? buildRevenueManagerScope(persistedCases, filters, { changedCaseIds: new Set(buildRevenueManagerDriftedCaseIds(baseBatchHistory)) })
+      : baseRevenueScope;
 
   if (!revenueScope.batchScope || revenueScope.focusedCases.length === 0) {
     return new Response(locale === "ar" ? "لا توجد حالات حية لهذه الدفعة" : "No live cases remain for this batch", {
@@ -39,7 +60,9 @@ export async function GET(request: Request, context: { params: Promise<{ locale:
     });
   }
 
-  const filename = `revenue-batch-${revenueScope.batchScope.batchId.slice(0, 8)}-${locale}.csv`;
+  const filename = `revenue-batch-${revenueScope.batchScope.batchId.slice(0, 8)}${
+    filters.batchDrift === "changed_later" ? "-changed-later" : ""
+  }-${locale}.csv`;
 
   return new Response(csv, {
     headers: {
