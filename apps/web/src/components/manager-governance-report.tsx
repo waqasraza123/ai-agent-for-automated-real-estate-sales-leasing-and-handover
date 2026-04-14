@@ -449,13 +449,12 @@ export function ManagerGovernanceReport(props: {
                         href={buildRevenueManagerHref(
                           props.locale,
                           {
-                            ownerName: batch.scopedOwnerName,
-                            queue: "escalated_handoffs"
+                            bulkBatchId: batch.batchId
                           },
                           { hash: revenueManagerFocusedQueueId }
                         )}
                       >
-                        {props.locale === "ar" ? "فتح نطاق المالك" : "Open owner scope"}
+                        {props.locale === "ar" ? "فتح الحالات المتأثرة" : "Open affected cases"}
                       </Link>
                     </td>
                   </tr>

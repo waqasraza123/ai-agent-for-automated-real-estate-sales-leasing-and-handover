@@ -42,10 +42,12 @@ describe("revenue manager filters", () => {
   it("keeps the first value when repeated params are present", () => {
     expect(
       parseRevenueManagerFilters({
+        bulkBatchId: ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"],
         ownerName: [" Manager Desk North ", "Revenue Ops"],
         queue: ["escalated_handoffs", "all"]
       })
     ).toEqual({
+      bulkBatchId: "33333333-3333-4333-8333-333333333333",
       ownerName: "Manager Desk North",
       queue: "escalated_handoffs"
     });
@@ -57,12 +59,15 @@ describe("revenue manager filters", () => {
       buildRevenueManagerHref(
         "en",
         {
+          bulkBatchId: "33333333-3333-4333-8333-333333333333",
           ownerName: "Manager Desk North",
           queue: "escalated_handoffs"
         },
         { hash: "revenue-focused-queue" }
       )
-    ).toBe("/en/manager/revenue?queue=escalated_handoffs&ownerName=Manager+Desk+North#revenue-focused-queue");
+    ).toBe(
+      "/en/manager/revenue?queue=escalated_handoffs&ownerName=Manager+Desk+North&bulkBatchId=33333333-3333-4333-8333-333333333333#revenue-focused-queue"
+    );
   });
 
   it("scopes operational-risk drill-downs to the selected owner and queue", () => {
@@ -105,5 +110,87 @@ describe("revenue manager filters", () => {
 
     expect(scope.ownerScopedCases.map((caseItem) => caseItem.caseId)).toEqual(["owner-escalated", "owner-aligned"]);
     expect(scope.focusedCases.map((caseItem) => caseItem.caseId)).toEqual(["owner-escalated"]);
+  });
+
+  it("prioritizes exact bulk batch scope over queue filtering", () => {
+    const batchId = "33333333-3333-4333-8333-333333333333";
+    const scope = buildRevenueManagerScope(
+      [
+        buildCase("batch-escalated", {
+          followUpStatus: "attention",
+          latestHumanReply: {
+            approvedFromQa: true,
+            message: "Sent the approved update.",
+            nextAction: "Confirm callback timing",
+            nextActionDueAt: "2026-04-12T09:00:00.000Z",
+            sentAt: "2026-04-11T10:00:00.000Z",
+            sentByName: "Amina Rahman"
+          },
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId,
+              caseCount: 3,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-12T11:00:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-11T11:30:00.000Z"
+          },
+          openInterventionsCount: 1,
+          ownerName: "Manager Desk North"
+        }),
+        buildCase("batch-cleared", {
+          followUpStatus: "on_track",
+          latestHumanReply: {
+            approvedFromQa: false,
+            message: "Sent the manual correction.",
+            nextAction: "Wait for reply",
+            nextActionDueAt: "2026-04-12T08:30:00.000Z",
+            sentAt: "2026-04-11T09:30:00.000Z",
+            sentByName: "Omar Saleh"
+          },
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId,
+              caseCount: 3,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-12T11:00:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-11T11:30:00.000Z"
+          },
+          ownerName: "Manager Desk South"
+        }),
+        buildCase("other-escalated", {
+          followUpStatus: "attention",
+          latestHumanReply: {
+            approvedFromQa: false,
+            message: "Sent a manual update.",
+            nextAction: "Wait for callback",
+            nextActionDueAt: "2026-04-12T10:00:00.000Z",
+            sentAt: "2026-04-11T11:00:00.000Z",
+            sentByName: "Omar Saleh"
+          },
+          ownerName: "Manager Desk South"
+        })
+      ],
+      {
+        bulkBatchId: batchId,
+        queue: "escalated_handoffs"
+      }
+    );
+
+    expect(scope.focusedCases.map((caseItem) => caseItem.caseId)).toEqual(["batch-escalated", "batch-cleared"]);
+    expect(scope.batchScope).toEqual({
+      batchId,
+      caseCount: 3,
+      clearedCaseCount: 1,
+      currentOwnerNames: ["Manager Desk North", "Manager Desk South"],
+      savedAt: "2026-04-11T11:30:00.000Z",
+      scopedOwnerName: "Revenue Ops Queue",
+      stillEscalatedCaseCount: 1
+    });
   });
 });

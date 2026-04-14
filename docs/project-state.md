@@ -70,6 +70,7 @@
 - The next persisted Phase 5 operational-risk-audit-visibility boundary is now live locally: revenue and lead surfaces now expose the latest saved manager follow-up plan from audit history so scoped queue actioning remains visible after reassignment or next-step reset without opening the full timeline
 - The next persisted Phase 5 operational-risk-bulk-actioning boundary is now live locally: owner-scoped escalated-handoff queues now support shared bulk follow-up-plan actioning with current-owner scope validation before the audited reset is applied across selected cases
 - The next persisted Phase 5 operational-risk-bulk-result-visibility boundary is now live locally: bulk follow-up actioning now leaves explicit batch-result context on latest manager follow-up summaries and the governance operational-risk report can review recent bulk resets with remaining-vs-cleared case counts
+- The next persisted Phase 5 operational-risk-bulk-drill-down boundary is now live locally: governance bulk-result rows now deep-link into the exact affected live cases, and the revenue route can scope by bulk batch while still showing current-owner outcomes and escalation status
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -120,6 +121,7 @@
 - Added the next persisted Phase 5 operational-risk-audit-visibility slice with derived latest-manager-follow-up summaries from existing audit events, API exposure on case summary and detail contracts, revenue plus lead-surface rendering for the saved plan owner and timestamp, presenter plus integration coverage, and successful fast-test, integration, build, lint, and typecheck verification
 - Added the next persisted Phase 5 operational-risk-bulk-actioning slice with a validated bulk follow-up-plan contract and API route, transactional multi-case follow-up resets inside the persisted store, owner-scoped bulk selection plus shared plan actioning on the focused revenue queue, and successful fast-test, integration, build, lint, and post-build typecheck verification
 - Added the next persisted Phase 5 operational-risk-bulk-result-visibility slice with bulk-action metadata derived from the existing `manager_follow_up_updated` audit event stream, lead and revenue-surface labels plus notes for bulk resets, governance operational-risk reporting for recent bulk result batches, expanded presenter plus governance-summary coverage, and successful fast-test, integration, build, lint, and post-build typecheck verification
+- Added the next persisted Phase 5 operational-risk-bulk-drill-down slice with batch-id-aware revenue-manager filters, governance-report links into exact affected-case scope, batch outcome badges on the focused revenue queue, fast coverage for batch scoping behavior, and successful fast-test, lint, build, and typecheck verification
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -175,6 +177,7 @@
 - Latest manager follow-up visibility is derived directly from the existing `manager_follow_up_updated` audit event stream, so queue-action auditability is exposed through summary contracts without persisting a second follow-up-shadow record
 - Bulk operational-risk resolution remains an owner-scoped revenue boundary and now requires the caller to assert the current owner name up front, so the shared follow-up-plan reset fails closed if any selected case has already moved to a different desk
 - Bulk operational-risk result visibility is still derived from the existing manager follow-up audit stream, with one shared batch id plus scoped-owner metadata on each affected event, so governance reporting can reconstruct recent bulk outcomes without a separate batch table
+- Bulk-result drill-down remains a web-layer revenue-routing concern, so governance reporting links into a batch-id-scoped revenue view instead of extending the API with a dedicated bulk-batch detail endpoint
 - Prepared handover customer updates now carry their own persisted QA gate state, and dispatch-ready promotion is blocked whenever the latest draft review is pending or marked for follow-up
 - Manager governance analytics now derive directly from the existing case-summary QA fields so revenue and handover command centers can show governance pressure without a separate reporting backend
 - Historical governance reporting now comes from a dedicated summary endpoint aggregated from persisted QA records plus audit events, rather than expanding the case-list contract with trend data

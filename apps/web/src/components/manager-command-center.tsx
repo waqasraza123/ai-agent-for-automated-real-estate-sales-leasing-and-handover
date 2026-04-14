@@ -48,6 +48,7 @@ import {
   getPersistedHandoverCustomerUpdateQaReviewDisplay,
   getPersistedLatestManagerFollowUpLabel,
   getPersistedLatestManagerFollowUpNote,
+  hasPersistedLatestHumanReplyEscalation,
   getPersistedLatestHumanReplyEscalationLabel,
   getPersistedHandoverWorkspaceDisplay,
   getPersistedLatestHumanReplyLabel,
@@ -752,9 +753,14 @@ export function RevenueManagerCommandCenter(props: {
   const canManageFollowUp = managerCapabilities.canManageFollowUp;
   const followUpManagerCopy = getFollowUpManagerCopy(props.locale);
   const followUpGuardNote = getOperatorPermissionGuardNote(props.locale, "manage_case_follow_up");
-  const hasScopedView = props.filters.queue !== "all" || Boolean(props.filters.ownerName);
+  const hasScopedBatchView = Boolean(revenueScope.batchScope);
+  const batchScopeSavedAt = revenueScope.batchScope ? new Date(revenueScope.batchScope.savedAt).toLocaleString(props.locale) : null;
+  const hasScopedView = props.filters.queue !== "all" || Boolean(props.filters.ownerName) || hasScopedBatchView;
   const canShowBulkOperationalRiskActioning =
-    props.filters.queue === "escalated_handoffs" && Boolean(props.filters.ownerName) && revenueScope.focusedCases.length > 1;
+    props.filters.queue === "escalated_handoffs" &&
+    Boolean(props.filters.ownerName) &&
+    !hasScopedBatchView &&
+    revenueScope.focusedCases.length > 1;
   const clearScopeHref = buildRevenueManagerHref(props.locale);
   const operationalRiskReportHref = buildGovernanceReportHref(props.locale, { windowDays: 30 }, "operational_risk");
   const scopedReturnPath = buildRevenueManagerHref(props.locale, props.filters, { hash: revenueManagerFocusedQueueId });
@@ -939,7 +945,11 @@ export function RevenueManagerCommandCenter(props: {
         <Panel title={props.locale === "ar" ? "نطاق الطابور الحالي" : "Current queue scope"}>
           <div className="page-stack" id={revenueManagerFocusedQueueId}>
             <p className="panel-summary">
-              {props.filters.queue === "escalated_handoffs"
+              {hasScopedBatchView && revenueScope.batchScope
+                ? props.locale === "ar"
+                  ? `يعرض هذا النطاق الحالات الحية المتأثرة مباشرة بالدفعة الجماعية المحفوظة ${batchScopeSavedAt} من نطاق ${revenueScope.batchScope.scopedOwnerName}.`
+                  : `This scope shows the exact live cases affected by the bulk follow-up batch saved ${batchScopeSavedAt} from ${revenueScope.batchScope.scopedOwnerName}.`
+                : props.filters.queue === "escalated_handoffs"
                 ? props.locale === "ar"
                   ? props.filters.ownerName
                     ? `يعرض هذا النطاق فقط تسليمات ما بعد الرد المتصاعدة المسندة حالياً إلى ${props.filters.ownerName}.`
@@ -952,14 +962,48 @@ export function RevenueManagerCommandCenter(props: {
                   : "This view is running inside a narrower operational scope."}
             </p>
             <div className="status-row-wrap">
-              <StatusBadge>{props.filters.queue === "escalated_handoffs" ? (props.locale === "ar" ? "طابور المخاطر التشغيلية" : "Operational-risk queue") : props.locale === "ar" ? "نطاق مخصص" : "Scoped view"}</StatusBadge>
+              <StatusBadge>
+                {hasScopedBatchView
+                  ? props.locale === "ar"
+                    ? "نطاق نتيجة الدفعة"
+                    : "Bulk-result scope"
+                  : props.filters.queue === "escalated_handoffs"
+                    ? props.locale === "ar"
+                      ? "طابور المخاطر التشغيلية"
+                      : "Operational-risk queue"
+                    : props.locale === "ar"
+                      ? "نطاق مخصص"
+                      : "Scoped view"}
+              </StatusBadge>
               {props.filters.ownerName ? <StatusBadge>{props.filters.ownerName}</StatusBadge> : null}
+              {hasScopedBatchView && revenueScope.batchScope ? <StatusBadge>{revenueScope.batchScope.scopedOwnerName}</StatusBadge> : null}
               <StatusBadge tone={revenueScope.focusedCases.length > 0 ? "warning" : "success"}>
                 {props.locale === "ar"
                   ? `${revenueScope.focusedCases.length} حالات مطابقة`
                   : `${revenueScope.focusedCases.length} matching cases`}
               </StatusBadge>
+              {hasScopedBatchView && revenueScope.batchScope ? (
+                <>
+                  <StatusBadge tone={revenueScope.batchScope.stillEscalatedCaseCount > 0 ? "warning" : "success"}>
+                    {props.locale === "ar"
+                      ? `${revenueScope.batchScope.stillEscalatedCaseCount} ما زالت متصاعدة`
+                      : `${revenueScope.batchScope.stillEscalatedCaseCount} still escalated`}
+                  </StatusBadge>
+                  <StatusBadge tone={revenueScope.batchScope.clearedCaseCount > 0 ? "success" : "warning"}>
+                    {props.locale === "ar"
+                      ? `${revenueScope.batchScope.clearedCaseCount} خرجت من الخطر`
+                      : `${revenueScope.batchScope.clearedCaseCount} now cleared`}
+                  </StatusBadge>
+                </>
+              ) : null}
             </div>
+            {hasScopedBatchView && revenueScope.batchScope ? (
+              <div className="status-row-wrap">
+                {revenueScope.batchScope.currentOwnerNames.map((ownerName) => (
+                  <StatusBadge key={`${revenueScope.batchScope?.batchId}:${ownerName}`}>{ownerName}</StatusBadge>
+                ))}
+              </div>
+            ) : null}
             <div className="status-row-wrap">
               <Link className="inline-link" href={clearScopeHref}>
                 {props.locale === "ar" ? "مسح النطاق" : "Clear scope"}
@@ -969,9 +1013,13 @@ export function RevenueManagerCommandCenter(props: {
               </Link>
             </div>
             <p className="field-note">
-              {props.locale === "ar"
-                ? "يمكن لمدير الإيرادات إعادة تعيين المالك أو حفظ خطوة المتابعة التالية مباشرة من هذا النطاق لتصفية التدخل المفتوح."
-                : "Revenue managers can reassign the owner or save the next follow-up directly from this scope to clear the open intervention."}
+              {hasScopedBatchView
+                ? props.locale === "ar"
+                  ? "يعرض هذا المسار الأثر الكامل للدفعة عبر الحالات المصعّدة والمصفّاة مع إبقاء التحويل إلى طابور المالك الحالي متاحاً عندما تبقى المخاطرة مفتوحة."
+                  : "This route shows the full batch outcome across both escalated and cleared cases, while still letting managers jump into the current owner queue when risk remains open."
+                : props.locale === "ar"
+                  ? "يمكن لمدير الإيرادات إعادة تعيين المالك أو حفظ خطوة المتابعة التالية مباشرة من هذا النطاق لتصفية التدخل المفتوح."
+                  : "Revenue managers can reassign the owner or save the next follow-up directly from this scope to clear the open intervention."}
             </p>
             {canShowBulkOperationalRiskActioning && props.filters.ownerName ? (
               <div className="bulk-follow-up-shell">
@@ -997,7 +1045,11 @@ export function RevenueManagerCommandCenter(props: {
             <p className="field-note">{followUpGuardNote}</p>
             <StatefulStack
               emptySummary={
-                props.filters.queue === "escalated_handoffs"
+                hasScopedBatchView
+                  ? props.locale === "ar"
+                    ? "لا توجد حالياً حالات حيّة تطابق دفعة المتابعة الجماعية المحددة."
+                    : "No live cases currently match this bulk follow-up batch."
+                  : props.filters.queue === "escalated_handoffs"
                   ? props.filters.ownerName
                     ? props.locale === "ar"
                       ? "لا توجد حالياً تسليمات متصاعدة مطابقة لهذا المالك داخل الحالات الحية."
@@ -1010,7 +1062,11 @@ export function RevenueManagerCommandCenter(props: {
                     : "No live cases currently match this scoped view."
               }
               emptyTitle={
-                props.filters.queue === "escalated_handoffs"
+                hasScopedBatchView
+                  ? props.locale === "ar"
+                    ? "لا توجد حالات لهذه الدفعة"
+                    : "No cases in this batch"
+                  : props.filters.queue === "escalated_handoffs"
                   ? props.locale === "ar"
                     ? "لا توجد تسليمات متصاعدة"
                     : "No escalated handoffs"
@@ -1020,6 +1076,12 @@ export function RevenueManagerCommandCenter(props: {
               }
               items={revenueScope.focusedCases}
               renderItem={(caseItem) => {
+                const isStillEscalated = hasPersistedLatestHumanReplyEscalation(
+                  caseItem.ownerName,
+                  caseItem.latestHumanReply,
+                  caseItem.followUpStatus,
+                  caseItem.openInterventionsCount
+                );
                 const latestManagerFollowUpLabel = getPersistedLatestManagerFollowUpLabel(props.locale, caseItem.latestManagerFollowUp);
                 const latestManagerFollowUpSavedAt = formatLatestManagerFollowUpSavedAt(caseItem.latestManagerFollowUp, props.locale);
                 const latestManagerFollowUpNote = getPersistedLatestManagerFollowUpNote(props.locale, caseItem.latestManagerFollowUp);
@@ -1045,9 +1107,23 @@ export function RevenueManagerCommandCenter(props: {
                         <p className="case-link-meta">{buildCaseReferenceCode(caseItem.caseId)}</p>
                       </div>
                       <div className="status-row-wrap">
-                        <StatusBadge tone="warning">{getPersistedFollowUpLabel(props.locale, caseItem)}</StatusBadge>
+                        <StatusBadge tone={isStillEscalated ? "warning" : "success"}>{getPersistedFollowUpLabel(props.locale, caseItem)}</StatusBadge>
                         {caseItem.openInterventionsCount > 0 ? (
                           <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
+                        ) : null}
+                        {hasScopedBatchView ? (
+                          <>
+                            <StatusBadge>{caseItem.ownerName}</StatusBadge>
+                            <StatusBadge tone={isStillEscalated ? "warning" : "success"}>
+                              {isStillEscalated
+                                ? props.locale === "ar"
+                                  ? "ما زالت متصاعدة"
+                                  : "Still escalated"
+                                : props.locale === "ar"
+                                  ? "خرجت من الخطر"
+                                  : "Now cleared"}
+                            </StatusBadge>
+                          </>
                         ) : null}
                       </div>
                     </div>
@@ -1077,20 +1153,59 @@ export function RevenueManagerCommandCenter(props: {
                       <Link className="inline-link" href={`/${props.locale}/leads/${caseItem.caseId}`}>
                         {props.locale === "ar" ? "فتح الحالة" : "Open case"}
                       </Link>
+                      {hasScopedBatchView && isStillEscalated ? (
+                        <Link
+                          className="inline-link"
+                          href={buildRevenueManagerHref(
+                            props.locale,
+                            {
+                              ownerName: caseItem.ownerName,
+                              queue: "escalated_handoffs"
+                            },
+                            { hash: revenueManagerFocusedQueueId }
+                          )}
+                        >
+                          {props.locale === "ar" ? "فتح طابور المالك الحالي" : "Open current owner queue"}
+                        </Link>
+                      ) : null}
                     </div>
-                    <div className="page-stack">
-                      <p className="case-link-meta">{followUpManagerCopy.title}</p>
-                      <ManagerFollowUpForm
-                        canManage={canManageFollowUp}
-                        caseId={caseItem.caseId}
-                        disabledLabel={props.locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
-                        locale={props.locale}
-                        nextAction={caseItem.nextAction}
-                        nextActionDueAt={caseItem.nextActionDueAt}
-                        ownerName={caseItem.ownerName}
-                        returnPath={scopedReturnPath}
-                      />
-                    </div>
+                    {hasScopedBatchView ? (
+                      isStillEscalated ? (
+                        <div className="page-stack">
+                          <p className="case-link-meta">{followUpManagerCopy.title}</p>
+                          <ManagerFollowUpForm
+                            canManage={canManageFollowUp}
+                            caseId={caseItem.caseId}
+                            disabledLabel={props.locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
+                            locale={props.locale}
+                            nextAction={caseItem.nextAction}
+                            nextActionDueAt={caseItem.nextActionDueAt}
+                            ownerName={caseItem.ownerName}
+                            returnPath={scopedReturnPath}
+                          />
+                        </div>
+                      ) : (
+                        <p className="case-link-meta">
+                          {props.locale === "ar"
+                            ? "هذه الحالة خرجت من المخاطرة بعد الدفعة الأخيرة ولا تحتاج إعادة تعيين متابعة الآن."
+                            : "This case is now clear after the bulk batch and does not need another follow-up reset right now."}
+                        </p>
+                      )
+                    ) : (
+                      <div className="page-stack">
+                        <p className="case-link-meta">{followUpManagerCopy.title}</p>
+                        <ManagerFollowUpForm
+                          canManage={canManageFollowUp}
+                          caseId={caseItem.caseId}
+                          disabledLabel={props.locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
+                          locale={props.locale}
+                          nextAction={caseItem.nextAction}
+                          nextActionDueAt={caseItem.nextActionDueAt}
+                          ownerName={caseItem.ownerName}
+                          returnPath={scopedReturnPath}
+                        />
+                      </div>
+                    )}
                   </article>
                 );
               }}
