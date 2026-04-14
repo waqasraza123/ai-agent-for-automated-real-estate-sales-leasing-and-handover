@@ -4,7 +4,7 @@ import { Panel } from "@real-estate-ai/ui";
 import { ManagerGovernanceReport } from "@/components/manager-governance-report";
 import { ScreenIntro } from "@/components/screen-intro";
 import { parseGovernanceReportSearchParams } from "@/lib/governance-report";
-import { tryGetPersistedGovernanceEvents, tryGetPersistedGovernanceSummary } from "@/lib/live-api";
+import { tryGetPersistedGovernanceEvents, tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 
 export const dynamic = "force-dynamic";
@@ -47,9 +47,10 @@ export default async function ManagerGovernanceReportPage(props: PageProps) {
   }
 
   const filters = parseGovernanceReportSearchParams(rawSearchParams);
-  const [governanceSummary, governanceEvents] = await Promise.all([
+  const [governanceSummary, governanceEvents, persistedCases] = await Promise.all([
     tryGetPersistedGovernanceSummary(),
-    tryGetPersistedGovernanceEvents(filters)
+    tryGetPersistedGovernanceEvents(filters),
+    tryListPersistedCases()
   ]);
 
   return (
@@ -59,6 +60,7 @@ export default async function ManagerGovernanceReportPage(props: PageProps) {
       governanceEvents={governanceEvents}
       governanceSummary={governanceSummary}
       locale={locale}
+      persistedCases={persistedCases ?? []}
     />
   );
 }

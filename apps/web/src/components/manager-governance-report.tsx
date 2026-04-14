@@ -4,6 +4,7 @@ import {
   canOperatorRoleAccessWorkspace,
   type ListGovernanceEventsQuery,
   type OperatorRole,
+  type PersistedCaseSummary,
   type PersistedGovernanceEventList,
   type PersistedGovernanceEventRecord,
   type PersistedGovernanceSummary,
@@ -12,6 +13,7 @@ import {
 import { EmptyState, Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
+import { buildGovernanceOperationalRiskSummary } from "@/lib/governance-workspace";
 import { getOperatorRoleLabel } from "@/lib/operator-role";
 import { buildCaseReferenceCode } from "@/lib/persisted-case-presenters";
 import { buildGovernanceReportHref } from "@/lib/governance-report";
@@ -19,6 +21,7 @@ import { buildGovernanceReportHref } from "@/lib/governance-report";
 export function ManagerGovernanceReport(props: {
   currentOperatorRole: OperatorRole;
   filters: ListGovernanceEventsQuery;
+  persistedCases: PersistedCaseSummary[];
   governanceEvents: PersistedGovernanceEventList | null;
   governanceSummary: PersistedGovernanceSummary | null;
   locale: SupportedLocale;
@@ -29,6 +32,7 @@ export function ManagerGovernanceReport(props: {
   const openedCount = props.governanceSummary?.openedItems.totalCount ?? 0;
   const resolvedCount = props.governanceSummary?.resolvedItems.totalCount ?? 0;
   const filteredCount = props.governanceEvents?.totalCount ?? 0;
+  const operationalRiskSummary = buildGovernanceOperationalRiskSummary(props.persistedCases);
 
   return (
     <div className="page-stack">
@@ -95,6 +99,15 @@ export function ManagerGovernanceReport(props: {
             {props.locale === "ar"
               ? "إجمالي السجل المطابق بعد تطبيق الفلاتر الحالية قبل التصدير."
               : "Filtered event count after the current scope is applied, before export."}
+          </p>
+        </article>
+        <article className="metric-tile metric-tile-ocean">
+          <p className="metric-label">{props.locale === "ar" ? "تسليمات متصاعدة بعد الرد" : "Escalated reply handoffs"}</p>
+          <p className="metric-value">{operationalRiskSummary.totalEscalatedReplyHandoffCount}</p>
+          <p className="metric-detail">
+            {props.locale === "ar"
+              ? "حالات حيّة انتقل فيها الرد البشري إلى مالك جديد ثم أصبحت متأخرة أو محملة بتدخلات مفتوحة."
+              : "Live cases where a human reply was handed to a new owner and that handoff is now overdue or intervention-backed."}
           </p>
         </article>
       </div>
@@ -231,6 +244,69 @@ export function ManagerGovernanceReport(props: {
           </div>
         </Panel>
       </div>
+
+      <Panel title={props.locale === "ar" ? "ضغط تسليمات الردود" : "Reply handoff pressure"}>
+        {operationalRiskSummary.owners.length > 0 ? (
+          <div className="lead-table-wrapper">
+            <table className="lead-table">
+              <thead>
+                <tr>
+                  <th>{props.locale === "ar" ? "المالك الحالي" : "Current owner"}</th>
+                  <th>{props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}</th>
+                  <th>{props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}</th>
+                  <th>{props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {operationalRiskSummary.owners.map((owner) => (
+                  <tr key={owner.ownerName}>
+                    <td data-column-label={props.locale === "ar" ? "المالك الحالي" : "Current owner"}>
+                      <div className="table-link">
+                        <strong>{owner.ownerName}</strong>
+                        <span>
+                          {props.locale === "ar"
+                            ? `${owner.overdueHandoffCount} تسليمات متأخرة`
+                            : `${owner.overdueHandoffCount} overdue handoffs`}
+                        </span>
+                      </div>
+                    </td>
+                    <td data-column-label={props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}>
+                      <StatusBadge tone="warning">
+                        {props.locale === "ar"
+                          ? `${owner.escalatedHandoffCount} حالات`
+                          : `${owner.escalatedHandoffCount} cases`}
+                      </StatusBadge>
+                    </td>
+                    <td data-column-label={props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}>
+                      <StatusBadge tone={owner.openInterventionsCount > 0 ? "warning" : "success"}>
+                        {props.locale === "ar"
+                          ? `${owner.openInterventionsCount} تدخلات`
+                          : `${owner.openInterventionsCount} interventions`}
+                      </StatusBadge>
+                    </td>
+                    <td data-column-label={props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}>
+                      <div className="status-row-wrap">
+                        {owner.latestSenderNames.map((senderName) => (
+                          <StatusBadge key={`${owner.ownerName}:${senderName}`}>{senderName}</StatusBadge>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            summary={
+              props.locale === "ar"
+                ? "لا توجد حالياً تسليمات ردود متصاعدة داخل الحالات الحية."
+                : "No live escalated reply handoffs are currently present in the active case set."
+            }
+            title={props.locale === "ar" ? "لا يوجد ضغط تشغيلي" : "No operational handoff pressure"}
+          />
+        )}
+      </Panel>
 
       <Panel title={props.locale === "ar" ? "سجل أحداث الحوكمة" : "Governance event log"}>
         {props.governanceEvents && props.governanceEvents.items.length > 0 ? (

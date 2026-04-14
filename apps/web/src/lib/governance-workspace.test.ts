@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CaseQaReviewStatus, HandoverCustomerUpdateQaReviewStatus, PersistedCaseSummary } from "@real-estate-ai/contracts";
 
-import { buildManagerGovernanceSummary } from "./governance-workspace";
+import { buildGovernanceOperationalRiskSummary, buildManagerGovernanceSummary } from "./governance-workspace";
 
 function buildRevenueQaCase(caseId: string, status: CaseQaReviewStatus, updatedAt: string, triggerSource: "manual_request" | "policy_rule") {
   return {
@@ -130,6 +130,64 @@ describe("manager governance summary", () => {
     expect(summary.handoverAttentionCases.map((caseItem) => caseItem.caseId)).toEqual([
       "handover-pending",
       "handover-follow-up"
+    ]);
+  });
+
+  it("derives escalated reply handoff pressure by current owner", () => {
+    const summary = buildGovernanceOperationalRiskSummary([
+      {
+        ...buildRevenueQaCase("handoff-owner-1", "approved", "2026-04-13T11:00:00.000Z", "manual_request"),
+        followUpStatus: "attention",
+        latestHumanReply: {
+          approvedFromQa: false,
+          message: "Sent the reservation answer.",
+          nextAction: "Wait for manager callback",
+          nextActionDueAt: "2026-04-13T12:00:00.000Z",
+          sentAt: "2026-04-13T11:00:00.000Z",
+          sentByName: "Amina Rahman"
+        },
+        openInterventionsCount: 1,
+        ownerName: "Manager Desk North"
+      },
+      {
+        ...buildRevenueQaCase("handoff-owner-2", "approved", "2026-04-13T10:00:00.000Z", "manual_request"),
+        followUpStatus: "attention",
+        latestHumanReply: {
+          approvedFromQa: true,
+          message: "Sent the approved reply.",
+          nextAction: "Confirm document receipt",
+          nextActionDueAt: "2026-04-13T13:00:00.000Z",
+          sentAt: "2026-04-13T10:00:00.000Z",
+          sentByName: "Omar Saleh"
+        },
+        openInterventionsCount: 0,
+        ownerName: "Manager Desk North"
+      },
+      {
+        ...buildRevenueQaCase("sender-still-owner", "approved", "2026-04-13T09:00:00.000Z", "manual_request"),
+        followUpStatus: "attention",
+        latestHumanReply: {
+          approvedFromQa: false,
+          message: "Followed up directly.",
+          nextAction: "Wait for customer",
+          nextActionDueAt: "2026-04-13T14:00:00.000Z",
+          sentAt: "2026-04-13T09:00:00.000Z",
+          sentByName: "Revenue Ops"
+        },
+        ownerName: "Revenue Ops"
+      }
+    ]);
+
+    expect(summary.totalEscalatedReplyHandoffCount).toBe(2);
+    expect(summary.escalatedReplyHandoffCases.map((caseItem) => caseItem.caseId)).toEqual(["handoff-owner-1", "handoff-owner-2"]);
+    expect(summary.owners).toEqual([
+      {
+        escalatedHandoffCount: 2,
+        latestSenderNames: ["Amina Rahman", "Omar Saleh"],
+        openInterventionsCount: 1,
+        overdueHandoffCount: 2,
+        ownerName: "Manager Desk North"
+      }
     ]);
   });
 });

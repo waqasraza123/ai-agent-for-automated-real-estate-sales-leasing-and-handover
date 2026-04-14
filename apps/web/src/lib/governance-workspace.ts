@@ -5,6 +5,8 @@ import type {
   HandoverCustomerUpdateQaPolicySignal
 } from "@real-estate-ai/contracts";
 
+import { hasPersistedLatestHumanReplyEscalation } from "./persisted-case-presenters";
+
 type PersistedGovernanceCase = PersistedCaseDetail | PersistedCaseSummary;
 
 type GovernanceAttentionStatus = "follow_up_required" | "pending_review";
@@ -13,6 +15,14 @@ export interface GovernanceSignalCount {
   count: number;
   kind: "case_message" | "handover_customer_update";
   signal: CaseQaPolicySignal | HandoverCustomerUpdateQaPolicySignal;
+}
+
+export interface GovernanceOperationalRiskOwner {
+  escalatedHandoffCount: number;
+  latestSenderNames: string[];
+  openInterventionsCount: number;
+  overdueHandoffCount: number;
+  ownerName: string;
 }
 
 export function buildManagerGovernanceSummary(
@@ -75,6 +85,59 @@ export function buildManagerGovernanceSummary(
     uniqueAttentionCaseCount: new Set(
       [...revenueAttentionCases, ...handoverAttentionCases].map((caseItem) => caseItem.caseId)
     ).size
+  };
+}
+
+export function buildGovernanceOperationalRiskSummary(persistedCases: PersistedGovernanceCase[]) {
+  const escalatedReplyHandoffCases = persistedCases.filter((caseItem) =>
+    hasPersistedLatestHumanReplyEscalation(
+      caseItem.ownerName,
+      caseItem.latestHumanReply,
+      caseItem.followUpStatus,
+      caseItem.openInterventionsCount
+    )
+  );
+
+  const owners = new Map<string, GovernanceOperationalRiskOwner>();
+
+  for (const caseItem of escalatedReplyHandoffCases) {
+    const currentOwner = owners.get(caseItem.ownerName) ?? {
+      escalatedHandoffCount: 0,
+      latestSenderNames: [],
+      openInterventionsCount: 0,
+      overdueHandoffCount: 0,
+      ownerName: caseItem.ownerName
+    };
+
+    const nextSenderNames = caseItem.latestHumanReply?.sentByName
+      ? [...new Set([...currentOwner.latestSenderNames, caseItem.latestHumanReply.sentByName])]
+      : currentOwner.latestSenderNames;
+
+    owners.set(caseItem.ownerName, {
+      escalatedHandoffCount: currentOwner.escalatedHandoffCount + 1,
+      latestSenderNames: nextSenderNames,
+      openInterventionsCount: currentOwner.openInterventionsCount + caseItem.openInterventionsCount,
+      overdueHandoffCount: currentOwner.overdueHandoffCount + (caseItem.followUpStatus === "attention" ? 1 : 0),
+      ownerName: caseItem.ownerName
+    });
+  }
+
+  return {
+    escalatedReplyHandoffCases,
+    owners: [...owners.values()]
+      .sort((left, right) => {
+        if (left.escalatedHandoffCount !== right.escalatedHandoffCount) {
+          return right.escalatedHandoffCount - left.escalatedHandoffCount;
+        }
+
+        if (left.openInterventionsCount !== right.openInterventionsCount) {
+          return right.openInterventionsCount - left.openInterventionsCount;
+        }
+
+        return left.ownerName.localeCompare(right.ownerName);
+      })
+      .slice(0, 5),
+    totalEscalatedReplyHandoffCount: escalatedReplyHandoffCases.length
   };
 }
 
