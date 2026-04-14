@@ -36,6 +36,14 @@ export interface RevenueManagerBatchOwnerGroup {
   stillEscalatedCaseCount: number;
 }
 
+export interface RevenueManagerScope {
+  batchOwnerGroups: RevenueManagerBatchOwnerGroup[];
+  batchScope?: RevenueManagerBulkBatchScope;
+  focusedCases: PersistedRevenueManagerCase[];
+  ownerScopedCases: PersistedRevenueManagerCase[];
+  ownerScopedQueues: ReturnType<typeof buildManagerWorkspaceQueues>;
+}
+
 export const revenueManagerFocusedQueueId = "revenue-focused-queue";
 
 export function parseRevenueManagerFilters(searchParams: SearchParamsInput): RevenueManagerFilters {
@@ -84,7 +92,14 @@ export function buildRevenueManagerHref(
   return `${path}${hash}`;
 }
 
-export function buildRevenueManagerScope(persistedCases: PersistedRevenueManagerCase[], filters: RevenueManagerFilters) {
+export function buildRevenueManagerExportHref(locale: SupportedLocale, filters: Partial<RevenueManagerFilters> = {}) {
+  const searchParams = buildRevenueManagerSearchParams(filters);
+  const serialized = searchParams.toString();
+
+  return serialized.length > 0 ? `/${locale}/manager/revenue/export?${serialized}` : `/${locale}/manager/revenue/export`;
+}
+
+export function buildRevenueManagerScope(persistedCases: PersistedRevenueManagerCase[], filters: RevenueManagerFilters): RevenueManagerScope {
   const ownerScopedCases = filters.ownerName
     ? persistedCases.filter((caseItem) => caseItem.ownerName === filters.ownerName)
     : persistedCases;
@@ -94,16 +109,93 @@ export function buildRevenueManagerScope(persistedCases: PersistedRevenueManager
         .sort((left, right) => compareBatchScopedCases(left, right))
     : null;
   const ownerScopedQueues = buildManagerWorkspaceQueues(ownerScopedCases);
+  const batchScope = batchScopedCases ? buildRevenueManagerBulkBatchScope(batchScopedCases) : undefined;
 
   return {
     batchOwnerGroups: batchScopedCases ? buildRevenueManagerBatchOwnerGroups(batchScopedCases) : [],
-    batchScope: batchScopedCases ? buildRevenueManagerBulkBatchScope(batchScopedCases) : undefined,
+    ...(batchScope ? { batchScope } : {}),
     focusedCases:
       batchScopedCases ??
       (filters.queue === "escalated_handoffs" ? ownerScopedQueues.escalatedPostReplyHandoffCases : ownerScopedQueues.revenueAttentionCases),
     ownerScopedCases,
     ownerScopedQueues
   };
+}
+
+export function buildRevenueManagerBatchExportCsv(scope: RevenueManagerScope) {
+  if (!scope.batchScope) {
+    return null;
+  }
+
+  const ownerGroups = new Map(scope.batchOwnerGroups.map((ownerGroup) => [ownerGroup.ownerName, ownerGroup]));
+  const headers = [
+    "batchId",
+    "batchSavedAt",
+    "batchScopedOwnerName",
+    "batchVisibleCaseCount",
+    "batchStillEscalatedCaseCount",
+    "batchClearedCaseCount",
+    "currentOwnerName",
+    "currentOwnerGroupCaseCount",
+    "currentOwnerGroupStillEscalatedCaseCount",
+    "currentOwnerGroupClearedCaseCount",
+    "riskStatus",
+    "customerName",
+    "caseReference",
+    "caseId",
+    "projectInterest",
+    "preferredLocale",
+    "nextAction",
+    "nextActionDueAt",
+    "followUpStatus",
+    "openInterventionsCount",
+    "latestHumanReplySentBy",
+    "latestHumanReplySentAt",
+    "latestHumanReplyApprovedFromQa",
+    "latestManagerFollowUpSavedAt",
+    "latestManagerFollowUpOwnerName",
+    "latestManagerFollowUpNextAction"
+  ];
+  const rows = scope.focusedCases.map((caseItem) => {
+    const ownerGroup = ownerGroups.get(caseItem.ownerName);
+    const isStillEscalated = hasPersistedLatestHumanReplyEscalation(
+      caseItem.ownerName,
+      caseItem.latestHumanReply,
+      caseItem.followUpStatus,
+      caseItem.openInterventionsCount
+    );
+
+    return [
+      scope.batchScope?.batchId,
+      scope.batchScope?.savedAt,
+      scope.batchScope?.scopedOwnerName,
+      scope.focusedCases.length,
+      scope.batchScope?.stillEscalatedCaseCount,
+      scope.batchScope?.clearedCaseCount,
+      caseItem.ownerName,
+      ownerGroup?.caseCount ?? 0,
+      ownerGroup?.stillEscalatedCaseCount ?? 0,
+      ownerGroup?.clearedCaseCount ?? 0,
+      isStillEscalated ? "still_escalated" : "cleared",
+      caseItem.customerName,
+      buildCaseReferenceCode(caseItem.caseId),
+      caseItem.caseId,
+      caseItem.projectInterest,
+      caseItem.preferredLocale,
+      caseItem.nextAction,
+      caseItem.nextActionDueAt,
+      caseItem.followUpStatus,
+      caseItem.openInterventionsCount,
+      caseItem.latestHumanReply?.sentByName ?? "",
+      caseItem.latestHumanReply?.sentAt ?? "",
+      caseItem.latestHumanReply ? String(caseItem.latestHumanReply.approvedFromQa) : "",
+      caseItem.latestManagerFollowUp?.savedAt ?? "",
+      caseItem.latestManagerFollowUp?.ownerName ?? "",
+      caseItem.latestManagerFollowUp?.nextAction ?? ""
+    ].map((value) => escapeCsvValue(typeof value === "string" ? value : value == null ? "" : String(value)));
+  });
+
+  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
 }
 
 function normalizeSearchParamRecord(searchParams: SearchParamsInput) {
@@ -124,6 +216,24 @@ function normalizeSearchParamRecord(searchParams: SearchParamsInput) {
       return [[key, value]];
     })
   );
+}
+
+function buildRevenueManagerSearchParams(filters: Partial<RevenueManagerFilters>) {
+  const searchParams = new URLSearchParams();
+
+  if (filters.queue && filters.queue !== "all") {
+    searchParams.set("queue", filters.queue);
+  }
+
+  if (filters.ownerName) {
+    searchParams.set("ownerName", filters.ownerName);
+  }
+
+  if (filters.bulkBatchId) {
+    searchParams.set("bulkBatchId", filters.bulkBatchId);
+  }
+
+  return searchParams;
 }
 
 function sanitizeOwnerName(ownerName: string | undefined) {
@@ -258,4 +368,16 @@ function compareBatchScopedCases(left: PersistedRevenueManagerCase, right: Persi
   }
 
   return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+}
+
+function buildCaseReferenceCode(caseId: string) {
+  return `CASE-${caseId.slice(0, 8).toUpperCase()}`;
+}
+
+function escapeCsvValue(value: string) {
+  if (value.includes(",") || value.includes("\"") || value.includes("\n")) {
+    return `"${value.replaceAll("\"", "\"\"")}"`;
+  }
+
+  return value;
 }

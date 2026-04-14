@@ -56,6 +56,7 @@ import {
   getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
 import {
+  buildRevenueManagerExportHref,
   buildRevenueManagerHref,
   buildRevenueManagerScope,
   revenueManagerFocusedQueueId,
@@ -763,6 +764,7 @@ export function RevenueManagerCommandCenter(props: {
     !hasScopedBatchView &&
     revenueScope.focusedCases.length > 1;
   const clearScopeHref = buildRevenueManagerHref(props.locale);
+  const batchExportHref = hasScopedBatchView ? buildRevenueManagerExportHref(props.locale, props.filters) : null;
   const operationalRiskReportHref = buildGovernanceReportHref(props.locale, { windowDays: 30 }, "operational_risk");
   const scopedReturnPath = buildRevenueManagerHref(props.locale, props.filters, { hash: revenueManagerFocusedQueueId });
 
@@ -1012,12 +1014,17 @@ export function RevenueManagerCommandCenter(props: {
               <Link className="inline-link" href={operationalRiskReportHref}>
                 {props.locale === "ar" ? "العودة إلى تقرير المخاطر التشغيلية" : "Return to operational-risk report"}
               </Link>
+              {batchExportHref ? (
+                <Link className="inline-link" href={batchExportHref}>
+                  {props.locale === "ar" ? "تنزيل CSV للحالات المتأثرة" : "Download affected-case CSV"}
+                </Link>
+              ) : null}
             </div>
             <p className="field-note">
               {hasScopedBatchView
                 ? props.locale === "ar"
-                  ? "يعرض هذا المسار الأثر الكامل للدفعة عبر الحالات المصعّدة والمصفّاة مع إبقاء التحويل إلى طابور المالك الحالي متاحاً عندما تبقى المخاطرة مفتوحة."
-                  : "This route shows the full batch outcome across both escalated and cleared cases, while still letting managers jump into the current owner queue when risk remains open."
+                  ? "يعرض هذا المسار الأثر الكامل للدفعة عبر الحالات المصعّدة والمصفّاة مع إبقاء التحويل إلى طابور المالك الحالي وتصدير CSV للحالات المتأثرة متاحين عندما تحتاج المراجعة التشغيلية إلى أثر قابل للمشاركة."
+                  : "This route shows the full batch outcome across both escalated and cleared cases, while still letting managers jump into the current owner queue and export the affected-case CSV for operational review."
                 : props.locale === "ar"
                   ? "يمكن لمدير الإيرادات إعادة تعيين المالك أو حفظ خطوة المتابعة التالية مباشرة من هذا النطاق لتصفية التدخل المفتوح."
                   : "Revenue managers can reassign the owner or save the next follow-up directly from this scope to clear the open intervention."}

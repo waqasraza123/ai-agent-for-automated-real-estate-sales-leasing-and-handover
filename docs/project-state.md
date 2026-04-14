@@ -72,6 +72,7 @@
 - The next persisted Phase 5 operational-risk-bulk-result-visibility boundary is now live locally: bulk follow-up actioning now leaves explicit batch-result context on latest manager follow-up summaries and the governance operational-risk report can review recent bulk resets with remaining-vs-cleared case counts
 - The next persisted Phase 5 operational-risk-bulk-drill-down boundary is now live locally: governance operational-risk bulk-result rows now drill into an exact revenue batch scope showing the affected live cases across both cleared and still-escalated outcomes, with direct pivots back into current-owner queues when risk remains
 - The next persisted Phase 5 operational-risk-bulk-owner-grouping boundary is now live locally: mixed-owner batch scopes now group affected cases by their current desk so managers can reopen shared follow-up actioning inside each owner cluster after the original bulk reset has drifted
+- The next persisted Phase 5 operational-risk-batch-export boundary is now live locally: exact batch-scoped revenue views now export the affected live cases as CSV with batch, owner-group, and current-risk columns so grouped recovery can be audited outside the UI
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -124,6 +125,7 @@
 - Added the next persisted Phase 5 operational-risk-bulk-result-visibility slice with bulk-action metadata derived from the existing `manager_follow_up_updated` audit event stream, lead and revenue-surface labels plus notes for bulk resets, governance operational-risk reporting for recent bulk result batches, expanded presenter plus governance-summary coverage, and successful fast-test, integration, build, lint, and post-build typecheck verification
 - Added the next persisted Phase 5 operational-risk-bulk-drill-down slice with route-level bulk batch filters on the revenue manager surface, governance-report links into exact affected-case scopes, mixed-outcome batch visibility across cleared vs still-escalated cases, current-owner queue pivots for unresolved risk, and successful fast-test, lint, build, and typecheck verification
 - Added the next persisted Phase 5 operational-risk-bulk-owner-grouping slice with current-owner grouping on batch-scoped revenue views, owner-level still-escalated vs cleared counts, reopened bulk follow-up actioning inside each mixed-owner cluster, and successful fast-test, lint, build, and typecheck verification
+- Added the next persisted Phase 5 operational-risk-batch-export slice with a dedicated revenue-manager CSV export route for exact bulk-batch scope, shared batch-export shaping in revenue helpers, affected-case export actions on the scoped revenue UI, focused export coverage, and successful fast-test, lint, build, and typecheck verification
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -181,6 +183,7 @@
 - Bulk operational-risk result visibility is still derived from the existing manager follow-up audit stream, with one shared batch id plus scoped-owner metadata on each affected event, so governance reporting can reconstruct recent bulk outcomes without a separate batch table
 - Exact bulk-result drill-down remains a revenue-workspace concern in the web layer, so the focused batch scope is reconstructed from `latestManagerFollowUp.bulkAction` on the live case set rather than introducing a separate persisted batch-read model
 - Mixed-owner batch recovery also remains a revenue-workspace concern in the web layer, so reopened bulk actioning is regrouped by each case's current owner after drill-down instead of mutating the original batch identity
+- Batch export remains a revenue-workspace artifact built from the live scoped case set, so affected-case CSV output reuses the existing batch drill-down model instead of introducing a second persisted export snapshot
 - Bulk-result drill-down remains a web-layer revenue-routing concern, so governance reporting links into a batch-id-scoped revenue view instead of extending the API with a dedicated bulk-batch detail endpoint
 - Prepared handover customer updates now carry their own persisted QA gate state, and dispatch-ready promotion is blocked whenever the latest draft review is pending or marked for follow-up
 - Manager governance analytics now derive directly from the existing case-summary QA fields so revenue and handover command centers can show governance pressure without a separate reporting backend

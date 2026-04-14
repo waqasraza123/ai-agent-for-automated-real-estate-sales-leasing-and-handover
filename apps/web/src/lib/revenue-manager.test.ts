@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { PersistedCaseSummary } from "@real-estate-ai/contracts";
 
-import { buildRevenueManagerHref, buildRevenueManagerScope, parseRevenueManagerFilters } from "./revenue-manager";
+import {
+  buildRevenueManagerBatchExportCsv,
+  buildRevenueManagerExportHref,
+  buildRevenueManagerHref,
+  buildRevenueManagerScope,
+  parseRevenueManagerFilters
+} from "./revenue-manager";
 
 function buildCase(caseId: string, overrides?: Partial<PersistedCaseSummary>) {
   return {
@@ -55,6 +61,7 @@ describe("revenue manager filters", () => {
 
   it("builds stable revenue manager drill-down links", () => {
     expect(buildRevenueManagerHref("en")).toBe("/en/manager/revenue");
+    expect(buildRevenueManagerExportHref("en")).toBe("/en/manager/revenue/export");
     expect(
       buildRevenueManagerHref(
         "en",
@@ -68,6 +75,12 @@ describe("revenue manager filters", () => {
     ).toBe(
       "/en/manager/revenue?queue=escalated_handoffs&ownerName=Manager+Desk+North&bulkBatchId=33333333-3333-4333-8333-333333333333#revenue-focused-queue"
     );
+    expect(
+      buildRevenueManagerExportHref("en", {
+        bulkBatchId: "33333333-3333-4333-8333-333333333333",
+        queue: "escalated_handoffs"
+      })
+    ).toBe("/en/manager/revenue/export?queue=escalated_handoffs&bulkBatchId=33333333-3333-4333-8333-333333333333");
   });
 
   it("scopes operational-risk drill-downs to the selected owner and queue", () => {
@@ -208,5 +221,9 @@ describe("revenue manager filters", () => {
         stillEscalatedCaseCount: 0
       }
     ]);
+
+    expect(buildRevenueManagerBatchExportCsv(scope)).toBe(`batchId,batchSavedAt,batchScopedOwnerName,batchVisibleCaseCount,batchStillEscalatedCaseCount,batchClearedCaseCount,currentOwnerName,currentOwnerGroupCaseCount,currentOwnerGroupStillEscalatedCaseCount,currentOwnerGroupClearedCaseCount,riskStatus,customerName,caseReference,caseId,projectInterest,preferredLocale,nextAction,nextActionDueAt,followUpStatus,openInterventionsCount,latestHumanReplySentBy,latestHumanReplySentAt,latestHumanReplyApprovedFromQa,latestManagerFollowUpSavedAt,latestManagerFollowUpOwnerName,latestManagerFollowUpNextAction
+33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk North,1,1,0,still_escalated,Customer batch-escalated,CASE-BATCH-ES,batch-escalated,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,attention,1,Amina Rahman,2026-04-11T10:00:00.000Z,true,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up
+33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk South,1,0,1,cleared,Customer batch-cleared,CASE-BATCH-CL,batch-cleared,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,on_track,0,Omar Saleh,2026-04-11T09:30:00.000Z,false,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up`);
   });
 });
