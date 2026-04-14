@@ -227,6 +227,10 @@ describe("manager governance summary", () => {
     ]);
 
     expect(summary.totalEscalatedReplyHandoffCount).toBe(2);
+    expect(summary.batchesWithDriftCount).toBe(0);
+    expect(summary.driftedCaseCount).toBe(0);
+    expect(summary.laterBulkResetCount).toBe(0);
+    expect(summary.postBatchFollowUpUpdateCount).toBe(0);
     expect(summary.escalatedReplyHandoffCases.map((caseItem) => caseItem.caseId)).toEqual(["handoff-owner-1", "handoff-owner-2"]);
     expect(summary.owners).toEqual([
       {
@@ -246,6 +250,99 @@ describe("manager governance summary", () => {
         savedAt: "2026-04-13T11:15:00.000Z",
         scopedOwnerName: "Revenue Ops Queue",
         stillEscalatedCaseCount: 2
+      }
+    ]);
+  });
+
+  it("hydrates recent bulk batches with visible drift indicators when batch history is available", () => {
+    const summary = buildGovernanceOperationalRiskSummary(
+      [
+        {
+          ...buildRevenueQaCase("handoff-owner-1", "approved", "2026-04-13T11:00:00.000Z", "manual_request"),
+          followUpStatus: "attention",
+          latestHumanReply: {
+            approvedFromQa: false,
+            message: "Sent the reservation answer.",
+            nextAction: "Wait for manager callback",
+            nextActionDueAt: "2026-04-13T12:00:00.000Z",
+            sentAt: "2026-04-13T11:00:00.000Z",
+            sentByName: "Amina Rahman"
+          },
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId: "33333333-3333-4333-8333-333333333333",
+              caseCount: 3,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-13T12:30:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-13T11:15:00.000Z"
+          },
+          openInterventionsCount: 1,
+          ownerName: "Manager Desk North"
+        },
+        {
+          ...buildRevenueQaCase("bulk-cleared", "approved", "2026-04-13T08:00:00.000Z", "manual_request"),
+          followUpStatus: "on_track",
+          latestHumanReply: {
+            approvedFromQa: false,
+            message: "Shared the corrected reply.",
+            nextAction: "Hold until buyer confirms",
+            nextActionDueAt: "2026-04-13T15:00:00.000Z",
+            sentAt: "2026-04-13T08:00:00.000Z",
+            sentByName: "Omar Saleh"
+          },
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId: "33333333-3333-4333-8333-333333333333",
+              caseCount: 3,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-13T12:30:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-13T11:15:00.000Z"
+          },
+          openInterventionsCount: 0,
+          ownerName: "Manager Desk North"
+        }
+      ],
+      {
+        batchHistoryByBatchId: new Map([
+          [
+            "33333333-3333-4333-8333-333333333333",
+            {
+              casesWithHistoryCount: 2,
+              casesWithLaterChangesCount: 1,
+              historyCases: [],
+              laterBulkResetCount: 1,
+              postBatchFollowUpUpdateCount: 2
+            }
+          ]
+        ])
+      }
+    );
+
+    expect(summary.batchesWithDriftCount).toBe(1);
+    expect(summary.driftedCaseCount).toBe(1);
+    expect(summary.laterBulkResetCount).toBe(1);
+    expect(summary.postBatchFollowUpUpdateCount).toBe(2);
+    expect(summary.bulkBatches).toEqual([
+      {
+        batchId: "33333333-3333-4333-8333-333333333333",
+        caseCount: 3,
+        clearedCaseCount: 1,
+        currentOwnerNames: ["Manager Desk North"],
+        drift: {
+          casesWithHistoryCount: 2,
+          casesWithLaterChangesCount: 1,
+          laterBulkResetCount: 1,
+          postBatchFollowUpUpdateCount: 2
+        },
+        savedAt: "2026-04-13T11:15:00.000Z",
+        scopedOwnerName: "Revenue Ops Queue",
+        stillEscalatedCaseCount: 1
       }
     ]);
   });

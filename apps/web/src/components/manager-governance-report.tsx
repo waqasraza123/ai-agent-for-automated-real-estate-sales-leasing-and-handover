@@ -4,7 +4,6 @@ import {
   canOperatorRoleAccessWorkspace,
   type ListGovernanceEventsQuery,
   type OperatorRole,
-  type PersistedCaseSummary,
   type PersistedGovernanceEventList,
   type PersistedGovernanceEventRecord,
   type PersistedGovernanceSummary,
@@ -13,7 +12,7 @@ import {
 import { EmptyState, Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
-import { buildGovernanceOperationalRiskSummary } from "@/lib/governance-workspace";
+import type { GovernanceOperationalRiskSummary } from "@/lib/governance-workspace";
 import type { GovernanceReportView } from "@/lib/governance-report";
 import { getOperatorRoleLabel } from "@/lib/operator-role";
 import { buildCaseReferenceCode } from "@/lib/persisted-case-presenters";
@@ -23,10 +22,10 @@ import { buildRevenueManagerHref, revenueManagerFocusedQueueId } from "@/lib/rev
 export function ManagerGovernanceReport(props: {
   currentOperatorRole: OperatorRole;
   filters: ListGovernanceEventsQuery;
-  persistedCases: PersistedCaseSummary[];
   governanceEvents: PersistedGovernanceEventList | null;
   governanceSummary: PersistedGovernanceSummary | null;
   locale: SupportedLocale;
+  operationalRiskSummary: GovernanceOperationalRiskSummary;
   view: GovernanceReportView;
 }) {
   const activeRoleLabel = getOperatorRoleLabel(props.locale, props.currentOperatorRole);
@@ -35,7 +34,6 @@ export function ManagerGovernanceReport(props: {
   const openedCount = props.governanceSummary?.openedItems.totalCount ?? 0;
   const resolvedCount = props.governanceSummary?.resolvedItems.totalCount ?? 0;
   const filteredCount = props.governanceEvents?.totalCount ?? 0;
-  const operationalRiskSummary = buildGovernanceOperationalRiskSummary(props.persistedCases);
   const showQaHistory = props.view !== "operational_risk";
   const showOperationalRisk = props.view !== "qa_history";
 
@@ -118,7 +116,7 @@ export function ManagerGovernanceReport(props: {
         {showOperationalRisk ? (
           <article className="metric-tile metric-tile-ocean">
             <p className="metric-label">{props.locale === "ar" ? "تسليمات متصاعدة بعد الرد" : "Escalated reply handoffs"}</p>
-            <p className="metric-value">{operationalRiskSummary.totalEscalatedReplyHandoffCount}</p>
+            <p className="metric-value">{props.operationalRiskSummary.totalEscalatedReplyHandoffCount}</p>
             <p className="metric-detail">
               {props.locale === "ar"
                 ? "حالات حيّة انتقل فيها الرد البشري إلى مالك جديد ثم أصبحت متأخرة أو محملة بتدخلات مفتوحة."
@@ -128,12 +126,23 @@ export function ManagerGovernanceReport(props: {
         ) : null}
         {showOperationalRisk ? (
           <article className="metric-tile metric-tile-sand">
-            <p className="metric-label">{props.locale === "ar" ? "دفعات المتابعة الجماعية" : "Bulk follow-up batches"}</p>
-            <p className="metric-value">{operationalRiskSummary.bulkBatches.length}</p>
+            <p className="metric-label">{props.locale === "ar" ? "دفعات المتابعة مع انجراف" : "Bulk batches with drift"}</p>
+            <p className="metric-value">{props.operationalRiskSummary.batchesWithDriftCount}</p>
             <p className="metric-detail">
               {props.locale === "ar"
-                ? "أحدث الدفعات الجماعية التي ما زال أثرها ظاهراً على الحالات الحية بعد تصفية طابور المخاطر."
-                : "The most recent bulk follow-up batches whose result is still visible on the live case set after the risk queue was cleared."}
+                ? "الدفعات الحديثة التي تغيّرت فيها الحالات لاحقاً بعد إعادة الضبط الجماعية الأصلية."
+                : "Recent bulk batches where affected cases picked up later follow-up changes after the original reset."}
+            </p>
+          </article>
+        ) : null}
+        {showOperationalRisk ? (
+          <article className="metric-tile">
+            <p className="metric-label">{props.locale === "ar" ? "تغيّرات لاحقة مرئية" : "Visible later changes"}</p>
+            <p className="metric-value">{props.operationalRiskSummary.driftedCaseCount}</p>
+            <p className="metric-detail">
+              {props.locale === "ar"
+                ? "عدد الحالات داخل أحدث الدفعات التي حملت تحديث متابعة أو إعادة ضبط جماعية لاحقة."
+                : "Affected cases across the recent visible batches that later received another follow-up update or bulk reset."}
             </p>
           </article>
         ) : null}
@@ -296,8 +305,8 @@ export function ManagerGovernanceReport(props: {
               <StatusBadge>
                 {props.view === "operational_risk"
                   ? props.locale === "ar"
-                    ? `${operationalRiskSummary.totalEscalatedReplyHandoffCount} مخاطر حية`
-                    : `${operationalRiskSummary.totalEscalatedReplyHandoffCount} live risks`
+                    ? `${props.operationalRiskSummary.totalEscalatedReplyHandoffCount} مخاطر حية`
+                    : `${props.operationalRiskSummary.totalEscalatedReplyHandoffCount} live risks`
                   : props.locale === "ar"
                     ? `${filteredCount} صفاً مطابقاً`
                     : `${filteredCount} matching rows`}
@@ -317,7 +326,7 @@ export function ManagerGovernanceReport(props: {
 
       {showOperationalRisk ? (
       <Panel title={props.locale === "ar" ? "ضغط تسليمات الردود" : "Reply handoff pressure"}>
-        {operationalRiskSummary.owners.length > 0 ? (
+        {props.operationalRiskSummary.owners.length > 0 ? (
           <div className="lead-table-wrapper">
             <table className="lead-table">
               <thead>
@@ -329,7 +338,7 @@ export function ManagerGovernanceReport(props: {
                 </tr>
               </thead>
               <tbody>
-                {operationalRiskSummary.owners.map((owner) => (
+                {props.operationalRiskSummary.owners.map((owner) => (
                   <tr key={owner.ownerName}>
                     <td data-column-label={props.locale === "ar" ? "المالك الحالي" : "Current owner"}>
                       <div className="table-link">
@@ -395,7 +404,7 @@ export function ManagerGovernanceReport(props: {
 
       {showOperationalRisk ? (
       <Panel title={props.locale === "ar" ? "نتائج المتابعة الجماعية الأخيرة" : "Recent bulk follow-up results"}>
-        {operationalRiskSummary.bulkBatches.length > 0 ? (
+        {props.operationalRiskSummary.bulkBatches.length > 0 ? (
           <div className="lead-table-wrapper">
             <table className="lead-table">
               <thead>
@@ -403,11 +412,12 @@ export function ManagerGovernanceReport(props: {
                   <th>{props.locale === "ar" ? "الدفعة" : "Batch"}</th>
                   <th>{props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}</th>
                   <th>{props.locale === "ar" ? "النتيجة الحالية" : "Current result"}</th>
+                  <th>{props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}</th>
                   <th>{props.locale === "ar" ? "المسار" : "Route"}</th>
                 </tr>
               </thead>
               <tbody>
-                {operationalRiskSummary.bulkBatches.map((batch) => (
+                {props.operationalRiskSummary.bulkBatches.map((batch) => (
                   <tr key={batch.batchId}>
                     <td data-column-label={props.locale === "ar" ? "الدفعة" : "Batch"}>
                       <div className="table-link">
@@ -443,6 +453,36 @@ export function ManagerGovernanceReport(props: {
                         </StatusBadge>
                       </div>
                     </td>
+                    <td data-column-label={props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}>
+                      {batch.drift ? (
+                        <div className="stack-tight">
+                          <StatusBadge tone={batch.drift.casesWithLaterChangesCount > 0 ? "warning" : "success"}>
+                            {props.locale === "ar"
+                              ? `${batch.drift.casesWithLaterChangesCount} تغيّرت لاحقاً`
+                              : `${batch.drift.casesWithLaterChangesCount} changed later`}
+                          </StatusBadge>
+                          <div className="status-row-wrap">
+                            <StatusBadge>{props.locale === "ar" ? `${batch.drift.casesWithHistoryCount} بسجل` : `${batch.drift.casesWithHistoryCount} with history`}</StatusBadge>
+                            {batch.drift.postBatchFollowUpUpdateCount > 0 ? (
+                              <StatusBadge>
+                                {props.locale === "ar"
+                                  ? `${batch.drift.postBatchFollowUpUpdateCount} تحديثات متابعة`
+                                  : `${batch.drift.postBatchFollowUpUpdateCount} follow-up updates`}
+                              </StatusBadge>
+                            ) : null}
+                            {batch.drift.laterBulkResetCount > 0 ? (
+                              <StatusBadge>
+                                {props.locale === "ar"
+                                  ? `${batch.drift.laterBulkResetCount} دفعات لاحقة`
+                                  : `${batch.drift.laterBulkResetCount} later bulk resets`}
+                              </StatusBadge>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <StatusBadge>{props.locale === "ar" ? "لا يوجد انجراف مرئي" : "No visible drift"}</StatusBadge>
+                      )}
+                    </td>
                     <td data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
                       <Link
                         className="inline-link"
@@ -466,8 +506,8 @@ export function ManagerGovernanceReport(props: {
           <EmptyState
             summary={
               props.locale === "ar"
-                ? "لا توجد حالياً دفعات متابعة جماعية حديثة ما زال أثرها ظاهراً على السجل الحي."
-                : "No recent bulk follow-up batches currently have visible results on the live case set."
+                ? "لا توجد حالياً دفعات متابعة جماعية حديثة ما زال أثرها وظروف انجرافها ظاهرة على السجل الحي."
+                : "No recent bulk follow-up batches currently have visible results or drift signals on the live case set."
             }
             title={props.locale === "ar" ? "لا توجد نتائج جماعية بعد" : "No visible bulk results yet"}
           />

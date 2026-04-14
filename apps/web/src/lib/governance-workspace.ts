@@ -6,6 +6,7 @@ import type {
 } from "@real-estate-ai/contracts";
 
 import { hasPersistedLatestHumanReplyEscalation } from "./persisted-case-presenters";
+import type { RevenueManagerBatchHistorySummary } from "./revenue-manager";
 
 type PersistedGovernanceCase = PersistedCaseDetail | PersistedCaseSummary;
 
@@ -30,9 +31,28 @@ export interface GovernanceOperationalRiskBulkBatch {
   caseCount: number;
   clearedCaseCount: number;
   currentOwnerNames: string[];
+  drift?: GovernanceOperationalRiskBatchDrift;
   savedAt: string;
   scopedOwnerName: string;
   stillEscalatedCaseCount: number;
+}
+
+export interface GovernanceOperationalRiskBatchDrift {
+  casesWithHistoryCount: number;
+  casesWithLaterChangesCount: number;
+  laterBulkResetCount: number;
+  postBatchFollowUpUpdateCount: number;
+}
+
+export interface GovernanceOperationalRiskSummary {
+  batchesWithDriftCount: number;
+  bulkBatches: GovernanceOperationalRiskBulkBatch[];
+  driftedCaseCount: number;
+  escalatedReplyHandoffCases: PersistedGovernanceCase[];
+  laterBulkResetCount: number;
+  owners: GovernanceOperationalRiskOwner[];
+  postBatchFollowUpUpdateCount: number;
+  totalEscalatedReplyHandoffCount: number;
 }
 
 export function buildManagerGovernanceSummary(
@@ -98,7 +118,10 @@ export function buildManagerGovernanceSummary(
   };
 }
 
-export function buildGovernanceOperationalRiskSummary(persistedCases: PersistedGovernanceCase[]) {
+export function buildGovernanceOperationalRiskSummary(
+  persistedCases: PersistedGovernanceCase[],
+  options: { batchHistoryByBatchId?: ReadonlyMap<string, RevenueManagerBatchHistorySummary> } = {}
+): GovernanceOperationalRiskSummary {
   const escalatedReplyHandoffCases = persistedCases.filter((caseItem) =>
     hasPersistedLatestHumanReplyEscalation(
       caseItem.ownerName,
@@ -171,11 +194,40 @@ export function buildGovernanceOperationalRiskSummary(persistedCases: PersistedG
     });
   }
 
+  const recentBulkBatches = [...bulkBatches.values()]
+    .sort((left, right) => new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime())
+    .slice(0, 5)
+    .map((batch) => {
+      const history = options.batchHistoryByBatchId?.get(batch.batchId);
+
+      if (!history) {
+        return batch;
+      }
+
+      return {
+        ...batch,
+        drift: {
+          casesWithHistoryCount: history.casesWithHistoryCount,
+          casesWithLaterChangesCount: history.casesWithLaterChangesCount,
+          laterBulkResetCount: history.laterBulkResetCount,
+          postBatchFollowUpUpdateCount: history.postBatchFollowUpUpdateCount
+        }
+      };
+    });
+  const batchesWithDriftCount = recentBulkBatches.filter((batch) => (batch.drift?.casesWithLaterChangesCount ?? 0) > 0).length;
+  const driftedCaseCount = recentBulkBatches.reduce((total, batch) => total + (batch.drift?.casesWithLaterChangesCount ?? 0), 0);
+  const laterBulkResetCount = recentBulkBatches.reduce((total, batch) => total + (batch.drift?.laterBulkResetCount ?? 0), 0);
+  const postBatchFollowUpUpdateCount = recentBulkBatches.reduce(
+    (total, batch) => total + (batch.drift?.postBatchFollowUpUpdateCount ?? 0),
+    0
+  );
+
   return {
-    bulkBatches: [...bulkBatches.values()]
-      .sort((left, right) => new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime())
-      .slice(0, 5),
+    batchesWithDriftCount,
+    bulkBatches: recentBulkBatches,
+    driftedCaseCount,
     escalatedReplyHandoffCases,
+    laterBulkResetCount,
     owners: [...owners.values()]
       .sort((left, right) => {
         if (left.escalatedHandoffCount !== right.escalatedHandoffCount) {
@@ -189,6 +241,7 @@ export function buildGovernanceOperationalRiskSummary(persistedCases: PersistedG
         return left.ownerName.localeCompare(right.ownerName);
       })
       .slice(0, 5),
+    postBatchFollowUpUpdateCount,
     totalEscalatedReplyHandoffCount: escalatedReplyHandoffCases.length
   };
 }

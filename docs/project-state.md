@@ -74,6 +74,7 @@
 - The next persisted Phase 5 operational-risk-bulk-owner-grouping boundary is now live locally: mixed-owner batch scopes now group affected cases by their current desk so managers can reopen shared follow-up actioning inside each owner cluster after the original bulk reset has drifted
 - The next persisted Phase 5 operational-risk-batch-export boundary is now live locally: exact batch-scoped revenue views now export the affected live cases as CSV with batch, owner-group, and current-risk columns so grouped recovery can be audited outside the UI
 - The next persisted Phase 5 operational-risk-batch-history boundary is now live locally: exact batch-scoped revenue views now reconstruct in-product follow-up history from case audit events so managers can inspect the original bulk reset plus any later per-case or later-bulk follow-up changes without leaving the scoped queue
+- The next persisted Phase 5 operational-risk-batch-drift-reporting boundary is now live locally: governance operational-risk reporting now surfaces later-change drift indicators for recent bulk follow-up batches from reconstructed case audit history before managers drill into the exact affected-case scope
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -128,6 +129,7 @@
 - Added the next persisted Phase 5 operational-risk-bulk-owner-grouping slice with current-owner grouping on batch-scoped revenue views, owner-level still-escalated vs cleared counts, reopened bulk follow-up actioning inside each mixed-owner cluster, and successful fast-test, lint, build, and typecheck verification
 - Added the next persisted Phase 5 operational-risk-batch-export slice with a dedicated revenue-manager CSV export route for exact bulk-batch scope, shared batch-export shaping in revenue helpers, affected-case export actions on the scoped revenue UI, focused export coverage, and successful fast-test, lint, build, and typecheck verification
 - Added the next persisted Phase 5 operational-risk-batch-history slice with scoped case-detail fetches on exact batch views, shared audit-event history derivation for original vs later follow-up saves, in-product history rendering on the revenue manager surface, focused history coverage, and successful fast-test, lint, build, and typecheck verification
+- Added the next persisted Phase 5 operational-risk-batch-drift-reporting slice with governance-route hydration for recent batch-scoped case details, shared drift counts derived from existing batch-history logic, operational-risk report visibility for later follow-up updates and later bulk resets before drill-down, and successful focused-test plus typecheck verification
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -187,6 +189,7 @@
 - Mixed-owner batch recovery also remains a revenue-workspace concern in the web layer, so reopened bulk actioning is regrouped by each case's current owner after drill-down instead of mutating the original batch identity
 - Batch export remains a revenue-workspace artifact built from the live scoped case set, so affected-case CSV output reuses the existing batch drill-down model instead of introducing a second persisted export snapshot
 - In-product batch history also remains a revenue-workspace concern built from existing case-detail audit events, so later follow-up drift is reconstructed on demand for the scoped batch instead of introducing a dedicated persisted batch-history model
+- Governance-side batch-drift reporting remains a web-layer concern built by hydrating case details only for the recent visible bulk batches, so the existing governance summary API and case-summary contract stay unchanged
 - Bulk-result drill-down remains a web-layer revenue-routing concern, so governance reporting links into a batch-id-scoped revenue view instead of extending the API with a dedicated bulk-batch detail endpoint
 - Prepared handover customer updates now carry their own persisted QA gate state, and dispatch-ready promotion is blocked whenever the latest draft review is pending or marked for follow-up
 - Manager governance analytics now derive directly from the existing case-summary QA fields so revenue and handover command centers can show governance pressure without a separate reporting backend

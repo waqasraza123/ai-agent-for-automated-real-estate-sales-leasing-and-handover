@@ -1,11 +1,18 @@
-import { canOperatorRoleAccessWorkspace, type SupportedLocale } from "@real-estate-ai/contracts";
+import { canOperatorRoleAccessWorkspace, type PersistedCaseDetail, type SupportedLocale } from "@real-estate-ai/contracts";
 import { Panel } from "@real-estate-ai/ui";
 
 import { ManagerGovernanceReport } from "@/components/manager-governance-report";
 import { ScreenIntro } from "@/components/screen-intro";
+import { buildGovernanceOperationalRiskSummary } from "@/lib/governance-workspace";
 import { parseGovernanceReportSearchParams, parseGovernanceReportView } from "@/lib/governance-report";
-import { tryGetPersistedGovernanceEvents, tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
+import {
+  tryGetPersistedCaseDetail,
+  tryGetPersistedGovernanceEvents,
+  tryGetPersistedGovernanceSummary,
+  tryListPersistedCases
+} from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
+import { buildRevenueManagerBatchHistory, buildRevenueManagerScope } from "@/lib/revenue-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +60,47 @@ export default async function ManagerGovernanceReportPage(props: PageProps) {
     tryGetPersistedGovernanceEvents(filters),
     tryListPersistedCases()
   ]);
+  const baseOperationalRiskSummary = buildGovernanceOperationalRiskSummary(persistedCases ?? []);
+  const recentBatchScopes = baseOperationalRiskSummary.bulkBatches.map((batch) => ({
+    batchId: batch.batchId,
+    scope: buildRevenueManagerScope(persistedCases ?? [], {
+      bulkBatchId: batch.batchId,
+      queue: "escalated_handoffs"
+    })
+  }));
+  const recentBatchCaseIds = [...new Set(recentBatchScopes.flatMap(({ scope }) => scope.focusedCases.map((caseItem) => caseItem.caseId)))];
+  const recentBatchCaseDetails = new Map<string, PersistedCaseDetail>(
+    (
+      await Promise.all(
+        recentBatchCaseIds.map(async (caseId) => {
+          const caseDetail = await tryGetPersistedCaseDetail(caseId);
+
+          return caseDetail ? ([caseId, caseDetail] as const) : null;
+        })
+      )
+    ).flatMap((entry) => (entry ? [entry] : []))
+  );
+
+  const batchHistoryByBatchId = new Map<string, NonNullable<ReturnType<typeof buildRevenueManagerBatchHistory>>>();
+
+  for (const { batchId, scope } of recentBatchScopes) {
+    const batchHistory = buildRevenueManagerBatchHistory(
+      scope,
+      scope.focusedCases.flatMap((caseItem) => {
+        const caseDetail = recentBatchCaseDetails.get(caseItem.caseId);
+
+        return caseDetail ? [caseDetail] : [];
+      })
+    );
+
+    if (batchHistory) {
+      batchHistoryByBatchId.set(batchId, batchHistory);
+    }
+  }
+
+  const operationalRiskSummary = buildGovernanceOperationalRiskSummary(persistedCases ?? [], {
+    batchHistoryByBatchId
+  });
 
   return (
     <ManagerGovernanceReport
@@ -61,7 +109,7 @@ export default async function ManagerGovernanceReportPage(props: PageProps) {
       governanceEvents={governanceEvents}
       governanceSummary={governanceSummary}
       locale={locale}
-      persistedCases={persistedCases ?? []}
+      operationalRiskSummary={operationalRiskSummary}
       view={view}
     />
   );
