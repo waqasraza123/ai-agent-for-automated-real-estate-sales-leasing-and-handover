@@ -207,6 +207,28 @@ export function formatDueAt(value: PersistedCaseDetail | PersistedCaseSummary, l
   return new Date(value.nextActionDueAt).toLocaleString(locale);
 }
 
+export function formatLatestHumanReplySentAt(
+  latestHumanReply: PersistedCaseDetail["latestHumanReply"] | PersistedCaseSummary["latestHumanReply"],
+  locale: SupportedLocale
+) {
+  return latestHumanReply ? new Date(latestHumanReply.sentAt).toLocaleString(locale) : null;
+}
+
+export function getPersistedLatestHumanReplyLabel(
+  locale: SupportedLocale,
+  latestHumanReply: PersistedCaseDetail["latestHumanReply"] | PersistedCaseSummary["latestHumanReply"]
+) {
+  if (!latestHumanReply) {
+    return null;
+  }
+
+  if (latestHumanReply.approvedFromQa) {
+    return locale === "ar" ? "رد بشري بعد اعتماد الجودة" : "Human reply after QA approval";
+  }
+
+  return locale === "ar" ? "رد بشري محفوظ" : "Human reply saved";
+}
+
 export function getPersistedAutomationLabel(locale: SupportedLocale, automationStatus: PersistedCaseDetail["automationStatus"]) {
   return getAutomationStatusLabel(locale, automationStatus);
 }

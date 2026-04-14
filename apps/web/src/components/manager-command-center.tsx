@@ -35,12 +35,14 @@ import { getOperatorRoleLabel } from "@/lib/operator-role";
 import {
   buildCaseReferenceCode,
   formatCaseLastChange,
+  formatLatestHumanReplySentAt,
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
   getPersistedHandoverCustomerUpdateQaReviewDisplay,
   getPersistedHandoverWorkspaceDisplay,
+  getPersistedLatestHumanReplyLabel,
   getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
 
@@ -969,6 +971,8 @@ export function RevenueManagerCommandCenter(props: {
               const handoverDisplay = getPersistedHandoverWorkspaceDisplay(props.locale, caseItem);
               const qaReviewDisplay = getPersistedQaReviewDisplay(props.locale, caseItem);
               const automationHoldReasonLabel = getPersistedAutomationHoldReasonLabel(props.locale, caseItem.automationHoldReason);
+              const latestHumanReplyLabel = getPersistedLatestHumanReplyLabel(props.locale, caseItem.latestHumanReply);
+              const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, props.locale);
 
               return (
                 <article key={caseItem.caseId} className="alert-row alert-row-high">
@@ -989,6 +993,15 @@ export function RevenueManagerCommandCenter(props: {
                     </div>
                   </div>
                   <p>{caseItem.nextAction}</p>
+                  {caseItem.latestHumanReply ? (
+                    <p className="case-link-meta">
+                      {latestHumanReplyLabel}
+                      {" · "}
+                      {caseItem.latestHumanReply.sentByName}
+                      {" · "}
+                      {latestHumanReplySentAt}
+                    </p>
+                  ) : null}
                   <p className="case-link-meta">{formatCaseLastChange(caseItem, props.locale)}</p>
                   <div className="status-row-wrap">
                     <StatusBadge>{getPersistedAutomationLabel(props.locale, caseItem.automationStatus)}</StatusBadge>
@@ -1020,6 +1033,8 @@ export function RevenueManagerCommandCenter(props: {
               const handoverDisplay = getPersistedHandoverWorkspaceDisplay(props.locale, caseItem);
               const qaReviewDisplay = getPersistedQaReviewDisplay(props.locale, caseItem);
               const automationHoldReasonLabel = getPersistedAutomationHoldReasonLabel(props.locale, caseItem.automationHoldReason);
+              const latestHumanReplyLabel = getPersistedLatestHumanReplyLabel(props.locale, caseItem.latestHumanReply);
+              const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, props.locale);
 
               return (
                 <Link key={caseItem.caseId} className="case-link-card" href={`/${props.locale}/leads/${caseItem.caseId}`}>
@@ -1027,6 +1042,15 @@ export function RevenueManagerCommandCenter(props: {
                     <p className="case-link-meta">{buildCaseReferenceCode(caseItem.caseId)}</p>
                     <h3>{caseItem.customerName}</h3>
                     <p>{caseItem.nextAction}</p>
+                    {caseItem.latestHumanReply ? (
+                      <p className="case-link-meta">
+                        {latestHumanReplyLabel}
+                        {" · "}
+                        {caseItem.latestHumanReply.sentByName}
+                        {" · "}
+                        {latestHumanReplySentAt}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="case-link-aside">
                     <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>

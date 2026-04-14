@@ -23,6 +23,7 @@ import {
   buildPersistedTimeline,
   formatCaseLastChange,
   formatDueAt,
+  formatLatestHumanReplySentAt,
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
   getPersistedAutomationHoldReasonNote,
@@ -30,6 +31,7 @@ import {
   getPersistedFollowUpLabel,
   getPersistedHandoverStatusLabel,
   getPersistedInterventionDisplay,
+  getPersistedLatestHumanReplyLabel,
   getPersistedQaReviewDisplay,
   getPersistedQualificationSummary,
   getPersistedSourceLabel
@@ -92,6 +94,8 @@ export default async function LeadProfilePage(props: PageProps) {
       persistedCase.automationStatus,
       persistedCase.automationHoldReason
     );
+    const latestHumanReplyLabel = getPersistedLatestHumanReplyLabel(locale, persistedCase.latestHumanReply);
+    const latestHumanReplySentAt = formatLatestHumanReplySentAt(persistedCase.latestHumanReply, locale);
 
     return (
       <div className="page-stack">
@@ -196,6 +200,38 @@ export default async function LeadProfilePage(props: PageProps) {
         </div>
 
         <div className="two-column-grid">
+          <Panel title={locale === "ar" ? "آخر رد بشري" : "Latest human reply"}>
+            {persistedCase.latestHumanReply ? (
+              <div className="page-stack">
+                <div className="row-between">
+                  <h3>{persistedCase.latestHumanReply.sentByName}</h3>
+                  {latestHumanReplyLabel ? <StatusBadge tone="success">{latestHumanReplyLabel}</StatusBadge> : null}
+                </div>
+                <p>{persistedCase.latestHumanReply.message}</p>
+                <dl className="detail-list">
+                  <div>
+                    <dt>{locale === "ar" ? "وقت الإرسال" : "Sent at"}</dt>
+                    <dd>{latestHumanReplySentAt}</dd>
+                  </div>
+                  <div>
+                    <dt>{locale === "ar" ? "الخطوة التالية المحفوظة" : "Saved next action"}</dt>
+                    <dd>{persistedCase.latestHumanReply.nextAction}</dd>
+                  </div>
+                  <div>
+                    <dt>{locale === "ar" ? "موعد الخطوة التالية" : "Next action due"}</dt>
+                    <dd>{new Date(persistedCase.latestHumanReply.nextActionDueAt).toLocaleString(locale)}</dd>
+                  </div>
+                </dl>
+              </div>
+            ) : (
+              <p className="panel-summary">
+                {locale === "ar"
+                  ? "لم يُسجل على هذه الحالة أي رد بشري بعد."
+                  : "No human reply has been recorded on this case yet."}
+              </p>
+            )}
+          </Panel>
+
           <Panel title={qaReviewRequestCopy.title}>
             <p className="panel-summary">{qaReviewRequestCopy.summary}</p>
             <p className="field-note">{qaSamplingGuardNote}</p>

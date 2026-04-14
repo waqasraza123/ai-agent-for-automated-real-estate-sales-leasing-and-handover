@@ -60,6 +60,7 @@
 - The next persisted Phase 5 exportable-governance-reporting boundary is now live locally: manager roles can open a dedicated governance report route with filterable detailed QA event history across revenue and handover, and export the current scope as CSV through the trusted local session path
 - The next persisted Phase 5 automation-governance boundary is now live locally: open case QA reviews now suppress follow-up automation, clearing or follow-up-required outcomes derive an explicit case automation hold state, and revenue plus manager surfaces show that governance hold directly
 - The next persisted Phase 5 human-override boundary is now live locally: eligible revenue operators can now record a real human reply on the case, open QA holds block that send path, approved reply drafts must be sent exactly as approved until consumed, the send path now resets the next action and clears overdue intervention state, and the conversation plus timeline now show the manual override outcome
+- The next persisted Phase 5 revenue-audit-visibility boundary is now live locally: case detail, lead-list, and revenue-manager surfaces now expose the latest sent human reply with sender, time, QA-cleared state, and saved follow-up context without opening the full conversation history
 
 ## Completed Major Slices
 - Bootstrapped durable repo memory and operating instructions
@@ -100,6 +101,7 @@
 - Added the next persisted Phase 5 exportable-governance-reporting slice with filterable governance-event contracts, normalized event reporting from audit history, a manager-only `/manager/governance` route, CSV export, manager-route entry links, and integration plus smoke coverage for the new reporting surface
 - Added the next persisted Phase 5 automation-governance slice with derived case automation-hold state from QA reviews, worker-side suppression of overdue automation while QA is open, follow-up job re-arming when QA clears, manager and lead-surface hold visibility, and lifecycle coverage across API, worker, and manager-unit tests
 - Added the next persisted Phase 5 human-override slice with a role-aware case-reply mutation, QA-gated reply-send rules, consumed approved-draft enforcement, next-action reset plus overdue-intervention clearance on send, persisted reply audit history, conversation-thread rendering for sent human replies, and fast plus integration coverage for the override lifecycle
+- Added the next persisted Phase 5 revenue-audit-visibility slice with a derived latest-human-reply summary on case contracts, persisted latest-reply hydration from audit history, manager and lead-surface visibility for the latest human takeover outcome, and integration plus presenter coverage for the new summary contract
 - Strengthened push verification to include lint and API integration tests in addition to typecheck, fast tests, and build
 
 ## Important Decisions
@@ -145,6 +147,7 @@
 - Automatic QA sampling now runs during website lead intake when the inbound message matches local policy heuristics, and the persisted review keeps explicit trigger source, signal list, and matched-evidence context
 - Case QA reviews now carry an explicit subject type and optional prepared reply draft text so the same persisted review boundary can govern both inbound-message sampling and outbound revenue reply-draft approval without a parallel review system
 - Approved prepared revenue reply drafts now act as a one-time governed send boundary: the first human reply must match the approved text exactly, that send must also capture the next action and due time, and subsequent human replies can continue on the live case without reusing that approval token
+- Case summaries and detail now expose a derived `latestHumanReply` summary from audit history so manager and sales surfaces can inspect the most recent human takeover outcome without replaying the full conversation thread
 - Prepared handover customer updates now carry their own persisted QA gate state, and dispatch-ready promotion is blocked whenever the latest draft review is pending or marked for follow-up
 - Manager governance analytics now derive directly from the existing case-summary QA fields so revenue and handover command centers can show governance pressure without a separate reporting backend
 - Historical governance reporting now comes from a dedicated summary endpoint aggregated from persisted QA records plus audit events, rather than expanding the case-list contract with trend data

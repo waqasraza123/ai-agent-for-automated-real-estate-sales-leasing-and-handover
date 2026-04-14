@@ -442,6 +442,15 @@ export const persistedAuditEventSchema = z.object({
   payload: z.record(z.string(), z.unknown())
 });
 
+export const persistedLatestCaseReplySchema = z.object({
+  approvedFromQa: z.boolean(),
+  message: z.string(),
+  nextAction: z.string(),
+  nextActionDueAt: z.iso.datetime(),
+  sentAt: z.iso.datetime(),
+  sentByName: z.string()
+});
+
 export const persistedGovernanceCurrentOpenSummarySchema = z.object({
   caseMessageCount: z.number().int().min(0),
   followUpRequiredCount: z.number().int().min(0),
@@ -553,6 +562,7 @@ export const persistedCaseSummarySchema = z.object({
   caseId: z.uuid(),
   createdAt: z.iso.datetime(),
   currentHandoverCustomerUpdateQaReview: persistedCurrentHandoverCustomerUpdateQaReviewSchema.nullable(),
+  latestHumanReply: persistedLatestCaseReplySchema.nullable(),
   currentQaReview: persistedCaseQaReviewSchema.nullable(),
   customerName: z.string(),
   followUpStatus: followUpStatusSchema,
@@ -662,6 +672,7 @@ export type PrepareCaseReplyDraftQaReviewInput = z.infer<typeof prepareCaseReply
 export type ListGovernanceEventsQuery = z.infer<typeof listGovernanceEventsQuerySchema>;
 export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseQaReview = z.infer<typeof persistedCaseQaReviewSchema>;
+export type PersistedLatestCaseReply = z.infer<typeof persistedLatestCaseReplySchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
 export type PersistedCurrentHandoverCustomerUpdateQaReview = z.infer<typeof persistedCurrentHandoverCustomerUpdateQaReviewSchema>;
 export type PersistedDocumentRequest = z.infer<typeof persistedDocumentRequestSchema>;

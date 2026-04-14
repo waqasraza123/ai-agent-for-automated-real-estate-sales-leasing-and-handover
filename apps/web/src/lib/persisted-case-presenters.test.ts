@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PersistedCaseDetail } from "@real-estate-ai/contracts";
 
-import { buildPersistedConversation } from "./persisted-case-presenters";
+import { buildPersistedConversation, formatLatestHumanReplySentAt, getPersistedLatestHumanReplyLabel } from "./persisted-case-presenters";
 
 const qaReviewId = "11111111-1111-4111-8111-111111111111";
 
@@ -15,6 +15,7 @@ function buildCaseDetail(auditEvents: PersistedCaseDetail["auditEvents"]): Persi
     caseId: "22222222-2222-4222-8222-222222222222",
     createdAt: "2026-04-13T09:00:00.000Z",
     currentHandoverCustomerUpdateQaReview: null,
+    latestHumanReply: null,
     currentQaReview: {
       createdAt: "2026-04-13T09:05:00.000Z",
       draftMessage: "Approved reply draft text",
@@ -93,5 +94,33 @@ describe("buildPersistedConversation", () => {
     expect(managerMessages).toHaveLength(1);
     expect(managerMessages[0]?.body.en).toBe("Approved reply draft text");
     expect(managerMessages[0]?.state?.en).toBe("Human reply sent after QA approval");
+  });
+
+  it("formats the latest human reply state for manager-facing surfaces", () => {
+    const caseDetail = buildCaseDetail([
+      {
+        createdAt: "2026-04-13T09:12:00.000Z",
+        eventType: "case_reply_sent",
+        payload: {
+          approvedDraftQaReviewId: qaReviewId,
+          message: "Approved reply draft text",
+          nextAction: "Confirm receipt of the approved reply",
+          nextActionDueAt: "2026-04-14T09:00:00.000Z",
+          sentByName: "Amina Rahman"
+        }
+      }
+    ]);
+
+    caseDetail.latestHumanReply = {
+      approvedFromQa: true,
+      message: "Approved reply draft text",
+      nextAction: "Confirm receipt of the approved reply",
+      nextActionDueAt: "2026-04-14T09:00:00.000Z",
+      sentAt: "2026-04-13T09:12:00.000Z",
+      sentByName: "Amina Rahman"
+    };
+
+    expect(getPersistedLatestHumanReplyLabel("en", caseDetail.latestHumanReply)).toBe("Human reply after QA approval");
+    expect(formatLatestHumanReplySentAt(caseDetail.latestHumanReply, "en")).toBe(new Date("2026-04-13T09:12:00.000Z").toLocaleString("en"));
   });
 });

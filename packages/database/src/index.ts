@@ -61,6 +61,7 @@ import type {
   PersistedHandoverClosureSummary,
   PersistedHandoverCustomerUpdate,
   PersistedHandoverMilestone,
+  PersistedLatestCaseReply,
   PersistedHandoverPostCompletionFollowUp,
   PersistedHandoverReview,
   PersistedHandoverTask,
@@ -1258,6 +1259,38 @@ export async function createAlphaLeadCaptureStore(options?: {
     return latestReviews;
   };
 
+  const listLatestCaseReplies = async (caseIds: string[]) => {
+    const caseIdsWithValues = caseIds.filter(Boolean);
+
+    if (caseIdsWithValues.length === 0) {
+      return new Map<string, PersistedLatestCaseReply>();
+    }
+
+    const records = await db
+      .select({
+        caseId: auditEvents.caseId,
+        createdAt: auditEvents.createdAt,
+        payload: auditEvents.payload
+      })
+      .from(auditEvents)
+      .where(and(inArray(auditEvents.caseId, caseIdsWithValues), eq(auditEvents.eventType, "case_reply_sent")))
+      .orderBy(desc(auditEvents.createdAt));
+
+    const latestReplies = new Map<string, PersistedLatestCaseReply>();
+
+    for (const record of records) {
+      if (!latestReplies.has(record.caseId)) {
+        const hydratedReply = hydrateLatestCaseReply(record);
+
+        if (hydratedReply) {
+          latestReplies.set(record.caseId, hydratedReply);
+        }
+      }
+    }
+
+    return latestReplies;
+  };
+
   const listCurrentHandoverCustomerUpdateQaReviews = async (caseIds: string[]) => {
     const caseIdsWithValues = caseIds.filter(Boolean);
 
@@ -1748,6 +1781,10 @@ export async function createAlphaLeadCaptureStore(options?: {
     const hydratedInterventions = persistedInterventions.map((intervention) => hydrateManagerIntervention(intervention));
     const hydratedQaReviews = persistedQaReviews.map((qaReview) => hydrateCaseQaReview(qaReview));
     const currentQaReview = hydratedQaReviews[0] ?? null;
+    const latestHumanReply = caseAuditEvents
+      .filter((event) => event.eventType === "case_reply_sent")
+      .map((event) => hydrateLatestCaseReply({ caseId, createdAt: event.createdAt, payload: event.payload }))
+      .find((reply): reply is PersistedLatestCaseReply => reply !== null) ?? null;
 
     return {
       auditEvents: caseAuditEvents.map((event) => ({
@@ -1782,6 +1819,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       followUpStatus: toFollowUpStatus(caseRecord.nextActionDueAt),
       handoverClosure: handoverClosureMap.get(caseId) ?? null,
       handoverCase: linkedHandoverCase[0] ? hydrateLinkedHandoverCase(linkedHandoverCase[0]) : null,
+      latestHumanReply,
       managerInterventions: hydratedInterventions,
       message: caseRecord.message,
       nextAction: caseRecord.nextAction,
@@ -2148,23 +2186,24 @@ export async function createAlphaLeadCaptureStore(options?: {
         automationHoldReason: getCaseAutomationHoldReason(currentQaReview),
         automationStatus: toAutomationStatus(createdCase.automationStatus),
         caseId: createdCase.caseId,
-        createdAt: createdCase.createdAt,
+        createdAt: toIsoDateTimeString(createdCase.createdAt),
         currentHandoverCustomerUpdateQaReview: null,
         currentQaReview,
         customerName: createdCase.customerName,
         followUpStatus: toFollowUpStatus(createdCase.nextActionDueAt),
         handoverCase: null,
         handoverClosure: null,
+        latestHumanReply: null,
         leadId: createdCase.leadId,
         nextAction: createdCase.nextAction,
-        nextActionDueAt: createdCase.nextActionDueAt,
+        nextActionDueAt: toIsoDateTimeString(createdCase.nextActionDueAt),
         openInterventionsCount: 0,
         ownerName: createdCase.ownerName,
         preferredLocale: toSupportedLocale(createdCase.preferredLocale),
         projectInterest: createdCase.projectInterest,
         source: toLeadSource(createdCase.source),
         stage: toCaseStage(createdCase.stage),
-        updatedAt: createdCase.updatedAt
+        updatedAt: toIsoDateTimeString(createdCase.updatedAt)
       };
     },
     async requestCaseQaReview(caseId, input) {
@@ -2450,11 +2489,12 @@ export async function createAlphaLeadCaptureStore(options?: {
         .orderBy(desc(cases.createdAt));
 
       const caseIds = persistedCases.map((caseRecord) => caseRecord.caseId);
-      const [openInterventionCounts, currentQaReviews, currentHandoverCustomerUpdateQaReviews, linkedHandoverCases, handoverClosureSummaries] =
+      const [openInterventionCounts, currentQaReviews, currentHandoverCustomerUpdateQaReviews, latestCaseReplies, linkedHandoverCases, handoverClosureSummaries] =
         await Promise.all([
         listOpenInterventionCounts(caseIds),
         listCurrentQaReviews(caseIds),
         listCurrentHandoverCustomerUpdateQaReviews(caseIds),
+        listLatestCaseReplies(caseIds),
         listLinkedHandoverCases(caseIds),
         listHandoverClosureSummaries(caseIds)
       ]);
@@ -2470,6 +2510,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         followUpStatus: toFollowUpStatus(caseRecord.nextActionDueAt),
         handoverCase: linkedHandoverCases.get(caseRecord.caseId) ?? null,
         handoverClosure: handoverClosureSummaries.get(caseRecord.caseId) ?? null,
+        latestHumanReply: latestCaseReplies.get(caseRecord.caseId) ?? null,
         nextAction: caseRecord.nextAction,
         nextActionDueAt: toIsoDateTimeString(caseRecord.nextActionDueAt),
         openInterventionsCount: openInterventionCounts.get(caseRecord.caseId) ?? 0,
@@ -5039,6 +5080,30 @@ function hydrateCaseQaReview(value: {
     triggerEvidence: value.triggerEvidence ?? [],
     triggerSource: toCaseQaReviewTriggerSource(value.triggerSource),
     updatedAt: value.updatedAt
+  };
+}
+
+function hydrateLatestCaseReply(value: {
+  caseId: string;
+  createdAt: string;
+  payload: Record<string, unknown>;
+}): PersistedLatestCaseReply | null {
+  const message = readPayloadString(value.payload, "message");
+  const nextAction = readPayloadString(value.payload, "nextAction");
+  const nextActionDueAt = readPayloadString(value.payload, "nextActionDueAt");
+  const sentByName = readPayloadString(value.payload, "sentByName");
+
+  if (!message || !nextAction || !nextActionDueAt || !sentByName) {
+    return null;
+  }
+
+  return {
+    approvedFromQa: typeof readPayloadString(value.payload, "approvedDraftQaReviewId") === "string",
+    message,
+    nextAction,
+    nextActionDueAt: toIsoDateTimeString(nextActionDueAt),
+    sentAt: toIsoDateTimeString(value.createdAt),
+    sentByName
   };
 }
 

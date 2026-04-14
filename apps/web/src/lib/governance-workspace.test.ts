@@ -49,6 +49,7 @@ function buildRevenueQaCase(caseId: string, status: CaseQaReviewStatus, updatedA
     followUpStatus: "on_track",
     handoverCase: null,
     handoverClosure: null,
+    latestHumanReply: null,
     nextAction: "Review governance hold",
     nextActionDueAt: "2026-04-12T08:00:00.000Z",
     openInterventionsCount: 0,

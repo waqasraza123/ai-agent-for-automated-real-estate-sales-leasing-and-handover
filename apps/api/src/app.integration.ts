@@ -455,6 +455,14 @@ describe("lead capture api", () => {
     expect(sendResponse.statusCode).toBe(200);
     expect(sendResponse.json().nextAction).toBe(nextAction);
     expect(sendResponse.json().nextActionDueAt).toBe(nextActionDueAt);
+    expect(sendResponse.json().latestHumanReply).toEqual({
+      approvedFromQa: true,
+      message: approvedDraftMessage,
+      nextAction,
+      nextActionDueAt,
+      sentAt: sendResponse.json().latestHumanReply.sentAt,
+      sentByName: "Amina Rahman"
+    });
 
     const detailResponse = await app.inject({
       method: "GET",
@@ -462,6 +470,14 @@ describe("lead capture api", () => {
     });
 
     expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json().latestHumanReply).toEqual({
+      approvedFromQa: true,
+      message: approvedDraftMessage,
+      nextAction,
+      nextActionDueAt,
+      sentAt: detailResponse.json().latestHumanReply.sentAt,
+      sentByName: "Amina Rahman"
+    });
     expect(
       detailResponse
         .json()
@@ -498,6 +514,21 @@ describe("lead capture api", () => {
     });
 
     expect(secondReplyResponse.statusCode).toBe(200);
+
+    const casesResponse = await app.inject({
+      method: "GET",
+      url: "/v1/cases"
+    });
+
+    expect(casesResponse.statusCode).toBe(200);
+    expect(casesResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === createdCase.caseId)?.latestHumanReply).toEqual({
+      approvedFromQa: false,
+      message: "Following up with the promised banking details and final booking checklist.",
+      nextAction: "Check whether the banking details were received and confirm the booking window.",
+      nextActionDueAt: "2026-04-15T12:00:00.000Z",
+      sentAt: casesResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === createdCase.caseId)?.latestHumanReply.sentAt,
+      sentByName: "Amina Rahman"
+    });
   });
 
   it("blocks a human reply while QA is still open and rejects edits to an approved draft", async () => {
@@ -639,6 +670,14 @@ describe("lead capture api", () => {
     expect(sendResponse.json().openInterventionsCount).toBe(0);
     expect(sendResponse.json().nextAction).toBe("Confirm that the customer received the reservation instructions.");
     expect(sendResponse.json().nextActionDueAt).toBe("2026-04-13T12:00:00.000Z");
+    expect(sendResponse.json().latestHumanReply).toEqual({
+      approvedFromQa: false,
+      message: "I just sent the reservation instructions and will confirm receipt next.",
+      nextAction: "Confirm that the customer received the reservation instructions.",
+      nextActionDueAt: "2026-04-13T12:00:00.000Z",
+      sentAt: sendResponse.json().latestHumanReply.sentAt,
+      sentByName: "Revenue Ops"
+    });
 
     const detailResponse = await app.inject({
       method: "GET",

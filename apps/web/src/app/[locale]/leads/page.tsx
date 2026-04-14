@@ -11,11 +11,13 @@ import {
   buildCaseReferenceCode,
   formatCaseLastChange,
   formatDueAt,
+  formatLatestHumanReplySentAt,
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
   getPersistedHandoverWorkspaceDisplay,
+  getPersistedLatestHumanReplyLabel,
   getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
 import { getInterventionCountLabel } from "@/lib/live-copy";
@@ -94,6 +96,8 @@ export default async function LeadsPage(props: PageProps) {
                     const handoverDisplay = getPersistedHandoverWorkspaceDisplay(locale, caseItem);
                     const qaReviewDisplay = getPersistedQaReviewDisplay(locale, caseItem);
                     const automationHoldReasonLabel = getPersistedAutomationHoldReasonLabel(locale, caseItem.automationHoldReason);
+                    const latestHumanReplyLabel = getPersistedLatestHumanReplyLabel(locale, caseItem.latestHumanReply);
+                    const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, locale);
 
                     return (
                       <tr key={caseItem.caseId}>
@@ -127,6 +131,15 @@ export default async function LeadsPage(props: PageProps) {
                         <td data-column-label={columnLabels.nextAction}>
                           <div className="stack-tight">
                             <span>{caseItem.nextAction}</span>
+                            {caseItem.latestHumanReply ? (
+                              <span className="case-link-meta">
+                                {latestHumanReplyLabel}
+                                {" · "}
+                                {caseItem.latestHumanReply.sentByName}
+                                {" · "}
+                                {latestHumanReplySentAt}
+                              </span>
+                            ) : null}
                             <div className="status-row-wrap">
                               <StatusBadge>{getPersistedAutomationLabel(locale, caseItem.automationStatus)}</StatusBadge>
                               {automationHoldReasonLabel ? <StatusBadge tone="warning">{automationHoldReasonLabel}</StatusBadge> : null}
