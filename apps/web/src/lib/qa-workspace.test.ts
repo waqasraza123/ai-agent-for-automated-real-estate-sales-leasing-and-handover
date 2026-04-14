@@ -32,6 +32,7 @@ function buildCase(caseId: string, status: CaseQaReviewStatus, updatedAt: string
     handoverCase: null,
     handoverClosure: null,
     latestHumanReply: null,
+    latestManagerFollowUp: null,
     nextAction: "Review",
     nextActionDueAt: "2026-04-12T08:00:00.000Z",
     openInterventionsCount: 0,

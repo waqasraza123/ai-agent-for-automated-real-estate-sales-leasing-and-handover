@@ -1640,6 +1640,41 @@ describe("lead capture api", () => {
 
     expect(allowedFollowUpResponse.statusCode).toBe(200);
     expect(allowedFollowUpResponse.json().nextAction).toContain("discovery-call");
+    expect(allowedFollowUpResponse.json().latestManagerFollowUp).toEqual({
+      nextAction: "Confirm tomorrow's discovery-call slot with the buyer and re-arm manager visibility.",
+      nextActionDueAt: "2026-04-16T09:00:00.000Z",
+      ownerName: "Sales Desk",
+      savedAt: allowedFollowUpResponse.json().latestManagerFollowUp.savedAt
+    });
+
+    const followUpDetailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${createdCase.caseId}`
+    });
+
+    expect(followUpDetailResponse.statusCode).toBe(200);
+    expect(followUpDetailResponse.json().latestManagerFollowUp).toEqual({
+      nextAction: "Confirm tomorrow's discovery-call slot with the buyer and re-arm manager visibility.",
+      nextActionDueAt: "2026-04-16T09:00:00.000Z",
+      ownerName: "Sales Desk",
+      savedAt: followUpDetailResponse.json().latestManagerFollowUp.savedAt
+    });
+
+    const followUpListResponse = await app.inject({
+      method: "GET",
+      url: "/v1/cases"
+    });
+
+    expect(followUpListResponse.statusCode).toBe(200);
+    expect(
+      followUpListResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === createdCase.caseId)?.latestManagerFollowUp
+    ).toEqual({
+      nextAction: "Confirm tomorrow's discovery-call slot with the buyer and re-arm manager visibility.",
+      nextActionDueAt: "2026-04-16T09:00:00.000Z",
+      ownerName: "Sales Desk",
+      savedAt: followUpListResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === createdCase.caseId)?.latestManagerFollowUp
+        .savedAt
+    });
 
     const forbiddenAutomationResponse = await app.inject({
       headers: withOperatorSession("handover_coordinator"),
@@ -1769,6 +1804,141 @@ describe("lead capture api", () => {
     expect(allowedCompletionResponse.statusCode).toBe(200);
     expect(allowedCompletionResponse.json().status).toBe("completed");
   }, 50000);
+
+  it("applies bulk follow-up actioning only within the scoped current-owner queue", async () => {
+    const firstCreateResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Layla Hassan",
+        email: "layla@example.com",
+        message: "I need a fast manager response before the handoff slips again.",
+        preferredLocale: "en",
+        projectInterest: "Sunrise Residences"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const secondCreateResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Nabil Farouk",
+        email: "nabil@example.com",
+        message: "Please keep the follow-up owned by the same desk until the reset is confirmed.",
+        preferredLocale: "en",
+        projectInterest: "Sunrise Residences"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const firstCase = firstCreateResponse.json();
+    const secondCase = secondCreateResponse.json();
+    const bulkPayload = {
+      caseIds: [firstCase.caseId, secondCase.caseId],
+      expectedCurrentOwnerName: "Revenue Ops Queue",
+      nextAction: "Reset the post-reply handoff, confirm the next buyer callback, and keep the desk aligned.",
+      nextActionDueAt: "2026-04-16T11:00:00.000Z",
+      ownerName: "Manager Desk North"
+    };
+
+    const forbiddenBulkResponse = await app.inject({
+      headers: withOperatorSession("handover_coordinator"),
+      method: "POST",
+      payload: bulkPayload,
+      url: "/v1/cases/follow-up-plan/bulk"
+    });
+
+    expect(forbiddenBulkResponse.statusCode).toBe(403);
+    expect(forbiddenBulkResponse.json().permission).toBe("manage_case_follow_up");
+
+    const allowedBulkResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: bulkPayload,
+      url: "/v1/cases/follow-up-plan/bulk"
+    });
+
+    expect(allowedBulkResponse.statusCode).toBe(200);
+    expect(allowedBulkResponse.json().updatedCases).toHaveLength(2);
+    expect(allowedBulkResponse.json().updatedCases.map((caseItem: { caseId: string }) => caseItem.caseId).sort()).toEqual(
+      [firstCase.caseId, secondCase.caseId].sort()
+    );
+    expect(
+      allowedBulkResponse.json().updatedCases.every(
+        (caseItem: {
+          latestManagerFollowUp: {
+            bulkAction?: { batchId: string; caseCount: number; scopedOwnerName: string };
+            nextAction: string;
+            nextActionDueAt: string;
+            ownerName: string;
+            savedAt: string;
+          };
+          ownerName: string;
+        }) =>
+          caseItem.ownerName === "Manager Desk North" &&
+          caseItem.latestManagerFollowUp.bulkAction?.caseCount === 2 &&
+          caseItem.latestManagerFollowUp.bulkAction?.scopedOwnerName === "Revenue Ops Queue" &&
+          typeof caseItem.latestManagerFollowUp.bulkAction?.batchId === "string" &&
+          caseItem.latestManagerFollowUp.nextAction === bulkPayload.nextAction &&
+          caseItem.latestManagerFollowUp.nextActionDueAt === bulkPayload.nextActionDueAt &&
+          caseItem.latestManagerFollowUp.ownerName === "Manager Desk North" &&
+          typeof caseItem.latestManagerFollowUp.savedAt === "string"
+      )
+    ).toBe(true);
+
+    const firstDetailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${firstCase.caseId}`
+    });
+
+    expect(firstDetailResponse.statusCode).toBe(200);
+    expect(firstDetailResponse.json().ownerName).toBe("Manager Desk North");
+    expect(firstDetailResponse.json().latestManagerFollowUp).toEqual({
+      bulkAction: {
+        batchId: firstDetailResponse.json().latestManagerFollowUp.bulkAction.batchId,
+        caseCount: 2,
+        scopedOwnerName: "Revenue Ops Queue"
+      },
+      nextAction: bulkPayload.nextAction,
+      nextActionDueAt: bulkPayload.nextActionDueAt,
+      ownerName: "Manager Desk North",
+      savedAt: firstDetailResponse.json().latestManagerFollowUp.savedAt
+    });
+
+    const bulkListResponse = await app.inject({
+      method: "GET",
+      url: "/v1/cases"
+    });
+
+    expect(bulkListResponse.statusCode).toBe(200);
+    expect(
+      bulkListResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === firstCase.caseId)?.latestManagerFollowUp
+    ).toEqual({
+      bulkAction: {
+        batchId: bulkListResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === firstCase.caseId)?.latestManagerFollowUp
+          .bulkAction.batchId,
+        caseCount: 2,
+        scopedOwnerName: "Revenue Ops Queue"
+      },
+      nextAction: bulkPayload.nextAction,
+      nextActionDueAt: bulkPayload.nextActionDueAt,
+      ownerName: "Manager Desk North",
+      savedAt: bulkListResponse.json().cases.find((caseItem: { caseId: string }) => caseItem.caseId === firstCase.caseId)?.latestManagerFollowUp
+        .savedAt
+    });
+
+    const bulkMismatchResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "POST",
+      payload: {
+        ...bulkPayload,
+        expectedCurrentOwnerName: "Revenue Ops Queue"
+      },
+      url: "/v1/cases/follow-up-plan/bulk"
+    });
+
+    expect(bulkMismatchResponse.statusCode).toBe(409);
+    expect(bulkMismatchResponse.json().error).toBe("case_follow_up_scope_mismatch");
+  });
 
   it("enforces role-aware milestone, appointment, and customer-update planning controls", async () => {
     const planningRecord = await createPlanningBoundaryHandoverRecord(app);

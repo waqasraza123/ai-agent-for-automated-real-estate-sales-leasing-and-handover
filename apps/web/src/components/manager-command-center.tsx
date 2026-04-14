@@ -14,8 +14,11 @@ import { Panel, StatusBadge } from "@real-estate-ai/ui";
 import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
+import { ManagerBulkFollowUpForm } from "@/components/manager-bulk-follow-up-form";
+import { ManagerFollowUpForm } from "@/components/manager-follow-up-form";
 import {
   getCaseQaPolicySignalLabel,
+  getFollowUpManagerCopy,
   getCaseQaReviewStatusLabel,
   getHandoverCustomerUpdateQaReviewStatusLabel,
   getHandoverCustomerUpdateTypeLabel,
@@ -23,6 +26,7 @@ import {
   getInterventionCountLabel
 } from "@/lib/live-copy";
 import { buildManagerGovernanceSummary, type GovernanceSignalCount } from "@/lib/governance-workspace";
+import { buildGovernanceReportHref } from "@/lib/governance-report";
 import {
   buildManagerWorkspaceQueues,
   getManagerWorkspaceCapabilities,
@@ -31,22 +35,31 @@ import {
   getManagerWorkspacePath,
   type ManagerWorkspaceRoute
 } from "@/lib/manager-workspace";
-import { getOperatorRoleLabel } from "@/lib/operator-role";
+import { getOperatorPermissionGuardNote, getOperatorRoleLabel } from "@/lib/operator-role";
 import {
   buildCaseReferenceCode,
   formatCaseLastChange,
+  formatLatestManagerFollowUpSavedAt,
   formatLatestHumanReplySentAt,
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
   getPersistedHandoverCustomerUpdateQaReviewDisplay,
+  getPersistedLatestManagerFollowUpLabel,
+  getPersistedLatestManagerFollowUpNote,
   getPersistedLatestHumanReplyEscalationLabel,
   getPersistedHandoverWorkspaceDisplay,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
   getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
+import {
+  buildRevenueManagerHref,
+  buildRevenueManagerScope,
+  revenueManagerFocusedQueueId,
+  type RevenueManagerFilters
+} from "@/lib/revenue-manager";
 
 export function HandoverManagerCommandCenter(props: {
   currentOperatorRole: OperatorRole;
@@ -715,6 +728,7 @@ export function ManagerWorkspaceUnavailable(props: {
 
 export function RevenueManagerCommandCenter(props: {
   currentOperatorRole: OperatorRole;
+  filters: RevenueManagerFilters;
   governanceReport: PersistedGovernanceSummary | null;
   locale: SupportedLocale;
   persistedCases: PersistedCaseSummary[];
@@ -722,6 +736,7 @@ export function RevenueManagerCommandCenter(props: {
   const messages = getMessages(props.locale);
   const workspaceCopy = getManagerWorkspaceCopy(props.locale, "manager_revenue");
   const managerCapabilities = getManagerWorkspaceCapabilities(props.currentOperatorRole);
+  const revenueScope = buildRevenueManagerScope(props.persistedCases, props.filters);
   const {
     escalatedPostReplyHandoffCases,
     governanceHeldAutomationCases,
@@ -729,11 +744,20 @@ export function RevenueManagerCommandCenter(props: {
     pausedAutomationCases,
     postReplyHandoffCases,
     revenueAttentionCases
-  } = buildManagerWorkspaceQueues(props.persistedCases);
-  const governanceSummary = buildManagerGovernanceSummary(props.persistedCases);
+  } = revenueScope.ownerScopedQueues;
+  const governanceSummary = buildManagerGovernanceSummary(revenueScope.ownerScopedCases);
   const canAccessHandoverManagerWorkspace = canOperatorRoleAccessWorkspace("manager_handover", props.currentOperatorRole);
   const canAccessHandoverWorkspace = canOperatorRoleAccessWorkspace("handover", props.currentOperatorRole);
   const canAccessQaWorkspace = canOperatorRoleAccessWorkspace("qa", props.currentOperatorRole);
+  const canManageFollowUp = managerCapabilities.canManageFollowUp;
+  const followUpManagerCopy = getFollowUpManagerCopy(props.locale);
+  const followUpGuardNote = getOperatorPermissionGuardNote(props.locale, "manage_case_follow_up");
+  const hasScopedView = props.filters.queue !== "all" || Boolean(props.filters.ownerName);
+  const canShowBulkOperationalRiskActioning =
+    props.filters.queue === "escalated_handoffs" && Boolean(props.filters.ownerName) && revenueScope.focusedCases.length > 1;
+  const clearScopeHref = buildRevenueManagerHref(props.locale);
+  const operationalRiskReportHref = buildGovernanceReportHref(props.locale, { windowDays: 30 }, "operational_risk");
+  const scopedReturnPath = buildRevenueManagerHref(props.locale, props.filters, { hash: revenueManagerFocusedQueueId });
 
   if (props.persistedCases.length === 0) {
     return (
@@ -911,6 +935,170 @@ export function RevenueManagerCommandCenter(props: {
         </div>
       </Panel>
 
+      {hasScopedView ? (
+        <Panel title={props.locale === "ar" ? "نطاق الطابور الحالي" : "Current queue scope"}>
+          <div className="page-stack" id={revenueManagerFocusedQueueId}>
+            <p className="panel-summary">
+              {props.filters.queue === "escalated_handoffs"
+                ? props.locale === "ar"
+                  ? props.filters.ownerName
+                    ? `يعرض هذا النطاق فقط تسليمات ما بعد الرد المتصاعدة المسندة حالياً إلى ${props.filters.ownerName}.`
+                    : "يعرض هذا النطاق فقط تسليمات ما بعد الرد المتصاعدة عبر كل الملاك الحاليين."
+                  : props.filters.ownerName
+                    ? `This scope is narrowed to escalated post-reply handoffs currently owned by ${props.filters.ownerName}.`
+                    : "This scope is narrowed to escalated post-reply handoffs across the active owner set."
+                : props.locale === "ar"
+                  ? "يعمل هذا العرض داخل نطاق مخصص لقرار تشغيلي أكثر تركيزاً."
+                  : "This view is running inside a narrower operational scope."}
+            </p>
+            <div className="status-row-wrap">
+              <StatusBadge>{props.filters.queue === "escalated_handoffs" ? (props.locale === "ar" ? "طابور المخاطر التشغيلية" : "Operational-risk queue") : props.locale === "ar" ? "نطاق مخصص" : "Scoped view"}</StatusBadge>
+              {props.filters.ownerName ? <StatusBadge>{props.filters.ownerName}</StatusBadge> : null}
+              <StatusBadge tone={revenueScope.focusedCases.length > 0 ? "warning" : "success"}>
+                {props.locale === "ar"
+                  ? `${revenueScope.focusedCases.length} حالات مطابقة`
+                  : `${revenueScope.focusedCases.length} matching cases`}
+              </StatusBadge>
+            </div>
+            <div className="status-row-wrap">
+              <Link className="inline-link" href={clearScopeHref}>
+                {props.locale === "ar" ? "مسح النطاق" : "Clear scope"}
+              </Link>
+              <Link className="inline-link" href={operationalRiskReportHref}>
+                {props.locale === "ar" ? "العودة إلى تقرير المخاطر التشغيلية" : "Return to operational-risk report"}
+              </Link>
+            </div>
+            <p className="field-note">
+              {props.locale === "ar"
+                ? "يمكن لمدير الإيرادات إعادة تعيين المالك أو حفظ خطوة المتابعة التالية مباشرة من هذا النطاق لتصفية التدخل المفتوح."
+                : "Revenue managers can reassign the owner or save the next follow-up directly from this scope to clear the open intervention."}
+            </p>
+            {canShowBulkOperationalRiskActioning && props.filters.ownerName ? (
+              <div className="bulk-follow-up-shell">
+                <p className="case-link-meta">
+                  {props.locale === "ar"
+                    ? "الإجراء الجماعي يبقى محصوراً داخل هذا المالك الحالي نفسه ويستخدم حد خطة المتابعة الموثق نفسه لكل حالة محددة."
+                    : "Bulk actioning stays restricted to this current owner scope and uses the same audited follow-up boundary on each selected case."}
+                </p>
+                <ManagerBulkFollowUpForm
+                  canManage={canManageFollowUp}
+                  cases={revenueScope.focusedCases.map((caseItem) => ({
+                    caseId: caseItem.caseId,
+                    customerName: caseItem.customerName,
+                    nextAction: caseItem.nextAction
+                  }))}
+                  disabledLabel={props.locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
+                  locale={props.locale}
+                  ownerName={props.filters.ownerName}
+                  returnPath={scopedReturnPath}
+                />
+              </div>
+            ) : null}
+            <p className="field-note">{followUpGuardNote}</p>
+            <StatefulStack
+              emptySummary={
+                props.filters.queue === "escalated_handoffs"
+                  ? props.filters.ownerName
+                    ? props.locale === "ar"
+                      ? "لا توجد حالياً تسليمات متصاعدة مطابقة لهذا المالك داخل الحالات الحية."
+                      : "No live escalated handoffs currently match this owner."
+                    : props.locale === "ar"
+                      ? "لا توجد حالياً تسليمات متصاعدة مطابقة داخل النطاق الحي."
+                      : "No live escalated handoffs currently match this scope."
+                  : props.locale === "ar"
+                    ? "لا توجد حالياً حالات مطابقة لهذا النطاق المخصص."
+                    : "No live cases currently match this scoped view."
+              }
+              emptyTitle={
+                props.filters.queue === "escalated_handoffs"
+                  ? props.locale === "ar"
+                    ? "لا توجد تسليمات متصاعدة"
+                    : "No escalated handoffs"
+                  : props.locale === "ar"
+                    ? "لا توجد حالات مطابقة"
+                    : "No matching cases"
+              }
+              items={revenueScope.focusedCases}
+              renderItem={(caseItem) => {
+                const latestManagerFollowUpLabel = getPersistedLatestManagerFollowUpLabel(props.locale, caseItem.latestManagerFollowUp);
+                const latestManagerFollowUpSavedAt = formatLatestManagerFollowUpSavedAt(caseItem.latestManagerFollowUp, props.locale);
+                const latestManagerFollowUpNote = getPersistedLatestManagerFollowUpNote(props.locale, caseItem.latestManagerFollowUp);
+                const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, props.locale);
+                const latestHumanReplyOwnershipLabel = getPersistedLatestHumanReplyOwnershipLabel(
+                  props.locale,
+                  caseItem.ownerName,
+                  caseItem.latestHumanReply
+                );
+                const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
+                  props.locale,
+                  caseItem.ownerName,
+                  caseItem.latestHumanReply,
+                  caseItem.followUpStatus,
+                  caseItem.openInterventionsCount
+                );
+
+                return (
+                  <article key={caseItem.caseId} className="alert-row alert-row-high">
+                    <div className="row-between">
+                      <div className="stack-tight">
+                        <h3>{caseItem.customerName}</h3>
+                        <p className="case-link-meta">{buildCaseReferenceCode(caseItem.caseId)}</p>
+                      </div>
+                      <div className="status-row-wrap">
+                        <StatusBadge tone="warning">{getPersistedFollowUpLabel(props.locale, caseItem)}</StatusBadge>
+                        {caseItem.openInterventionsCount > 0 ? (
+                          <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p>{caseItem.nextAction}</p>
+                    <div className="stack-tight">
+                      <p className="case-link-meta">
+                        {caseItem.latestHumanReply?.sentByName}
+                        {" · "}
+                        {latestHumanReplySentAt}
+                      </p>
+                      {latestHumanReplyOwnershipLabel ? <p className="case-link-meta">{latestHumanReplyOwnershipLabel}</p> : null}
+                      {latestHumanReplyEscalationLabel ? <p className="case-link-meta">{latestHumanReplyEscalationLabel}</p> : null}
+                      {caseItem.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
+                        <>
+                          <p className="case-link-meta">
+                            {latestManagerFollowUpLabel}
+                            {" · "}
+                            {caseItem.latestManagerFollowUp.ownerName}
+                            {" · "}
+                            {latestManagerFollowUpSavedAt}
+                          </p>
+                          {latestManagerFollowUpNote ? <p className="case-link-meta">{latestManagerFollowUpNote}</p> : null}
+                        </>
+                      ) : null}
+                    </div>
+                    <div className="status-row-wrap">
+                      <Link className="inline-link" href={`/${props.locale}/leads/${caseItem.caseId}`}>
+                        {props.locale === "ar" ? "فتح الحالة" : "Open case"}
+                      </Link>
+                    </div>
+                    <div className="page-stack">
+                      <p className="case-link-meta">{followUpManagerCopy.title}</p>
+                      <ManagerFollowUpForm
+                        canManage={canManageFollowUp}
+                        caseId={caseItem.caseId}
+                        disabledLabel={props.locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
+                        locale={props.locale}
+                        nextAction={caseItem.nextAction}
+                        nextActionDueAt={caseItem.nextActionDueAt}
+                        ownerName={caseItem.ownerName}
+                        returnPath={scopedReturnPath}
+                      />
+                    </div>
+                  </article>
+                );
+              }}
+            />
+          </div>
+        </Panel>
+      ) : null}
+
       <div className="metric-grid">
         <article className="metric-tile metric-tile-ocean">
           <p className="metric-label">{props.locale === "ar" ? "طابور المتابعة" : "Follow-up queue"}</p>
@@ -996,6 +1184,9 @@ export function RevenueManagerCommandCenter(props: {
               const handoverDisplay = getPersistedHandoverWorkspaceDisplay(props.locale, caseItem);
               const qaReviewDisplay = getPersistedQaReviewDisplay(props.locale, caseItem);
               const automationHoldReasonLabel = getPersistedAutomationHoldReasonLabel(props.locale, caseItem.automationHoldReason);
+              const latestManagerFollowUpLabel = getPersistedLatestManagerFollowUpLabel(props.locale, caseItem.latestManagerFollowUp);
+              const latestManagerFollowUpSavedAt = formatLatestManagerFollowUpSavedAt(caseItem.latestManagerFollowUp, props.locale);
+              const latestManagerFollowUpNote = getPersistedLatestManagerFollowUpNote(props.locale, caseItem.latestManagerFollowUp);
               const latestHumanReplyLabel = getPersistedLatestHumanReplyLabel(props.locale, caseItem.latestHumanReply);
               const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, props.locale);
               const latestHumanReplyOwnershipLabel = getPersistedLatestHumanReplyOwnershipLabel(
@@ -1043,6 +1234,18 @@ export function RevenueManagerCommandCenter(props: {
                       {latestHumanReplyEscalationLabel ? <p className="case-link-meta">{latestHumanReplyEscalationLabel}</p> : null}
                     </div>
                   ) : null}
+                  {caseItem.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
+                    <div className="stack-tight">
+                      <p className="case-link-meta">
+                        {latestManagerFollowUpLabel}
+                        {" · "}
+                        {caseItem.latestManagerFollowUp.ownerName}
+                        {" · "}
+                        {latestManagerFollowUpSavedAt}
+                      </p>
+                      {latestManagerFollowUpNote ? <p className="case-link-meta">{latestManagerFollowUpNote}</p> : null}
+                    </div>
+                  ) : null}
                   <p className="case-link-meta">{formatCaseLastChange(caseItem, props.locale)}</p>
                   <div className="status-row-wrap">
                     <StatusBadge>{getPersistedAutomationLabel(props.locale, caseItem.automationStatus)}</StatusBadge>
@@ -1069,11 +1272,14 @@ export function RevenueManagerCommandCenter(props: {
           <StatefulStack
             emptySummary={messages.states.emptyCasesSummary}
             emptyTitle={messages.states.emptyCasesTitle}
-            items={props.persistedCases}
+            items={revenueScope.ownerScopedCases}
             renderItem={(caseItem) => {
               const handoverDisplay = getPersistedHandoverWorkspaceDisplay(props.locale, caseItem);
               const qaReviewDisplay = getPersistedQaReviewDisplay(props.locale, caseItem);
               const automationHoldReasonLabel = getPersistedAutomationHoldReasonLabel(props.locale, caseItem.automationHoldReason);
+              const latestManagerFollowUpLabel = getPersistedLatestManagerFollowUpLabel(props.locale, caseItem.latestManagerFollowUp);
+              const latestManagerFollowUpSavedAt = formatLatestManagerFollowUpSavedAt(caseItem.latestManagerFollowUp, props.locale);
+              const latestManagerFollowUpNote = getPersistedLatestManagerFollowUpNote(props.locale, caseItem.latestManagerFollowUp);
               const latestHumanReplyLabel = getPersistedLatestHumanReplyLabel(props.locale, caseItem.latestHumanReply);
               const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, props.locale);
               const latestHumanReplyOwnershipLabel = getPersistedLatestHumanReplyOwnershipLabel(
@@ -1108,6 +1314,18 @@ export function RevenueManagerCommandCenter(props: {
                         {latestHumanReplyEscalationLabel ? <p className="case-link-meta">{latestHumanReplyEscalationLabel}</p> : null}
                       </div>
                     ) : null}
+                    {caseItem.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
+                      <div className="stack-tight">
+                        <p className="case-link-meta">
+                          {latestManagerFollowUpLabel}
+                          {" · "}
+                          {caseItem.latestManagerFollowUp.ownerName}
+                          {" · "}
+                          {latestManagerFollowUpSavedAt}
+                        </p>
+                        {latestManagerFollowUpNote ? <p className="case-link-meta">{latestManagerFollowUpNote}</p> : null}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="case-link-aside">
                     <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>
@@ -1129,6 +1347,7 @@ export function RevenueManagerCommandCenter(props: {
         </Panel>
       </div>
 
+      {props.filters.queue !== "escalated_handoffs" ? (
       <Panel title={props.locale === "ar" ? "تسليمات متصاعدة بعد الرد" : "Escalated post-reply handoffs"}>
         <StatefulStack
           emptySummary={
@@ -1187,6 +1406,7 @@ export function RevenueManagerCommandCenter(props: {
           }}
         />
       </Panel>
+      ) : null}
 
       <div className="two-column-grid">
         <Panel title={props.locale === "ar" ? "طابور حوكمة الإيرادات" : "Revenue governance queue"}>

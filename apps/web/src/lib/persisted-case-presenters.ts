@@ -207,6 +207,49 @@ export function formatDueAt(value: PersistedCaseDetail | PersistedCaseSummary, l
   return new Date(value.nextActionDueAt).toLocaleString(locale);
 }
 
+export function formatLatestManagerFollowUpSavedAt(
+  latestManagerFollowUp: PersistedCaseDetail["latestManagerFollowUp"] | PersistedCaseSummary["latestManagerFollowUp"],
+  locale: SupportedLocale
+) {
+  return latestManagerFollowUp ? new Date(latestManagerFollowUp.savedAt).toLocaleString(locale) : null;
+}
+
+export function getPersistedLatestManagerFollowUpLabel(
+  locale: SupportedLocale,
+  latestManagerFollowUp: PersistedCaseDetail["latestManagerFollowUp"] | PersistedCaseSummary["latestManagerFollowUp"]
+) {
+  if (!latestManagerFollowUp) {
+    return null;
+  }
+
+  if (latestManagerFollowUp.bulkAction) {
+    return locale === "ar" ? "متابعة جماعية محفوظة" : "Bulk follow-up saved";
+  }
+
+  return locale === "ar" ? "خطة متابعة محفوظة" : "Follow-up plan saved";
+}
+
+export function getPersistedLatestManagerFollowUpNote(
+  locale: SupportedLocale,
+  latestManagerFollowUp: PersistedCaseDetail["latestManagerFollowUp"] | PersistedCaseSummary["latestManagerFollowUp"]
+) {
+  if (!latestManagerFollowUp) {
+    return null;
+  }
+
+  const dueAt = new Date(latestManagerFollowUp.nextActionDueAt).toLocaleString(locale);
+
+  if (latestManagerFollowUp.bulkAction) {
+    return locale === "ar"
+      ? `حُفظ هذا التحديث كإجراء جماعي على ${latestManagerFollowUp.bulkAction.caseCount} حالات من نطاق ${latestManagerFollowUp.bulkAction.scopedOwnerName}، مع إسناد المتابعة الحالية إلى ${latestManagerFollowUp.ownerName} واستحقاق ${dueAt}.`
+      : `This update was saved as a ${latestManagerFollowUp.bulkAction.caseCount}-case bulk action from ${latestManagerFollowUp.bulkAction.scopedOwnerName}, with the active follow-up assigned to ${latestManagerFollowUp.ownerName}, due ${dueAt}.`;
+  }
+
+  return locale === "ar"
+    ? `تم حفظ المتابعة الحالية للمالك ${latestManagerFollowUp.ownerName} مع استحقاق ${dueAt}.`
+    : `The current follow-up was saved for ${latestManagerFollowUp.ownerName}, due ${dueAt}.`;
+}
+
 export function formatLatestHumanReplySentAt(
   latestHumanReply: PersistedCaseDetail["latestHumanReply"] | PersistedCaseSummary["latestHumanReply"],
   locale: SupportedLocale
@@ -795,6 +838,15 @@ function describeAuditEvent(
   variant: "detail" | "title"
 ) {
   const eventType = event.eventType;
+
+  if (eventType === "manager_follow_up_updated" && typeof event.payload?.bulkActionBatchId === "string") {
+    if (locale === "ar") {
+      return variant === "title" ? "متابعة جماعية محفوظة" : "تم حفظ خطة متابعة جماعية وإزالة التدخلات المفتوحة عن الحالات المحددة.";
+    }
+
+    return variant === "title" ? "Bulk follow-up saved" : "A bulk follow-up plan was saved and the open interventions were cleared for the selected cases.";
+  }
+
   const descriptions = {
     ar: {
       automation_paused: {

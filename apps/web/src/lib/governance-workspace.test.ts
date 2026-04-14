@@ -50,6 +50,7 @@ function buildRevenueQaCase(caseId: string, status: CaseQaReviewStatus, updatedA
     handoverCase: null,
     handoverClosure: null,
     latestHumanReply: null,
+    latestManagerFollowUp: null,
     nextAction: "Review governance hold",
     nextActionDueAt: "2026-04-12T08:00:00.000Z",
     openInterventionsCount: 0,
@@ -146,6 +147,17 @@ describe("manager governance summary", () => {
           sentAt: "2026-04-13T11:00:00.000Z",
           sentByName: "Amina Rahman"
         },
+        latestManagerFollowUp: {
+          bulkAction: {
+            batchId: "33333333-3333-4333-8333-333333333333",
+            caseCount: 3,
+            scopedOwnerName: "Revenue Ops Queue"
+          },
+          nextAction: "Reset the desk follow-up",
+          nextActionDueAt: "2026-04-13T12:30:00.000Z",
+          ownerName: "Manager Desk North",
+          savedAt: "2026-04-13T11:15:00.000Z"
+        },
         openInterventionsCount: 1,
         ownerName: "Manager Desk North"
       },
@@ -159,6 +171,42 @@ describe("manager governance summary", () => {
           nextActionDueAt: "2026-04-13T13:00:00.000Z",
           sentAt: "2026-04-13T10:00:00.000Z",
           sentByName: "Omar Saleh"
+        },
+        latestManagerFollowUp: {
+          bulkAction: {
+            batchId: "33333333-3333-4333-8333-333333333333",
+            caseCount: 3,
+            scopedOwnerName: "Revenue Ops Queue"
+          },
+          nextAction: "Reset the desk follow-up",
+          nextActionDueAt: "2026-04-13T12:30:00.000Z",
+          ownerName: "Manager Desk North",
+          savedAt: "2026-04-13T11:15:00.000Z"
+        },
+        openInterventionsCount: 0,
+        ownerName: "Manager Desk North"
+      },
+      {
+        ...buildRevenueQaCase("bulk-cleared", "approved", "2026-04-13T08:00:00.000Z", "manual_request"),
+        followUpStatus: "on_track",
+        latestHumanReply: {
+          approvedFromQa: false,
+          message: "Shared the corrected reply.",
+          nextAction: "Hold until buyer confirms",
+          nextActionDueAt: "2026-04-13T15:00:00.000Z",
+          sentAt: "2026-04-13T08:00:00.000Z",
+          sentByName: "Omar Saleh"
+        },
+        latestManagerFollowUp: {
+          bulkAction: {
+            batchId: "33333333-3333-4333-8333-333333333333",
+            caseCount: 3,
+            scopedOwnerName: "Revenue Ops Queue"
+          },
+          nextAction: "Reset the desk follow-up",
+          nextActionDueAt: "2026-04-13T12:30:00.000Z",
+          ownerName: "Manager Desk North",
+          savedAt: "2026-04-13T11:15:00.000Z"
         },
         openInterventionsCount: 0,
         ownerName: "Manager Desk North"
@@ -187,6 +235,17 @@ describe("manager governance summary", () => {
         openInterventionsCount: 1,
         overdueHandoffCount: 2,
         ownerName: "Manager Desk North"
+      }
+    ]);
+    expect(summary.bulkBatches).toEqual([
+      {
+        batchId: "33333333-3333-4333-8333-333333333333",
+        caseCount: 3,
+        clearedCaseCount: 1,
+        currentOwnerNames: ["Manager Desk North"],
+        savedAt: "2026-04-13T11:15:00.000Z",
+        scopedOwnerName: "Revenue Ops Queue",
+        stillEscalatedCaseCount: 2
       }
     ]);
   });

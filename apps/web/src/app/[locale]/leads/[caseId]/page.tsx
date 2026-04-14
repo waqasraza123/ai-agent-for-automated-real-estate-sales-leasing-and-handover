@@ -23,6 +23,7 @@ import {
   buildPersistedTimeline,
   formatCaseLastChange,
   formatDueAt,
+  formatLatestManagerFollowUpSavedAt,
   formatLatestHumanReplySentAt,
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
@@ -31,6 +32,8 @@ import {
   getPersistedFollowUpLabel,
   getPersistedHandoverStatusLabel,
   getPersistedInterventionDisplay,
+  getPersistedLatestManagerFollowUpLabel,
+  getPersistedLatestManagerFollowUpNote,
   getPersistedLatestHumanReplyEscalationLabel,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
@@ -109,6 +112,9 @@ export default async function LeadProfilePage(props: PageProps) {
       persistedCase.ownerName,
       persistedCase.latestHumanReply
     );
+    const latestManagerFollowUpLabel = getPersistedLatestManagerFollowUpLabel(locale, persistedCase.latestManagerFollowUp);
+    const latestManagerFollowUpSavedAt = formatLatestManagerFollowUpSavedAt(persistedCase.latestManagerFollowUp, locale);
+    const latestManagerFollowUpNote = getPersistedLatestManagerFollowUpNote(locale, persistedCase.latestManagerFollowUp);
     const latestHumanReplyEscalationLabel = getPersistedLatestHumanReplyEscalationLabel(
       locale,
       persistedCase.ownerName,
@@ -192,6 +198,17 @@ export default async function LeadProfilePage(props: PageProps) {
           <Panel title={followUpManagerCopy.title}>
             <p className="panel-summary">{followUpManagerCopy.summary}</p>
             <p className="field-note">{followUpGuardNote}</p>
+            {persistedCase.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
+              <div className="page-stack">
+                <StatusBadge>{latestManagerFollowUpLabel}</StatusBadge>
+                <p className="field-note">
+                  {persistedCase.latestManagerFollowUp.ownerName}
+                  {" · "}
+                  {latestManagerFollowUpSavedAt}
+                </p>
+                {latestManagerFollowUpNote ? <p className="field-note">{latestManagerFollowUpNote}</p> : null}
+              </div>
+            ) : null}
             <ManagerFollowUpForm
               canManage={canManageFollowUp}
               caseId={persistedCase.caseId}

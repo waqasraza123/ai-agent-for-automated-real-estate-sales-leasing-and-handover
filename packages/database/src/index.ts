@@ -62,6 +62,7 @@ import type {
   PersistedHandoverCustomerUpdate,
   PersistedHandoverMilestone,
   PersistedLatestCaseReply,
+  PersistedLatestManagerFollowUp,
   PersistedHandoverPostCompletionFollowUp,
   PersistedHandoverReview,
   PersistedHandoverTask,
@@ -416,6 +417,7 @@ export interface LeadCaptureStore {
   getHandoverCaseDetail(handoverCaseId: string): Promise<PersistedHandoverCaseDetail | null>;
   listCases(): Promise<PersistedCaseSummary[]>;
   manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail | null>;
+  manageCaseFollowUpBulk(caseIds: string[], input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail[]>;
   createHandoverBlocker(
     handoverCaseId: string,
     input: CreateHandoverBlockerInput & {
@@ -1291,6 +1293,38 @@ export async function createAlphaLeadCaptureStore(options?: {
     return latestReplies;
   };
 
+  const listLatestManagerFollowUps = async (caseIds: string[]) => {
+    const caseIdsWithValues = caseIds.filter(Boolean);
+
+    if (caseIdsWithValues.length === 0) {
+      return new Map<string, PersistedLatestManagerFollowUp>();
+    }
+
+    const records = await db
+      .select({
+        caseId: auditEvents.caseId,
+        createdAt: auditEvents.createdAt,
+        payload: auditEvents.payload
+      })
+      .from(auditEvents)
+      .where(and(inArray(auditEvents.caseId, caseIdsWithValues), eq(auditEvents.eventType, "manager_follow_up_updated")))
+      .orderBy(desc(auditEvents.createdAt));
+
+    const latestFollowUps = new Map<string, PersistedLatestManagerFollowUp>();
+
+    for (const record of records) {
+      if (!latestFollowUps.has(record.caseId)) {
+        const hydratedFollowUp = hydrateLatestManagerFollowUp(record);
+
+        if (hydratedFollowUp) {
+          latestFollowUps.set(record.caseId, hydratedFollowUp);
+        }
+      }
+    }
+
+    return latestFollowUps;
+  };
+
   const listCurrentHandoverCustomerUpdateQaReviews = async (caseIds: string[]) => {
     const caseIdsWithValues = caseIds.filter(Boolean);
 
@@ -1785,6 +1819,10 @@ export async function createAlphaLeadCaptureStore(options?: {
       .filter((event) => event.eventType === "case_reply_sent")
       .map((event) => hydrateLatestCaseReply({ caseId, createdAt: event.createdAt, payload: event.payload }))
       .find((reply): reply is PersistedLatestCaseReply => reply !== null) ?? null;
+    const latestManagerFollowUp = caseAuditEvents
+      .filter((event) => event.eventType === "manager_follow_up_updated")
+      .map((event) => hydrateLatestManagerFollowUp({ caseId, createdAt: event.createdAt, payload: event.payload }))
+      .find((followUp): followUp is PersistedLatestManagerFollowUp => followUp !== null) ?? null;
 
     return {
       auditEvents: caseAuditEvents.map((event) => ({
@@ -1820,6 +1858,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       handoverClosure: handoverClosureMap.get(caseId) ?? null,
       handoverCase: linkedHandoverCase[0] ? hydrateLinkedHandoverCase(linkedHandoverCase[0]) : null,
       latestHumanReply,
+      latestManagerFollowUp,
       managerInterventions: hydratedInterventions,
       message: caseRecord.message,
       nextAction: caseRecord.nextAction,
@@ -2194,6 +2233,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         handoverCase: null,
         handoverClosure: null,
         latestHumanReply: null,
+        latestManagerFollowUp: null,
         leadId: createdCase.leadId,
         nextAction: createdCase.nextAction,
         nextActionDueAt: toIsoDateTimeString(createdCase.nextActionDueAt),
@@ -2489,12 +2529,21 @@ export async function createAlphaLeadCaptureStore(options?: {
         .orderBy(desc(cases.createdAt));
 
       const caseIds = persistedCases.map((caseRecord) => caseRecord.caseId);
-      const [openInterventionCounts, currentQaReviews, currentHandoverCustomerUpdateQaReviews, latestCaseReplies, linkedHandoverCases, handoverClosureSummaries] =
+      const [
+        openInterventionCounts,
+        currentQaReviews,
+        currentHandoverCustomerUpdateQaReviews,
+        latestCaseReplies,
+        latestManagerFollowUps,
+        linkedHandoverCases,
+        handoverClosureSummaries
+      ] =
         await Promise.all([
         listOpenInterventionCounts(caseIds),
         listCurrentQaReviews(caseIds),
         listCurrentHandoverCustomerUpdateQaReviews(caseIds),
         listLatestCaseReplies(caseIds),
+        listLatestManagerFollowUps(caseIds),
         listLinkedHandoverCases(caseIds),
         listHandoverClosureSummaries(caseIds)
       ]);
@@ -2511,6 +2560,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         handoverCase: linkedHandoverCases.get(caseRecord.caseId) ?? null,
         handoverClosure: handoverClosureSummaries.get(caseRecord.caseId) ?? null,
         latestHumanReply: latestCaseReplies.get(caseRecord.caseId) ?? null,
+        latestManagerFollowUp: latestManagerFollowUps.get(caseRecord.caseId) ?? null,
         nextAction: caseRecord.nextAction,
         nextActionDueAt: toIsoDateTimeString(caseRecord.nextActionDueAt),
         openInterventionsCount: openInterventionCounts.get(caseRecord.caseId) ?? 0,
@@ -2571,6 +2621,79 @@ export async function createAlphaLeadCaptureStore(options?: {
       });
 
       return getPersistedCaseDetail(caseId);
+    },
+    async manageCaseFollowUpBulk(caseIds, input) {
+      const uniqueCaseIds = Array.from(new Set(caseIds.filter(Boolean)));
+
+      if (uniqueCaseIds.length === 0) {
+        return [];
+      }
+
+      const currentCaseRecords = await db
+        .select({
+          automationStatus: cases.automationStatus,
+          caseId: cases.id,
+          ownerName: cases.ownerName
+        })
+        .from(cases)
+        .where(inArray(cases.id, uniqueCaseIds));
+
+      if (currentCaseRecords.length !== uniqueCaseIds.length) {
+        return [];
+      }
+
+      const currentQaReviews = await listCurrentQaReviews(uniqueCaseIds);
+      const updatedAt = new Date().toISOString();
+      const bulkActionBatchId = randomUUID();
+
+      await db.transaction(async (transaction) => {
+        for (const caseRecord of currentCaseRecords) {
+          const nextOwnerName = input.ownerName ?? caseRecord.ownerName;
+
+          await transaction
+            .update(cases)
+            .set({
+              currentNextAction: input.nextAction,
+              nextActionDueAt: input.nextActionDueAt,
+              ownerName: nextOwnerName,
+              updatedAt
+            })
+            .where(eq(cases.id, caseRecord.caseId));
+
+          await resolveOpenInterventions(transaction, {
+            caseId: caseRecord.caseId,
+            resolutionNote: "manager_follow_up_reset",
+            resolvedAt: updatedAt
+          });
+
+          await transaction.insert(auditEvents).values({
+            caseId: caseRecord.caseId,
+            createdAt: updatedAt,
+            eventType: "manager_follow_up_updated",
+            id: randomUUID(),
+            payload: {
+              bulkActionBatchId,
+              bulkActionCaseCount: uniqueCaseIds.length,
+              bulkActionScopedOwnerName: caseRecord.ownerName,
+              nextAction: input.nextAction,
+              nextActionDueAt: input.nextActionDueAt,
+              ownerName: nextOwnerName
+            }
+          });
+
+          await syncFollowUpJob(transaction, {
+            automationHoldReason: getCaseAutomationHoldReason(currentQaReviews.get(caseRecord.caseId) ?? null),
+            automationStatus: toAutomationStatus(caseRecord.automationStatus),
+            caseId: caseRecord.caseId,
+            runAfter: input.nextActionDueAt,
+            updatedAt
+          });
+        }
+      });
+
+      const updatedCases = await Promise.all(uniqueCaseIds.map((caseId) => getPersistedCaseDetail(caseId)));
+
+      return updatedCases.filter((caseRecord): caseRecord is PersistedCaseDetail => caseRecord !== null);
     },
     async runDueFollowUpCycle(input) {
       const dueJobs = await db
@@ -5107,6 +5230,38 @@ function hydrateLatestCaseReply(value: {
   };
 }
 
+function hydrateLatestManagerFollowUp(value: {
+  caseId: string;
+  createdAt: string;
+  payload: Record<string, unknown>;
+}): PersistedLatestManagerFollowUp | null {
+  const bulkActionBatchId = readPayloadString(value.payload, "bulkActionBatchId");
+  const bulkActionCaseCount = readPayloadInteger(value.payload, "bulkActionCaseCount");
+  const bulkActionScopedOwnerName = readPayloadString(value.payload, "bulkActionScopedOwnerName");
+  const nextAction = readPayloadString(value.payload, "nextAction");
+  const nextActionDueAt = readPayloadString(value.payload, "nextActionDueAt");
+  const ownerName = readPayloadString(value.payload, "ownerName");
+
+  if (!nextAction || !nextActionDueAt || !ownerName) {
+    return null;
+  }
+
+  return {
+    bulkAction:
+      bulkActionBatchId && bulkActionCaseCount !== null && bulkActionCaseCount >= 2 && bulkActionScopedOwnerName
+        ? {
+            batchId: bulkActionBatchId,
+            caseCount: bulkActionCaseCount,
+            scopedOwnerName: bulkActionScopedOwnerName
+          }
+        : undefined,
+    nextAction,
+    nextActionDueAt: toIsoDateTimeString(nextActionDueAt),
+    ownerName,
+    savedAt: toIsoDateTimeString(value.createdAt)
+  };
+}
+
 function hydrateGovernanceEventRecord(value: {
   caseId: string;
   createdAt: string;
@@ -5230,6 +5385,12 @@ function readPayloadStringArray(payload: Record<string, unknown>, key: string) {
   }
 
   return value.filter((item): item is string => typeof item === "string");
+}
+
+function readPayloadInteger(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
 }
 
 function toAutomationStatus(value: string): AutomationStatus {

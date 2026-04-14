@@ -18,6 +18,7 @@ import type { GovernanceReportView } from "@/lib/governance-report";
 import { getOperatorRoleLabel } from "@/lib/operator-role";
 import { buildCaseReferenceCode } from "@/lib/persisted-case-presenters";
 import { buildGovernanceReportHref } from "@/lib/governance-report";
+import { buildRevenueManagerHref, revenueManagerFocusedQueueId } from "@/lib/revenue-manager";
 
 export function ManagerGovernanceReport(props: {
   currentOperatorRole: OperatorRole;
@@ -122,6 +123,17 @@ export function ManagerGovernanceReport(props: {
               {props.locale === "ar"
                 ? "حالات حيّة انتقل فيها الرد البشري إلى مالك جديد ثم أصبحت متأخرة أو محملة بتدخلات مفتوحة."
                 : "Live cases where a human reply was handed to a new owner and that handoff is now overdue or intervention-backed."}
+            </p>
+          </article>
+        ) : null}
+        {showOperationalRisk ? (
+          <article className="metric-tile metric-tile-sand">
+            <p className="metric-label">{props.locale === "ar" ? "دفعات المتابعة الجماعية" : "Bulk follow-up batches"}</p>
+            <p className="metric-value">{operationalRiskSummary.bulkBatches.length}</p>
+            <p className="metric-detail">
+              {props.locale === "ar"
+                ? "أحدث الدفعات الجماعية التي ما زال أثرها ظاهراً على الحالات الحية بعد تصفية طابور المخاطر."
+                : "The most recent bulk follow-up batches whose result is still visible on the live case set after the risk queue was cleared."}
             </p>
           </article>
         ) : null}
@@ -327,6 +339,19 @@ export function ManagerGovernanceReport(props: {
                             ? `${owner.overdueHandoffCount} تسليمات متأخرة`
                             : `${owner.overdueHandoffCount} overdue handoffs`}
                         </span>
+                        <Link
+                          className="inline-link"
+                          href={buildRevenueManagerHref(
+                            props.locale,
+                            {
+                              ownerName: owner.ownerName,
+                              queue: "escalated_handoffs"
+                            },
+                            { hash: revenueManagerFocusedQueueId }
+                          )}
+                        >
+                          {props.locale === "ar" ? "فتح طابور المالك" : "Open owner queue"}
+                        </Link>
                       </div>
                     </td>
                     <td data-column-label={props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}>
@@ -363,6 +388,89 @@ export function ManagerGovernanceReport(props: {
                 : "No live escalated reply handoffs are currently present in the active case set."
             }
             title={props.locale === "ar" ? "لا يوجد ضغط تشغيلي" : "No operational handoff pressure"}
+          />
+        )}
+      </Panel>
+      ) : null}
+
+      {showOperationalRisk ? (
+      <Panel title={props.locale === "ar" ? "نتائج المتابعة الجماعية الأخيرة" : "Recent bulk follow-up results"}>
+        {operationalRiskSummary.bulkBatches.length > 0 ? (
+          <div className="lead-table-wrapper">
+            <table className="lead-table">
+              <thead>
+                <tr>
+                  <th>{props.locale === "ar" ? "الدفعة" : "Batch"}</th>
+                  <th>{props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}</th>
+                  <th>{props.locale === "ar" ? "النتيجة الحالية" : "Current result"}</th>
+                  <th>{props.locale === "ar" ? "المسار" : "Route"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {operationalRiskSummary.bulkBatches.map((batch) => (
+                  <tr key={batch.batchId}>
+                    <td data-column-label={props.locale === "ar" ? "الدفعة" : "Batch"}>
+                      <div className="table-link">
+                        <strong>{new Date(batch.savedAt).toLocaleString(props.locale)}</strong>
+                        <span>
+                          {props.locale === "ar"
+                            ? `${batch.caseCount} حالات في الدفعة`
+                            : `${batch.caseCount} cases in batch`}
+                        </span>
+                      </div>
+                    </td>
+                    <td data-column-label={props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}>
+                      <div className="stack-tight">
+                        <StatusBadge>{batch.scopedOwnerName}</StatusBadge>
+                        <div className="status-row-wrap">
+                          {batch.currentOwnerNames.map((ownerName) => (
+                            <StatusBadge key={`${batch.batchId}:${ownerName}`}>{ownerName}</StatusBadge>
+                          ))}
+                        </div>
+                      </div>
+                    </td>
+                    <td data-column-label={props.locale === "ar" ? "النتيجة الحالية" : "Current result"}>
+                      <div className="stack-tight">
+                        <StatusBadge tone={batch.stillEscalatedCaseCount > 0 ? "warning" : "success"}>
+                          {props.locale === "ar"
+                            ? `${batch.stillEscalatedCaseCount} ما زالت متصاعدة`
+                            : `${batch.stillEscalatedCaseCount} still escalated`}
+                        </StatusBadge>
+                        <StatusBadge tone={batch.clearedCaseCount > 0 ? "success" : "warning"}>
+                          {props.locale === "ar"
+                            ? `${batch.clearedCaseCount} خرجت من الخطر`
+                            : `${batch.clearedCaseCount} now cleared`}
+                        </StatusBadge>
+                      </div>
+                    </td>
+                    <td data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
+                      <Link
+                        className="inline-link"
+                        href={buildRevenueManagerHref(
+                          props.locale,
+                          {
+                            ownerName: batch.scopedOwnerName,
+                            queue: "escalated_handoffs"
+                          },
+                          { hash: revenueManagerFocusedQueueId }
+                        )}
+                      >
+                        {props.locale === "ar" ? "فتح نطاق المالك" : "Open owner scope"}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            summary={
+              props.locale === "ar"
+                ? "لا توجد حالياً دفعات متابعة جماعية حديثة ما زال أثرها ظاهراً على السجل الحي."
+                : "No recent bulk follow-up batches currently have visible results on the live case set."
+            }
+            title={props.locale === "ar" ? "لا توجد نتائج جماعية بعد" : "No visible bulk results yet"}
           />
         )}
       </Panel>

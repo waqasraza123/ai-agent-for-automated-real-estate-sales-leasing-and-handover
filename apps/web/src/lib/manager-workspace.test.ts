@@ -17,6 +17,7 @@ function buildCase(caseId: string, overrides?: Partial<PersistedCaseSummary>) {
     handoverCase: null,
     handoverClosure: null,
     latestHumanReply: null,
+    latestManagerFollowUp: null,
     nextAction: "Next follow-up",
     nextActionDueAt: "2026-04-12T08:00:00.000Z",
     openInterventionsCount: 0,

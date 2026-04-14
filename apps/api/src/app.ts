@@ -9,6 +9,7 @@ import {
   createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
   listGovernanceEventsQuerySchema,
+  manageBulkCaseFollowUpInputSchema,
   prepareCaseReplyDraftQaReviewInputSchema,
   requestCaseQaReviewInputSchema,
   resolveCaseQaReviewInputSchema,
@@ -54,6 +55,7 @@ import {
   listPersistedGovernanceEvents,
   listPersistedCases,
   markPersistedHandoverCustomerUpdateDispatchReady,
+  managePersistedBulkCaseFollowUp,
   managePersistedCaseFollowUp,
   planPersistedHandoverAppointment,
   preparePersistedHandoverCustomerUpdateDelivery,
@@ -100,6 +102,45 @@ export function buildApiApp(dependencies: {
   app.get("/v1/cases", async () => ({
     cases: await listPersistedCases(dependencies.store)
   }));
+
+  app.post("/v1/cases/follow-up-plan/bulk", async (request, reply) => {
+    const permission = "manage_case_follow_up";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = manageBulkCaseFollowUpInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    try {
+      const updatedCases = await managePersistedBulkCaseFollowUp(dependencies.store, result.data);
+
+      if (!updatedCases || updatedCases.length === 0) {
+        return reply.status(404).send({
+          error: "case_not_found"
+        });
+      }
+
+      return reply.status(200).send({
+        updatedCases
+      });
+    } catch (error) {
+      if (error instanceof WorkflowRuleError) {
+        return reply.status(409).send({
+          error: error.code
+        });
+      }
+
+      throw error;
+    }
+  });
 
   app.get("/v1/governance/summary", async (request, reply) => {
     if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue", "manager_handover", "qa"])) {

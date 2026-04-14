@@ -14,6 +14,7 @@ import {
   createHandoverPostCompletionFollowUpInputSchema,
   createHandoverIntakeInputSchema,
   createWebsiteLeadInputSchema,
+  manageBulkCaseFollowUpInputSchema,
   markHandoverCustomerUpdateDispatchReadyInputSchema,
   manageCaseFollowUpInputSchema,
   planHandoverAppointmentInputSchema,
@@ -55,6 +56,7 @@ import {
   createHandoverIntake,
   createWebsiteLead,
   markHandoverCustomerUpdateDispatchReady,
+  manageBulkCaseFollowUp,
   manageCaseFollowUp,
   planHandoverAppointment,
   prepareCaseReplyDraftQaReview,
@@ -178,6 +180,73 @@ export async function saveManagerFollowUpAction(_: FormActionState, formData: Fo
       status: "success"
     };
   } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function saveBulkManagerFollowUpAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const returnPath = formData.get("returnPath");
+  const nextActionDueAt = formData.get("nextActionDueAt");
+
+  if (typeof returnPath !== "string" || typeof nextActionDueAt !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = manageBulkCaseFollowUpInputSchema.safeParse({
+    caseIds: formData.getAll("caseIds"),
+    expectedCurrentOwnerName: formData.get("expectedCurrentOwnerName"),
+    nextAction: formData.get("nextAction"),
+    nextActionDueAt: toIsoDateTimeOrEmpty(nextActionDueAt),
+    ownerName: normalizeOptionalString(formData.get("ownerName"))
+  });
+
+  if (!result.success) {
+    return {
+      message: getValidationMessage(locale),
+      status: "error"
+    };
+  }
+
+  try {
+    const updateResult = await manageBulkCaseFollowUp(result.data, await getOperatorRole());
+
+    for (const updatedCase of updateResult.updatedCases) {
+      revalidatePaths(locale, returnPath, updatedCase.caseId, updatedCase.handoverCase?.handoverCaseId);
+    }
+
+    return {
+      message:
+        locale === "ar"
+          ? `تم تحديث ${updateResult.updatedCases.length} حالات وحفظ خطة متابعة موحدة لها.`
+          : `Updated ${updateResult.updatedCases.length} cases with one shared follow-up plan.`,
+      status: "success"
+    };
+  } catch (error) {
+    if (error instanceof WebApiError && error.status === 404) {
+      return {
+        message:
+          locale === "ar"
+            ? "تعذر إكمال الإجراء لأن واحدة أو أكثر من الحالات المحددة لم تعد متاحة داخل النطاق الحي."
+            : "The bulk action could not finish because one or more selected cases are no longer available in the live scope.",
+        status: "error"
+      };
+    }
+
+    if (error instanceof WebApiError && error.status === 409) {
+      const errorCode = typeof error.body === "object" && error.body && "error" in error.body ? error.body.error : null;
+
+      if (errorCode === "case_follow_up_scope_mismatch") {
+        return {
+          message:
+            locale === "ar"
+              ? "تغيّر مالك واحدة أو أكثر من الحالات المحددة. أعد تحميل النطاق قبل تطبيق الإجراء الجماعي."
+              : "One or more selected cases changed owner. Refresh the scoped queue before applying the bulk action.",
+          status: "error"
+        };
+      }
+    }
+
     return getActionError(locale, error);
   }
 }

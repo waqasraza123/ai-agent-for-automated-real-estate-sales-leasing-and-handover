@@ -25,6 +25,16 @@ export interface GovernanceOperationalRiskOwner {
   ownerName: string;
 }
 
+export interface GovernanceOperationalRiskBulkBatch {
+  batchId: string;
+  caseCount: number;
+  clearedCaseCount: number;
+  currentOwnerNames: string[];
+  savedAt: string;
+  scopedOwnerName: string;
+  stillEscalatedCaseCount: number;
+}
+
 export function buildManagerGovernanceSummary(
   persistedCases: PersistedGovernanceCase[],
   options: { now?: Date } = {}
@@ -99,6 +109,7 @@ export function buildGovernanceOperationalRiskSummary(persistedCases: PersistedG
   );
 
   const owners = new Map<string, GovernanceOperationalRiskOwner>();
+  const bulkBatches = new Map<string, GovernanceOperationalRiskBulkBatch>();
 
   for (const caseItem of escalatedReplyHandoffCases) {
     const currentOwner = owners.get(caseItem.ownerName) ?? {
@@ -122,7 +133,48 @@ export function buildGovernanceOperationalRiskSummary(persistedCases: PersistedG
     });
   }
 
+  for (const caseItem of persistedCases) {
+    const bulkAction = caseItem.latestManagerFollowUp?.bulkAction;
+
+    if (!bulkAction) {
+      continue;
+    }
+
+    const currentBatch = bulkBatches.get(bulkAction.batchId) ?? {
+      batchId: bulkAction.batchId,
+      caseCount: bulkAction.caseCount,
+      clearedCaseCount: 0,
+      currentOwnerNames: [],
+      savedAt: caseItem.latestManagerFollowUp?.savedAt ?? caseItem.updatedAt,
+      scopedOwnerName: bulkAction.scopedOwnerName,
+      stillEscalatedCaseCount: 0
+    };
+
+    const isStillEscalated = hasPersistedLatestHumanReplyEscalation(
+      caseItem.ownerName,
+      caseItem.latestHumanReply,
+      caseItem.followUpStatus,
+      caseItem.openInterventionsCount
+    );
+
+    bulkBatches.set(bulkAction.batchId, {
+      ...currentBatch,
+      caseCount: Math.max(currentBatch.caseCount, bulkAction.caseCount),
+      clearedCaseCount: currentBatch.clearedCaseCount + (isStillEscalated ? 0 : 1),
+      currentOwnerNames: [...new Set([...currentBatch.currentOwnerNames, caseItem.ownerName])],
+      savedAt:
+        new Date(caseItem.latestManagerFollowUp?.savedAt ?? caseItem.updatedAt).getTime() >
+        new Date(currentBatch.savedAt).getTime()
+          ? caseItem.latestManagerFollowUp?.savedAt ?? caseItem.updatedAt
+          : currentBatch.savedAt,
+      stillEscalatedCaseCount: currentBatch.stillEscalatedCaseCount + (isStillEscalated ? 1 : 0)
+    });
+  }
+
   return {
+    bulkBatches: [...bulkBatches.values()]
+      .sort((left, right) => new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime())
+      .slice(0, 5),
     escalatedReplyHandoffCases,
     owners: [...owners.values()]
       .sort((left, right) => {

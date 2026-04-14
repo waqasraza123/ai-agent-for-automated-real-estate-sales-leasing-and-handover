@@ -4,7 +4,10 @@ import type { PersistedCaseDetail } from "@real-estate-ai/contracts";
 
 import {
   buildPersistedConversation,
+  formatLatestManagerFollowUpSavedAt,
   formatLatestHumanReplySentAt,
+  getPersistedLatestManagerFollowUpLabel,
+  getPersistedLatestManagerFollowUpNote,
   getPersistedLatestHumanReplyEscalationLabel,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
@@ -25,6 +28,7 @@ function buildCaseDetail(auditEvents: PersistedCaseDetail["auditEvents"]): Persi
     createdAt: "2026-04-13T09:00:00.000Z",
     currentHandoverCustomerUpdateQaReview: null,
     latestHumanReply: null,
+    latestManagerFollowUp: null,
     currentQaReview: {
       createdAt: "2026-04-13T09:05:00.000Z",
       draftMessage: "Approved reply draft text",
@@ -131,6 +135,46 @@ describe("buildPersistedConversation", () => {
 
     expect(getPersistedLatestHumanReplyLabel("en", caseDetail.latestHumanReply)).toBe("Human reply after QA approval");
     expect(formatLatestHumanReplySentAt(caseDetail.latestHumanReply, "en")).toBe(new Date("2026-04-13T09:12:00.000Z").toLocaleString("en"));
+  });
+
+  it("formats the latest manager follow-up summary for manager-facing surfaces", () => {
+    const caseDetail = buildCaseDetail([]);
+
+    caseDetail.latestManagerFollowUp = {
+      nextAction: "Confirm tomorrow's discovery-call slot with the buyer.",
+      nextActionDueAt: "2026-04-14T09:00:00.000Z",
+      ownerName: "Manager Desk North",
+      savedAt: "2026-04-13T09:15:00.000Z"
+    };
+
+    expect(getPersistedLatestManagerFollowUpLabel("en", caseDetail.latestManagerFollowUp)).toBe("Follow-up plan saved");
+    expect(formatLatestManagerFollowUpSavedAt(caseDetail.latestManagerFollowUp, "en")).toBe(
+      new Date("2026-04-13T09:15:00.000Z").toLocaleString("en")
+    );
+    expect(getPersistedLatestManagerFollowUpNote("en", caseDetail.latestManagerFollowUp)).toBe(
+      `The current follow-up was saved for Manager Desk North, due ${new Date("2026-04-14T09:00:00.000Z").toLocaleString("en")}.`
+    );
+  });
+
+  it("formats bulk manager follow-up summaries with batch context", () => {
+    const caseDetail = buildCaseDetail([]);
+
+    caseDetail.latestManagerFollowUp = {
+      bulkAction: {
+        batchId: "33333333-3333-4333-8333-333333333333",
+        caseCount: 3,
+        scopedOwnerName: "Revenue Ops Queue"
+      },
+      nextAction: "Confirm the reset across the desk.",
+      nextActionDueAt: "2026-04-14T11:00:00.000Z",
+      ownerName: "Manager Desk North",
+      savedAt: "2026-04-13T10:15:00.000Z"
+    };
+
+    expect(getPersistedLatestManagerFollowUpLabel("en", caseDetail.latestManagerFollowUp)).toBe("Bulk follow-up saved");
+    expect(getPersistedLatestManagerFollowUpNote("en", caseDetail.latestManagerFollowUp)).toBe(
+      `This update was saved as a 3-case bulk action from Revenue Ops Queue, with the active follow-up assigned to Manager Desk North, due ${new Date("2026-04-14T11:00:00.000Z").toLocaleString("en")}.`
+    );
   });
 
   it("derives a handoff label when the reply sender and current owner differ", () => {

@@ -8,6 +8,7 @@ import type {
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   ListGovernanceEventsQuery,
+  ManageBulkCaseFollowUpInput,
   MarkHandoverCustomerUpdateDispatchReadyInput,
   ManageCaseFollowUpInput,
   PlanHandoverAppointmentInput,
@@ -98,6 +99,28 @@ export async function managePersistedCaseFollowUp(
   input: ManageCaseFollowUpInput
 ): Promise<PersistedCaseDetail | null> {
   return store.manageCaseFollowUp(caseId, input);
+}
+
+export async function managePersistedBulkCaseFollowUp(
+  store: LeadCaptureStore,
+  input: ManageBulkCaseFollowUpInput
+): Promise<PersistedCaseDetail[] | null> {
+  const caseIds = Array.from(new Set(input.caseIds));
+  const caseDetails = await Promise.all(caseIds.map((caseId) => store.getCaseDetail(caseId)));
+
+  if (caseDetails.some((caseDetail) => caseDetail === null)) {
+    return null;
+  }
+
+  if (caseDetails.some((caseDetail) => caseDetail !== null && caseDetail.ownerName !== input.expectedCurrentOwnerName)) {
+    throw new WorkflowRuleError("case_follow_up_scope_mismatch");
+  }
+
+  return store.manageCaseFollowUpBulk(caseIds, {
+    nextAction: input.nextAction,
+    nextActionDueAt: input.nextActionDueAt,
+    ownerName: input.ownerName
+  });
 }
 
 export async function requestPersistedCaseQaReview(

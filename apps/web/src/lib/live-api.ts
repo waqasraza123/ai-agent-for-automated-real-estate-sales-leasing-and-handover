@@ -10,6 +10,8 @@ import type {
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   ListGovernanceEventsQuery,
+  ManageBulkCaseFollowUpInput,
+  ManageBulkCaseFollowUpResult,
   MarkHandoverCustomerUpdateDispatchReadyInput,
   ManageCaseFollowUpInput,
   PlanHandoverAppointmentInput,
@@ -115,6 +117,14 @@ export async function getPersistedGovernanceEventsFromApi(query?: Partial<ListGo
 
 export async function manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput, operatorRole?: OperatorRole) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/follow-up-plan`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function manageBulkCaseFollowUp(input: ManageBulkCaseFollowUpInput, operatorRole?: OperatorRole) {
+  return requestJson<ManageBulkCaseFollowUpResult>("/v1/cases/follow-up-plan/bulk", {
     headers: await getOperatorSessionHeaders(operatorRole),
     method: "POST",
     payload: input

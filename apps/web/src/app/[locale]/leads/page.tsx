@@ -11,12 +11,15 @@ import {
   buildCaseReferenceCode,
   formatCaseLastChange,
   formatDueAt,
+  formatLatestManagerFollowUpSavedAt,
   formatLatestHumanReplySentAt,
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
   getPersistedCaseStageLabel,
   getPersistedFollowUpLabel,
   getPersistedHandoverWorkspaceDisplay,
+  getPersistedLatestManagerFollowUpLabel,
+  getPersistedLatestManagerFollowUpNote,
   getPersistedLatestHumanReplyEscalationLabel,
   getPersistedLatestHumanReplyLabel,
   getPersistedLatestHumanReplyOwnershipLabel,
@@ -98,6 +101,9 @@ export default async function LeadsPage(props: PageProps) {
                     const handoverDisplay = getPersistedHandoverWorkspaceDisplay(locale, caseItem);
                     const qaReviewDisplay = getPersistedQaReviewDisplay(locale, caseItem);
                     const automationHoldReasonLabel = getPersistedAutomationHoldReasonLabel(locale, caseItem.automationHoldReason);
+                    const latestManagerFollowUpLabel = getPersistedLatestManagerFollowUpLabel(locale, caseItem.latestManagerFollowUp);
+                    const latestManagerFollowUpSavedAt = formatLatestManagerFollowUpSavedAt(caseItem.latestManagerFollowUp, locale);
+                    const latestManagerFollowUpNote = getPersistedLatestManagerFollowUpNote(locale, caseItem.latestManagerFollowUp);
                     const latestHumanReplyLabel = getPersistedLatestHumanReplyLabel(locale, caseItem.latestHumanReply);
                     const latestHumanReplySentAt = formatLatestHumanReplySentAt(caseItem.latestHumanReply, locale);
                     const latestHumanReplyOwnershipLabel = getPersistedLatestHumanReplyOwnershipLabel(
@@ -160,6 +166,18 @@ export default async function LeadsPage(props: PageProps) {
                                 {latestHumanReplyEscalationLabel ? (
                                   <span className="case-link-meta">{latestHumanReplyEscalationLabel}</span>
                                 ) : null}
+                              </div>
+                            ) : null}
+                            {caseItem.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
+                              <div className="stack-tight">
+                                <span className="case-link-meta">
+                                  {latestManagerFollowUpLabel}
+                                  {" · "}
+                                  {caseItem.latestManagerFollowUp.ownerName}
+                                  {" · "}
+                                  {latestManagerFollowUpSavedAt}
+                                </span>
+                                {latestManagerFollowUpNote ? <span className="case-link-meta">{latestManagerFollowUpNote}</span> : null}
                               </div>
                             ) : null}
                             <div className="status-row-wrap">

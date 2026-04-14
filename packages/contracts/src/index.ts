@@ -125,6 +125,14 @@ export const manageCaseFollowUpInputSchema = z.object({
   ownerName: z.string().trim().min(2).max(120).optional()
 });
 
+export const manageBulkCaseFollowUpInputSchema = z.object({
+  caseIds: z.array(z.string().uuid()).min(1).max(25),
+  expectedCurrentOwnerName: z.string().trim().min(2).max(120),
+  nextAction: z.string().trim().min(4).max(200),
+  nextActionDueAt: z.iso.datetime(),
+  ownerName: z.string().trim().min(2).max(120).optional()
+});
+
 export const createHandoverIntakeInputSchema = z.object({
   ownerName: z.string().trim().min(2).max(120).optional(),
   readinessSummary: z.string().trim().min(10).max(240)
@@ -442,6 +450,20 @@ export const persistedAuditEventSchema = z.object({
   payload: z.record(z.string(), z.unknown())
 });
 
+export const persistedBulkManagerFollowUpSchema = z.object({
+  batchId: z.uuid(),
+  caseCount: z.number().int().min(2),
+  scopedOwnerName: z.string()
+});
+
+export const persistedLatestManagerFollowUpSchema = z.object({
+  bulkAction: persistedBulkManagerFollowUpSchema.optional(),
+  nextAction: z.string(),
+  nextActionDueAt: z.iso.datetime(),
+  ownerName: z.string(),
+  savedAt: z.iso.datetime()
+});
+
 export const persistedLatestCaseReplySchema = z.object({
   approvedFromQa: z.boolean(),
   message: z.string(),
@@ -562,6 +584,7 @@ export const persistedCaseSummarySchema = z.object({
   caseId: z.uuid(),
   createdAt: z.iso.datetime(),
   currentHandoverCustomerUpdateQaReview: persistedCurrentHandoverCustomerUpdateQaReviewSchema.nullable(),
+  latestManagerFollowUp: persistedLatestManagerFollowUpSchema.nullable(),
   latestHumanReply: persistedLatestCaseReplySchema.nullable(),
   currentQaReview: persistedCaseQaReviewSchema.nullable(),
   customerName: z.string(),
@@ -618,6 +641,10 @@ export const createWebsiteLeadResultSchema = persistedCaseSummarySchema.extend({
   leadId: z.uuid()
 });
 
+export const manageBulkCaseFollowUpResultSchema = z.object({
+  updatedCases: z.array(persistedCaseDetailSchema)
+});
+
 export type ApproveHandoverCustomerUpdateInput = z.infer<typeof approveHandoverCustomerUpdateInputSchema>;
 export type AutomationStatus = z.infer<typeof automationStatusSchema>;
 export type CaseAutomationHoldReason = z.infer<typeof caseAutomationHoldReasonSchema>;
@@ -660,6 +687,8 @@ export type HandoverReviewOutcome = z.infer<typeof handoverReviewOutcomeSchema>;
 export type HandoverTaskStatus = z.infer<typeof handoverTaskStatusSchema>;
 export type HandoverTaskType = z.infer<typeof handoverTaskTypeSchema>;
 export type ManageCaseFollowUpInput = z.infer<typeof manageCaseFollowUpInputSchema>;
+export type ManageBulkCaseFollowUpInput = z.infer<typeof manageBulkCaseFollowUpInputSchema>;
+export type ManageBulkCaseFollowUpResult = z.infer<typeof manageBulkCaseFollowUpResultSchema>;
 export type MarkHandoverCustomerUpdateDispatchReadyInput = z.infer<typeof markHandoverCustomerUpdateDispatchReadyInputSchema>;
 export type ManagerInterventionSeverity = z.infer<typeof managerInterventionSeveritySchema>;
 export type ManagerInterventionStatus = z.infer<typeof managerInterventionStatusSchema>;
@@ -672,7 +701,9 @@ export type PrepareCaseReplyDraftQaReviewInput = z.infer<typeof prepareCaseReply
 export type ListGovernanceEventsQuery = z.infer<typeof listGovernanceEventsQuerySchema>;
 export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseQaReview = z.infer<typeof persistedCaseQaReviewSchema>;
+export type PersistedBulkManagerFollowUp = z.infer<typeof persistedBulkManagerFollowUpSchema>;
 export type PersistedLatestCaseReply = z.infer<typeof persistedLatestCaseReplySchema>;
+export type PersistedLatestManagerFollowUp = z.infer<typeof persistedLatestManagerFollowUpSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
 export type PersistedCurrentHandoverCustomerUpdateQaReview = z.infer<typeof persistedCurrentHandoverCustomerUpdateQaReviewSchema>;
 export type PersistedDocumentRequest = z.infer<typeof persistedDocumentRequestSchema>;
