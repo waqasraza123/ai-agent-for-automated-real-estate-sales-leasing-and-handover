@@ -7,7 +7,7 @@ test("skip link moves focus to main content @a11y", async ({ page }) => {
   await page.goto(smokeRoutes.landing);
   await page.keyboard.press("Tab");
 
-  const skipLink = page.getByRole("link", { name: "Skip to main content" });
+  const skipLink = page.getByRole("link", { name: "تخطي إلى المحتوى الرئيسي" });
   await expect(skipLink).toBeFocused();
 
   await page.keyboard.press("Enter");

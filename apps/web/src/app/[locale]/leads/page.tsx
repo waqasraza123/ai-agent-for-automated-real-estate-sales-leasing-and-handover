@@ -25,6 +25,7 @@ import {
   getPersistedLatestHumanReplyOwnershipLabel,
   getPersistedQaReviewDisplay
 } from "@/lib/persisted-case-presenters";
+import { formatDateTime } from "@/lib/format";
 import { getInterventionCountLabel } from "@/lib/live-copy";
 import { tryListPersistedCases } from "@/lib/live-api";
 import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
@@ -48,7 +49,7 @@ export default async function LeadsPage(props: PageProps) {
         <ScreenIntro badge={messages.app.phaseLabel} summary={messages.leads.summary} title={messages.leads.title} />
         <WorkspaceAccessPanel
           actionHref={getPreferredOperatorSurfacePath(locale, currentOperatorRole)}
-          actionLabel={locale === "ar" ? "العودة إلى مركز القيادة" : "Return to the command center"}
+          actionLabel={messages.common.backToCommandCenter}
           locale={locale}
           operatorRole={currentOperatorRole}
           summary={
@@ -139,12 +140,12 @@ export default async function LeadsPage(props: PageProps) {
                               </div>
                               {canAccessHandoverWorkspace ? (
                                 <Link className="inline-link" href={`/${locale}/handover/${handoverDisplay.handoverCaseId}`}>
-                                  {locale === "ar" ? "فتح سجل التسليم" : "Open handover"}
+                                  {messages.common.openHandover}
                                 </Link>
                               ) : null}
                             </div>
                           ) : (
-                            <span className="case-link-meta">{locale === "ar" ? "غير متاح" : "Not active"}</span>
+                            <span className="case-link-meta">{messages.common.notActive}</span>
                           )}
                         </td>
                         <td data-column-label={columnLabels.currentOwner}>{caseItem.ownerName}</td>
@@ -228,11 +229,11 @@ export default async function LeadsPage(props: PageProps) {
                       <StatusBadge>{getLocalizedText(caseItem.stage, locale)}</StatusBadge>
                     </td>
                     <td data-column-label={columnLabels.handover}>
-                      <span className="case-link-meta">{locale === "ar" ? "غير متاح" : "Not active"}</span>
+                      <span className="case-link-meta">{messages.common.notActive}</span>
                     </td>
                     <td data-column-label={columnLabels.currentOwner}>{caseItem.owner}</td>
                     <td data-column-label={columnLabels.nextAction}>{getLocalizedText(caseItem.nextAction, locale)}</td>
-                    <td data-column-label={columnLabels.lastChange}>{new Date(caseItem.lastMeaningfulChange).toLocaleString(locale)}</td>
+                    <td data-column-label={columnLabels.lastChange}>{formatDateTime(caseItem.lastMeaningfulChange, locale)}</td>
                   </tr>
                 ))}
               </tbody>

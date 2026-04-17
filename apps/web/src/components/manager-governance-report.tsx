@@ -13,6 +13,7 @@ import { EmptyState, Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
 import type { ExportRecipient } from "@/lib/export-summary";
+import { formatDateTime } from "@/lib/format";
 import type {
   GovernanceOperationalRiskExportCandidate,
   GovernanceOperationalRiskExportScope,
@@ -490,7 +491,7 @@ export function ManagerGovernanceReport(props: {
                           <StatusBadge tone={getExportCandidateTone(candidate.priority)}>
                             {getExportCandidatePriorityLabel(props.locale, candidate.priority)}
                           </StatusBadge>
-                          <span>{new Date(candidate.savedAt).toLocaleString(props.locale)}</span>
+                          <span>{formatDateTime(candidate.savedAt, props.locale)}</span>
                         </div>
                       </td>
                       <td data-column-label={props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}>
@@ -656,7 +657,7 @@ export function ManagerGovernanceReport(props: {
                   <tr key={batch.batchId}>
                     <td data-column-label={props.locale === "ar" ? "الدفعة" : "Batch"}>
                       <div className="table-link">
-                        <strong>{new Date(batch.savedAt).toLocaleString(props.locale)}</strong>
+                        <strong>{formatDateTime(batch.savedAt, props.locale)}</strong>
                         <span>
                           {props.locale === "ar"
                             ? `${batch.caseCount} حالات في الدفعة`
@@ -915,7 +916,7 @@ export function ManagerGovernanceReport(props: {
                         <div className="table-link">
                           <strong>{event.customerName}</strong>
                           <span>{buildCaseReferenceCode(event.caseId)}</span>
-                          <span>{new Date(event.createdAt).toLocaleString(props.locale)}</span>
+                          <span>{formatDateTime(event.createdAt, props.locale)}</span>
                           <span>
                             {getActionLabel(props.locale, event.action)} · {getKindLabel(props.locale, event.kind)}
                           </span>

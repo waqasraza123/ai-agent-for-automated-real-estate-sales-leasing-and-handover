@@ -8,10 +8,11 @@ import type { OperatorRole } from "@real-estate-ai/contracts";
 import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 import type { SupportedLocale } from "@real-estate-ai/domain";
 import type { AppMessages } from "@real-estate-ai/i18n";
-import { getLocaleLabel, toggleLocale } from "@real-estate-ai/i18n";
+import { getLocaleLabel, locales } from "@real-estate-ai/i18n";
 import { cx } from "@real-estate-ai/ui";
 
 import { OperatorRoleSwitcher } from "@/components/operator-role-switcher";
+import { replacePathLocale } from "@/lib/locale";
 import { getQaWorkspaceCopy } from "@/lib/qa-workspace";
 
 export function AppChrome(props: {
@@ -21,8 +22,6 @@ export function AppChrome(props: {
   messages: AppMessages;
 }) {
   const pathname = usePathname();
-  const alternateLocale = toggleLocale(props.locale);
-  const alternatePath = replaceLocale(pathname, alternateLocale);
   const qaWorkspaceCopy = getQaWorkspaceCopy(props.locale);
   const navigation = [
     {
@@ -53,7 +52,7 @@ export function AppChrome(props: {
     },
     {
       href: `/${props.locale}/qa`,
-      label: props.locale === "ar" ? "الجودة" : "QA",
+      label: props.messages.navigation.qa,
       summary: qaWorkspaceCopy.title,
       visible: canOperatorRoleAccessWorkspace("qa", props.currentOperatorRole)
     }
@@ -77,13 +76,16 @@ export function AppChrome(props: {
             <p className="chrome-role-note">{props.messages.common.roleGuardNote}</p>
           </div>
           <nav aria-label={props.messages.common.switchLanguage} className="locale-switch">
-            <Link className={cx(props.locale === "en" && "locale-active")} href={replaceLocale(pathname, "en")}>
-              {getLocaleLabel("en")}
-            </Link>
-            <Link className={cx(props.locale === "ar" && "locale-active")} href={replaceLocale(pathname, "ar")}>
-              {getLocaleLabel("ar")}
-            </Link>
-            <Link href={alternatePath}>{props.messages.common.switchLanguage}</Link>
+            {locales.map((locale) => (
+              <Link
+                key={locale}
+                aria-current={props.locale === locale ? "page" : undefined}
+                className={cx(props.locale === locale && "locale-active")}
+                href={replacePathLocale(pathname, locale)}
+              >
+                {getLocaleLabel(locale)}
+              </Link>
+            ))}
           </nav>
         </div>
       </header>
@@ -116,19 +118,4 @@ export function AppChrome(props: {
       </div>
     </div>
   );
-}
-
-function replaceLocale(pathname: string, locale: SupportedLocale): string {
-  const segments = pathname.split("/").filter(Boolean);
-
-  if (segments.length === 0) {
-    return `/${locale}`;
-  }
-
-  if (segments[0] === "en" || segments[0] === "ar") {
-    segments[0] = locale;
-    return `/${segments.join("/")}`;
-  }
-
-  return `/${locale}/${segments.join("/")}`;
 }

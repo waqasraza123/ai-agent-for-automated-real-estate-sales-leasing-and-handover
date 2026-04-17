@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { SupportedLocale } from "@real-estate-ai/contracts";
+import { getMessages } from "@real-estate-ai/i18n";
 import { cx } from "@real-estate-ai/ui";
 
 import { initialFormActionState, sendCaseReplyAction } from "@/app/actions";
@@ -22,6 +23,7 @@ export function CaseManualReplyForm(props: {
   showApprovedDraftNote: boolean;
 }) {
   const copy = getCaseManualReplyCopy(props.locale);
+  const messages = getMessages(props.locale);
   const [state, action] = useActionState(sendCaseReplyAction, initialFormActionState);
 
   return (
@@ -83,7 +85,7 @@ export function CaseManualReplyForm(props: {
           disabled={!props.canSend}
           disabledLabel={props.disabledLabel}
           idleLabel={copy.action}
-          pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."}
+          pendingLabel={messages.forms.pendingSave}
         />
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}

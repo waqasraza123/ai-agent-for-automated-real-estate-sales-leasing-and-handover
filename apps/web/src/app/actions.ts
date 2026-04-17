@@ -38,6 +38,7 @@ import {
   updateHandoverMilestoneInputSchema,
   updateHandoverTaskStatusInputSchema
 } from "@real-estate-ai/contracts";
+import { defaultLocale, getMessages } from "@real-estate-ai/i18n";
 
 import { initialFormActionState, type FormActionState } from "@/lib/form-action-state";
 import { canUseOperatorRoleAccessKey } from "@/lib/operator-access";
@@ -84,7 +85,7 @@ export async function setOperatorRoleAction(formData: FormData) {
   const roleResult = operatorRoleSchema.safeParse(formData.get("operatorRole"));
   const accessKeyValue = formData.get("accessKey");
   const returnPathValue = formData.get("returnPath");
-  const returnPath = typeof returnPathValue === "string" && returnPathValue.startsWith("/") ? returnPathValue : "/en";
+  const returnPath = typeof returnPathValue === "string" && returnPathValue.startsWith("/") ? returnPathValue : `/${defaultLocale}`;
   const cookieStore = await cookies();
   const operatorRole = roleResult.success ? roleResult.data : defaultOperatorRole;
   const accessKey = typeof accessKeyValue === "string" ? accessKeyValue : "";
@@ -472,6 +473,7 @@ export async function sendCaseReplyAction(_: FormActionState, formData: FormData
 
 export async function saveQualificationAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
+  const messages = getMessages(locale);
   const caseId = formData.get("caseId");
   const returnPath = formData.get("returnPath");
 
@@ -498,7 +500,7 @@ export async function saveQualificationAction(_: FormActionState, formData: Form
     revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
-      message: locale === "ar" ? "تم حفظ التأهيل وتحديث الحالة." : "Qualification saved and the case has been updated.",
+      message: messages.actions.qualificationSaved,
       status: "success"
     };
   } catch (error) {
@@ -508,6 +510,7 @@ export async function saveQualificationAction(_: FormActionState, formData: Form
 
 export async function scheduleVisitAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
+  const messages = getMessages(locale);
   const caseId = formData.get("caseId");
   const returnPath = formData.get("returnPath");
   const scheduledAt = formData.get("scheduledAt");
@@ -533,7 +536,7 @@ export async function scheduleVisitAction(_: FormActionState, formData: FormData
     revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
-      message: locale === "ar" ? "تم حفظ موعد الزيارة." : "The visit was scheduled successfully.",
+      message: messages.actions.visitScheduled,
       status: "success"
     };
   } catch (error) {
@@ -573,6 +576,7 @@ export async function submitWebsiteLeadAction(_: FormActionState, formData: Form
 
 export async function updateAutomationStatusAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
+  const messages = getMessages(locale);
   const caseId = formData.get("caseId");
   const returnPath = formData.get("returnPath");
 
@@ -596,14 +600,7 @@ export async function updateAutomationStatusAction(_: FormActionState, formData:
     revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
-      message:
-        locale === "ar"
-          ? result.data.status === "paused"
-            ? "تم إيقاف الأتمتة لهذه الحالة."
-            : "تمت إعادة تشغيل الأتمتة لهذه الحالة."
-          : result.data.status === "paused"
-            ? "Automation was paused for this case."
-            : "Automation was resumed for this case.",
+      message: result.data.status === "paused" ? messages.actions.automationPaused : messages.actions.automationResumed,
       status: "success"
     };
   } catch (error) {
@@ -613,6 +610,7 @@ export async function updateAutomationStatusAction(_: FormActionState, formData:
 
 export async function updateDocumentStatusAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
+  const messages = getMessages(locale);
   const caseId = formData.get("caseId");
   const documentRequestId = formData.get("documentRequestId");
   const returnPath = formData.get("returnPath");
@@ -637,7 +635,7 @@ export async function updateDocumentStatusAction(_: FormActionState, formData: F
     revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
 
     return {
-      message: locale === "ar" ? "تم تحديث حالة المستند." : "The document state was updated.",
+      message: messages.actions.documentUpdated,
       status: "success"
     };
   } catch (error) {
@@ -647,6 +645,7 @@ export async function updateDocumentStatusAction(_: FormActionState, formData: F
 
 export async function updateHandoverTaskStatusAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
+  const messages = getMessages(locale);
   const handoverCaseId = formData.get("handoverCaseId");
   const handoverTaskId = formData.get("handoverTaskId");
   const returnPath = formData.get("returnPath");
@@ -671,7 +670,7 @@ export async function updateHandoverTaskStatusAction(_: FormActionState, formDat
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
-      message: locale === "ar" ? "تم تحديث عنصر جاهزية التسليم." : "The handover readiness item was updated.",
+      message: messages.actions.handoverTaskUpdated,
       status: "success"
     };
   } catch (error) {
@@ -769,6 +768,7 @@ export async function updateHandoverBlockerAction(_: FormActionState, formData: 
 
 export async function startHandoverExecutionAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
+  const messages = getMessages(locale);
   const handoverCaseId = formData.get("handoverCaseId");
   const returnPath = formData.get("returnPath");
 
@@ -792,19 +792,13 @@ export async function startHandoverExecutionAction(_: FormActionState, formData:
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
-      message:
-        locale === "ar"
-          ? "تم بدء حالة التنفيذ في يوم التسليم على السجل الحي."
-          : "The handover-day execution state was started on the live record.",
+      message: messages.actions.handoverExecutionStarted,
       status: "success"
     };
   } catch (error) {
     if (error instanceof WebApiError && error.status === 409) {
       return {
-        message:
-          locale === "ar"
-            ? "لا يمكن بدء التنفيذ قبل اكتمال الجدولة الداخلية وتصفية جميع العوائق المفتوحة."
-            : "Execution cannot start until the handover is internally scheduled and all open blockers are cleared.",
+        message: messages.actions.handoverExecutionBlocked,
         status: "error"
       };
     }
@@ -815,6 +809,7 @@ export async function startHandoverExecutionAction(_: FormActionState, formData:
 
 export async function completeHandoverAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
+  const messages = getMessages(locale);
   const handoverCaseId = formData.get("handoverCaseId");
   const returnPath = formData.get("returnPath");
 
@@ -839,19 +834,13 @@ export async function completeHandoverAction(_: FormActionState, formData: FormD
     revalidateHandoverPaths(locale, returnPath, updatedHandoverCase.caseId, updatedHandoverCase.handoverCaseId);
 
     return {
-      message:
-        locale === "ar"
-          ? "تم إغلاق يوم التسليم بملخص إتمام مضبوط."
-          : "The handover day was closed with a controlled completion summary.",
+      message: messages.actions.handoverCompleted,
       status: "success"
     };
   } catch (error) {
     if (error instanceof WebApiError && error.status === 409) {
       return {
-        message:
-          locale === "ar"
-            ? "لا يمكن إتمام التسليم قبل بدء التنفيذ ومعالجة جميع العوائق المفتوحة."
-            : "Handover completion requires an active execution state with no open blockers.",
+        message: messages.actions.handoverCompletionBlocked,
         status: "error"
       };
     }
@@ -1466,6 +1455,8 @@ export async function markHandoverCustomerUpdateDispatchReadyAction(
 }
 
 function getActionError(locale: "en" | "ar", error: unknown): FormActionState {
+  const messages = getMessages(locale);
+
   if (error instanceof WebApiError && error.status === 403) {
     const insufficientRoleError = getInsufficientRoleError(error.body);
 
@@ -1473,19 +1464,14 @@ function getActionError(locale: "en" | "ar", error: unknown): FormActionState {
       message:
         insufficientRoleError
           ? getOperatorPermissionGuardNote(locale, insufficientRoleError.permission)
-          : locale === "ar"
-            ? "هذا الإجراء يتطلب دوراً مناسباً في وضع التحكم المحلي."
-            : "This action requires an eligible role in local control mode.",
+          : messages.errors.localRoleRequired,
       status: "error"
     };
   }
 
   if (error instanceof WebApiError && error.status >= 500) {
     return {
-      message:
-        locale === "ar"
-          ? "خدمة الواجهة الحية غير متاحة حالياً. شغّل apps/api وapps/worker ثم أعد المحاولة."
-          : "The live alpha services are not available right now. Start apps/api and apps/worker, then try again.",
+      message: messages.errors.liveServicesUnavailable,
       status: "error"
     };
   }
@@ -1494,11 +1480,10 @@ function getActionError(locale: "en" | "ar", error: unknown): FormActionState {
 }
 
 function getLocalizedError(locale: "en" | "ar"): FormActionState {
+  const messages = getMessages(locale);
+
   return {
-    message:
-      locale === "ar"
-        ? "تعذر إكمال العملية الحالية. تحقق من تشغيل الخدمات المحلية ثم أعد المحاولة."
-        : "The current action could not be completed. Check the local services and try again.",
+    message: messages.errors.genericAction,
     status: "error"
   };
 }
@@ -1506,13 +1491,11 @@ function getLocalizedError(locale: "en" | "ar"): FormActionState {
 function getLocale(value: FormDataEntryValue | null) {
   const result = supportedLocaleSchema.safeParse(value);
 
-  return result.success ? result.data : "en";
+  return result.success ? result.data : defaultLocale;
 }
 
 function getValidationMessage(locale: "en" | "ar") {
-  return locale === "ar"
-    ? "راجع الحقول المطلوبة ثم أعد الإرسال."
-    : "Review the required fields and submit the form again.";
+  return getMessages(locale).validation.generic;
 }
 
 function normalizeOptionalString(value: FormDataEntryValue | null) {

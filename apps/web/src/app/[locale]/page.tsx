@@ -55,12 +55,8 @@ export default async function LandingPage(props: PageProps) {
       </section>
 
       <div className="two-column-grid">
-        <Panel title={locale === "ar" ? "التشغيل الحي" : "Live alpha intake"}>
-          <p className="panel-summary">
-            {locale === "ar"
-              ? "هذا هو المسار الأول الذي ينتقل من واجهة الويب إلى `apps/api` ثم يعود إلى شاشات الإدارة والحالة المحفوظة."
-              : "This is the first live path that leaves the web shell, persists into `apps/api`, and returns to manager-facing views."}
-          </p>
+        <Panel title={messages.landing.liveAlphaTitle}>
+          <p className="panel-summary">{messages.landing.liveAlphaSummary}</p>
           <LeadCaptureForm locale={locale} />
         </Panel>
 

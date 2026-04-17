@@ -4,7 +4,7 @@ import { demoDataset, getDemoCaseById, supportedLocales } from "./index";
 
 describe("domain fixtures", () => {
   it("keeps both supported locales", () => {
-    expect(supportedLocales).toEqual(["en", "ar"]);
+    expect(supportedLocales).toEqual(["ar", "en"]);
   });
 
   it("resolves seeded cases by id", () => {

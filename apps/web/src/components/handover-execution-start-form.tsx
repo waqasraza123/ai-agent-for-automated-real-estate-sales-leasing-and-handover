@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { HandoverCaseStatus, SupportedLocale } from "@real-estate-ai/contracts";
+import { getMessages } from "@real-estate-ai/i18n";
 import { cx } from "@real-estate-ai/ui";
 
 import { initialFormActionState, startHandoverExecutionAction } from "@/app/actions";
@@ -18,6 +19,7 @@ export function HandoverExecutionStartForm(props: {
   status: HandoverCaseStatus;
 }) {
   const copy = getHandoverExecutionCopy(props.locale);
+  const messages = getMessages(props.locale);
   const [state, action] = useActionState(startHandoverExecutionAction, initialFormActionState);
   const canStart = props.status === "scheduled";
   const alreadyStarted = props.status === "in_progress" || props.status === "completed";
@@ -32,17 +34,17 @@ export function HandoverExecutionStartForm(props: {
       <div className="form-actions-row">
         {alreadyStarted ? (
           <button className="primary-button" disabled type="button">
-            {props.locale === "ar" ? "تم البدء" : "Already started"}
+            {messages.forms.alreadyStarted}
           </button>
         ) : !props.canManage ? (
           <button className="primary-button" disabled type="button">
             {props.disabledLabel}
           </button>
         ) : canStart ? (
-          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ البدء..." : "Starting..."} />
+          <FormSubmitButton idleLabel={copy.action} pendingLabel={messages.forms.pendingStart} />
         ) : (
           <button className="primary-button" disabled type="button">
-            {props.locale === "ar" ? "بانتظار الجدولة" : "Waiting for scheduling"}
+            {messages.forms.waitingForScheduling}
           </button>
         )}
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>

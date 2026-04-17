@@ -16,6 +16,7 @@ import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
 import { TimelinePanel } from "@/components/timeline-panel";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
+import { formatDateTime } from "@/lib/format";
 import { getOperatorPermissionGuardNote, getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import {
@@ -258,7 +259,7 @@ export default async function LeadProfilePage(props: PageProps) {
                   </div>
                   <div>
                     <dt>{locale === "ar" ? "موعد الخطوة التالية" : "Next action due"}</dt>
-                    <dd>{new Date(persistedCase.latestHumanReply.nextActionDueAt).toLocaleString(locale)}</dd>
+                    <dd>{formatDateTime(persistedCase.latestHumanReply.nextActionDueAt, locale)}</dd>
                   </div>
                 </dl>
                 {latestHumanReplyOwnershipNote ? <p className="field-note">{latestHumanReplyOwnershipNote}</p> : null}
@@ -440,7 +441,7 @@ export default async function LeadProfilePage(props: PageProps) {
           </Panel>
         </div>
 
-        <TimelinePanel events={buildPersistedTimeline(persistedCase)} locale={locale} />
+        <TimelinePanel events={buildPersistedTimeline(persistedCase, locale)} locale={locale} />
       </div>
     );
   }
@@ -473,7 +474,7 @@ export default async function LeadProfilePage(props: PageProps) {
             </div>
             <div>
               <p className="detail-label">{messages.common.lastChange}</p>
-              <p>{new Date(caseItem.lastMeaningfulChange).toLocaleString(locale)}</p>
+              <p>{formatDateTime(caseItem.lastMeaningfulChange, locale)}</p>
             </div>
           </div>
           <div className="case-callout">

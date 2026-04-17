@@ -99,7 +99,8 @@ describe("buildPersistedConversation", () => {
             sentByName: "Amina Rahman"
           }
         }
-      ])
+      ]),
+      "en"
     );
 
     const managerMessages = messages.filter((message) => message.sender === "manager");

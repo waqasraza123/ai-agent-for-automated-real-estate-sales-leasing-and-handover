@@ -1,0 +1,30 @@
+import type { CommonSection } from "../types";
+
+export const arCommon: CommonSection = {
+  switchLanguage: "تبديل اللغة",
+  operatorRole: "دور المشغل",
+  applyRole: "تطبيق الدور",
+  roleGuardNote: "الضوابط الحساسة تعتمد على جلسة محلية موثوقة مع حدود واضحة للدور ومساحة العمل.",
+  skipToContent: "تخطي إلى المحتوى الرئيسي",
+  primaryNavigation: "التنقل الرئيسي",
+  demoState: "بيانات تجريبية",
+  languagePreference: "اللغة",
+  lead: "العميل",
+  currentOwner: "المسؤول الحالي",
+  nextAction: "الخطوة التالية",
+  lastChange: "آخر تغيير مهم",
+  timeline: "التسلسل الزمني",
+  documents: "المستندات",
+  visitReadiness: "جاهزية الزيارة",
+  handoverReadiness: "جاهزية التسليم",
+  stage: "المرحلة الحالية",
+  customer: "العميل",
+  automation: "الأتمتة",
+  manager: "المدير",
+  placeholderNotice: "تعتمد هذه الشاشة على بيانات تجريبية أو حالة حية محلية إلى أن تكتمل البنية التشغيلية الكاملة.",
+  notActive: "غير مفعّل",
+  backToDashboard: "العودة إلى اللوحة",
+  backToCommandCenter: "العودة إلى مركز القيادة",
+  openHandover: "فتح سجل التسليم",
+  openQaRecord: "فتح سجل الجودة"
+};

@@ -26,6 +26,7 @@ import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
 import { TimelinePanel } from "@/components/timeline-panel";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
+import { formatDateTime } from "@/lib/format";
 import {
   getOperatorPermissionGuardNote,
   getPreferredOperatorSurfacePath,
@@ -218,7 +219,7 @@ export default async function HandoverPage(props: PageProps) {
                   <p className="detail-label">{locale === "ar" ? "بدأ التنفيذ" : "Execution started"}</p>
                   <p>
                     {persistedHandoverCase.executionStartedAt
-                      ? new Date(persistedHandoverCase.executionStartedAt).toLocaleString(locale)
+                      ? formatDateTime(persistedHandoverCase.executionStartedAt, locale)
                       : locale === "ar"
                         ? "لم يبدأ بعد"
                         : "Not started yet"}
@@ -253,7 +254,7 @@ export default async function HandoverPage(props: PageProps) {
                   <p className="detail-label">{locale === "ar" ? "اكتمل في" : "Completed at"}</p>
                   <p>
                     {persistedHandoverCase.completedAt
-                      ? new Date(persistedHandoverCase.completedAt).toLocaleString(locale)
+                      ? formatDateTime(persistedHandoverCase.completedAt, locale)
                       : locale === "ar"
                         ? "بانتظار الإتمام"
                         : "Waiting for completion"}
@@ -815,7 +816,7 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
         </div>
 
-        <TimelinePanel events={buildPersistedHandoverTimeline(persistedHandoverCase)} locale={locale} />
+        <TimelinePanel events={buildPersistedHandoverTimeline(persistedHandoverCase, locale)} locale={locale} />
       </div>
     );
   }

@@ -184,7 +184,7 @@ export default async function ConversationPage(props: PageProps) {
         </div>
 
         <Panel title={persistedCase.customerName}>
-          <MessageThread locale={locale} messages={buildPersistedConversation(persistedCase)} />
+          <MessageThread locale={locale} messages={buildPersistedConversation(persistedCase, locale)} />
         </Panel>
       </div>
     );

@@ -12,12 +12,15 @@
 - Shared packages implemented are `domain`, `i18n`, `ui`, `testing`, `contracts`, `database`, and `workflows`
 - Root tooling now includes `pnpm` workspaces, `turbo`, TypeScript base config, ESLint, Vitest, Playwright, and a versioned pre-push safety system
 - The web application is now a hybrid Next.js App Router shell: premium seeded Phase 1 surfaces remain available, while the lead intake, lead detail, scheduling, documents, and manager routes can use persisted alpha data from `apps/api`
+- The web shell now resolves Arabic as the default locale on first entry, keeps locale-prefixed routes under `app/[locale]`, and persists explicit language choice through the `rea_locale` cookie instead of defaulting anonymous traffic to English
 - The API application is a Fastify service with schema-validated website lead intake, qualification, visit scheduling, follow-up-plan mutation, automation control, document state mutation, manager-readable case list and case detail endpoints, and persisted handover intake, milestone-planning, customer-update-boundary, and readiness-task endpoints
 - The worker application is a narrow background follow-up processor that polls the local alpha queue, opens overdue manager interventions, and respects both manual automation pause state and derived QA-driven automation holds
 - The current persisted alpha store uses Drizzle over local `PGlite` for safe Phase 2 and early Phase 3 development without introducing remote infrastructure
 - `integrations`, `analytics`, and `config` remain planned and unimplemented
 - Durable memory is kept in `docs/project-state.md`
 - Local working memory is kept in `docs/_local/current-session.md` and must remain uncommitted
+- Shared localization now lives behind typed domain resources in `packages/i18n`, with Arabic as the authored default, English as the secondary locale, and shared helpers for locale direction, labels, and formatter locale selection
+- Shared web formatting now routes date and number presentation through locale-aware helpers in `apps/web/src/lib/format.ts`, and the web shell now uses local Arabic-capable system font stacks instead of runtime Google font fetches
 
 ## Non-Negotiable Rules
 - Never store secrets in repository memory files

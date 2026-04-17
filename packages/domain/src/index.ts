@@ -96,7 +96,7 @@ export interface DemoDataset {
   handoverCases: DemoHandoverCase[];
 }
 
-export const supportedLocales: SupportedLocale[] = ["en", "ar"];
+export const supportedLocales: SupportedLocale[] = ["ar", "en"];
 
 export function getLocalizedText(value: LocalizedText, locale: SupportedLocale): string {
   return value[locale];

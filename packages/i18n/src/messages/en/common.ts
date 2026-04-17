@@ -1,0 +1,30 @@
+import type { CommonSection } from "../types";
+
+export const enCommon: CommonSection = {
+  switchLanguage: "Switch language",
+  operatorRole: "Operator role",
+  applyRole: "Apply role",
+  roleGuardNote: "Sensitive controls depend on a trusted local session with explicit role and workspace boundaries.",
+  skipToContent: "Skip to main content",
+  primaryNavigation: "Primary navigation",
+  demoState: "Demo data",
+  languagePreference: "Language",
+  lead: "Lead",
+  currentOwner: "Current owner",
+  nextAction: "Next action",
+  lastChange: "Last meaningful change",
+  timeline: "Timeline",
+  documents: "Documents",
+  visitReadiness: "Visit readiness",
+  handoverReadiness: "Handover readiness",
+  stage: "Current stage",
+  customer: "Customer",
+  automation: "Automation",
+  manager: "Manager",
+  placeholderNotice: "This screen uses demo or local live state until the full operating architecture is in place.",
+  notActive: "Not active",
+  backToDashboard: "Return to the dashboard",
+  backToCommandCenter: "Return to the command center",
+  openHandover: "Open handover record",
+  openQaRecord: "Open QA record"
+};

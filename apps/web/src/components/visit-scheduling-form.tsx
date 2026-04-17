@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { SupportedLocale } from "@real-estate-ai/contracts";
+import { getMessages } from "@real-estate-ai/i18n";
 import { cx } from "@real-estate-ai/ui";
 
 import { initialFormActionState, scheduleVisitAction } from "@/app/actions";
@@ -15,6 +16,7 @@ export function VisitSchedulingForm(props: {
   returnPath: string;
 }) {
   const copy = getVisitCopy(props.locale);
+  const messages = getMessages(props.locale);
   const [state, action] = useActionState(scheduleVisitAction, initialFormActionState);
 
   return (
@@ -26,7 +28,13 @@ export function VisitSchedulingForm(props: {
       <div className="field-grid">
         <label className="field-stack">
           <span>{copy.location}</span>
-          <input className="input-shell" name="location" placeholder="Sunrise Residences Sales Pavilion" required type="text" />
+          <input
+            className="input-shell"
+            name="location"
+            placeholder={messages.forms.visitScheduling.locationPlaceholder}
+            required
+            type="text"
+          />
         </label>
         <label className="field-stack">
           <span>{copy.scheduledAt}</span>
@@ -35,7 +43,7 @@ export function VisitSchedulingForm(props: {
       </div>
 
       <div className="form-actions-row">
-        <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ حفظ الموعد..." : "Saving visit..."} />
+        <FormSubmitButton idleLabel={copy.action} pendingLabel={messages.forms.pendingSchedule} />
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}
         </p>

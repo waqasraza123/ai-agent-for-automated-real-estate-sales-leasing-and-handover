@@ -20,14 +20,21 @@ async function setOperatorRoleCookie(
   ]);
 }
 
-test("landing shell renders in English", async ({ page }) => {
+test("root redirects to Arabic by default", async ({ page }) => {
+  await page.goto(smokeRoutes.root);
+
+  await expect(page).toHaveURL(/\/ar$/);
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+});
+
+test("landing shell renders in Arabic by default", async ({ page }) => {
   await page.goto(smokeRoutes.landing);
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Turn lead response, follow-up discipline, and handover visibility into a product advantage."
+    "حوّل سرعة الرد، وانضباط المتابعة، ووضوح التسليم إلى ميزة تشغيلية حقيقية."
   );
   await expect(page.getByTestId("landing-shell-note")).toBeVisible();
-  await expect(page.getByLabel("Customer name")).toBeVisible();
+  await expect(page.getByLabel("اسم العميل")).toBeVisible();
 });
 
 test("dashboard route renders in Arabic with rtl direction", async ({ page }) => {
@@ -35,6 +42,14 @@ test("dashboard route renders in Arabic with rtl direction", async ({ page }) =>
 
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("مركز قيادة عمليات الإيرادات");
+});
+
+test("language switching preserves route context", async ({ page }) => {
+  await page.goto("/ar/dashboard");
+  await page.getByRole("link", { name: "English" }).click();
+
+  await expect(page).toHaveURL(/\/en\/dashboard$/);
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
 });
 
 test("conversation shell shows the seeded thread", async ({ page }) => {

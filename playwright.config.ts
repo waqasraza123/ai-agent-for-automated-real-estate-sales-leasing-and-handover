@@ -17,7 +17,7 @@ export default defineConfig({
     env: {
       FORCE_COLOR: "0"
     },
-    url: "http://127.0.0.1:3100/en",
+    url: "http://127.0.0.1:3100/ar",
     reuseExistingServer: true,
     timeout: 240000
   },

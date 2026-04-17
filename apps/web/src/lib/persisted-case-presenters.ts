@@ -47,12 +47,13 @@ import {
   getQualificationReadinessLabel,
   getSourceLabel
 } from "./live-copy";
+import { formatDateTime } from "./format";
 
 export function buildCaseReferenceCode(caseId: string) {
   return `CASE-${caseId.slice(0, 8).toUpperCase()}`;
 }
 
-export function buildPersistedConversation(caseDetail: PersistedCaseDetail): ConversationMessage[] {
+export function buildPersistedConversation(caseDetail: PersistedCaseDetail, locale: SupportedLocale): ConversationMessage[] {
   const automationState =
     caseDetail.currentQaReview?.status === "pending_review"
       ? caseDetail.currentQaReview.triggerSource === "policy_rule"
@@ -92,7 +93,7 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
       },
       id: `${caseDetail.caseId}-customer`,
       sender: "customer",
-      timestamp: formatTimestamp(caseDetail.createdAt)
+      timestamp: formatTimestamp(caseDetail.createdAt, locale)
     },
     {
       body: {
@@ -102,7 +103,7 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
       id: `${caseDetail.caseId}-workflow`,
       sender: "automation",
       state: automationState,
-      timestamp: formatTimestamp(caseDetail.updatedAt)
+      timestamp: formatTimestamp(caseDetail.updatedAt, locale)
     }
   ];
 
@@ -130,7 +131,7 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
       id: `${caseDetail.caseId}-${caseDetail.currentQaReview.qaReviewId}-reply-draft`,
       sender: "manager",
       state: getPreparedReplyDraftState(caseDetail),
-      timestamp: formatTimestamp(caseDetail.currentQaReview.updatedAt)
+      timestamp: formatTimestamp(caseDetail.currentQaReview.updatedAt, locale)
     });
   }
 
@@ -160,14 +161,14 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail): Con
               ar: "رد بشري محفوظ",
               en: "Human reply saved"
             },
-      timestamp: formatTimestamp(event.createdAt)
+      timestamp: formatTimestamp(event.createdAt, locale)
     });
   }
 
   return conversation;
 }
 
-export function buildPersistedHandoverTimeline(handoverCase: PersistedHandoverCaseDetail): JourneyEvent[] {
+export function buildPersistedHandoverTimeline(handoverCase: PersistedHandoverCaseDetail, locale: SupportedLocale): JourneyEvent[] {
   return handoverCase.auditEvents
     .filter((event) => event.eventType.startsWith("handover_") || event.eventType === "document_request_updated")
     .map((event, index) => ({
@@ -176,7 +177,7 @@ export function buildPersistedHandoverTimeline(handoverCase: PersistedHandoverCa
         en: describeHandoverAuditEvent(handoverCase, event.eventType, "en", "detail")
       },
       id: `${handoverCase.handoverCaseId}-${index}`,
-      timestamp: formatTimestamp(event.createdAt),
+      timestamp: formatTimestamp(event.createdAt, locale),
       title: {
         ar: describeHandoverAuditEvent(handoverCase, event.eventType, "ar", "title"),
         en: describeHandoverAuditEvent(handoverCase, event.eventType, "en", "title")
@@ -184,14 +185,14 @@ export function buildPersistedHandoverTimeline(handoverCase: PersistedHandoverCa
     }));
 }
 
-export function buildPersistedTimeline(caseDetail: PersistedCaseDetail): JourneyEvent[] {
+export function buildPersistedTimeline(caseDetail: PersistedCaseDetail, locale: SupportedLocale): JourneyEvent[] {
   return caseDetail.auditEvents.map((event, index) => ({
     detail: {
       ar: describeAuditEvent(caseDetail, event, "ar", "detail"),
       en: describeAuditEvent(caseDetail, event, "en", "detail")
     },
     id: `${caseDetail.caseId}-${index}`,
-    timestamp: formatTimestamp(event.createdAt),
+    timestamp: formatTimestamp(event.createdAt, locale),
     title: {
       ar: describeAuditEvent(caseDetail, event, "ar", "title"),
       en: describeAuditEvent(caseDetail, event, "en", "title")
@@ -200,18 +201,18 @@ export function buildPersistedTimeline(caseDetail: PersistedCaseDetail): Journey
 }
 
 export function formatCaseLastChange(value: PersistedCaseDetail | PersistedCaseSummary, locale: SupportedLocale) {
-  return new Date(value.updatedAt).toLocaleString(locale);
+  return formatDateTime(value.updatedAt, locale);
 }
 
 export function formatDueAt(value: PersistedCaseDetail | PersistedCaseSummary, locale: SupportedLocale) {
-  return new Date(value.nextActionDueAt).toLocaleString(locale);
+  return formatDateTime(value.nextActionDueAt, locale);
 }
 
 export function formatLatestManagerFollowUpSavedAt(
   latestManagerFollowUp: PersistedCaseDetail["latestManagerFollowUp"] | PersistedCaseSummary["latestManagerFollowUp"],
   locale: SupportedLocale
 ) {
-  return latestManagerFollowUp ? new Date(latestManagerFollowUp.savedAt).toLocaleString(locale) : null;
+  return latestManagerFollowUp ? formatDateTime(latestManagerFollowUp.savedAt, locale) : null;
 }
 
 export function getPersistedLatestManagerFollowUpLabel(
@@ -237,7 +238,7 @@ export function getPersistedLatestManagerFollowUpNote(
     return null;
   }
 
-  const dueAt = new Date(latestManagerFollowUp.nextActionDueAt).toLocaleString(locale);
+  const dueAt = formatDateTime(latestManagerFollowUp.nextActionDueAt, locale);
 
   if (latestManagerFollowUp.bulkAction) {
     return locale === "ar"
@@ -254,7 +255,7 @@ export function formatLatestHumanReplySentAt(
   latestHumanReply: PersistedCaseDetail["latestHumanReply"] | PersistedCaseSummary["latestHumanReply"],
   locale: SupportedLocale
 ) {
-  return latestHumanReply ? new Date(latestHumanReply.sentAt).toLocaleString(locale) : null;
+  return latestHumanReply ? formatDateTime(latestHumanReply.sentAt, locale) : null;
 }
 
 export function getPersistedLatestHumanReplyLabel(
@@ -376,14 +377,14 @@ export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail:
     label: getDocumentRequestTypeLabel(locale, documentRequest.type),
     statusLabel: getDocumentRequestStatusLabel(locale, documentRequest.status),
     statusTone: getDocumentTone(documentRequest.status),
-    updatedAt: new Date(documentRequest.updatedAt).toLocaleString(locale),
+    updatedAt: formatDateTime(documentRequest.updatedAt, locale),
     value: documentRequest.status
   }));
 }
 
 export function getPersistedHandoverDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
   return handoverCase.tasks.map((task) => ({
-    dueAt: new Date(task.dueAt).toLocaleString(locale),
+    dueAt: formatDateTime(task.dueAt, locale),
     ownerName: task.ownerName,
     status: task.status,
     statusLabel: getHandoverTaskStatusLabel(locale, task.status),
@@ -391,7 +392,7 @@ export function getPersistedHandoverDisplay(locale: SupportedLocale, handoverCas
     taskId: task.taskId,
     title: getHandoverTaskTypeLabel(locale, task.type),
     type: task.type,
-    updatedAt: new Date(task.updatedAt).toLocaleString(locale),
+    updatedAt: formatDateTime(task.updatedAt, locale),
     summary: getHandoverTaskTypeDetail(locale, task.type)
   }));
 }
@@ -399,7 +400,7 @@ export function getPersistedHandoverDisplay(locale: SupportedLocale, handoverCas
 export function getPersistedHandoverBlockerDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
   return handoverCase.blockers.map((blocker) => ({
     blockerId: blocker.blockerId,
-    dueAt: new Date(blocker.dueAt).toLocaleString(locale),
+    dueAt: formatDateTime(blocker.dueAt, locale),
     dueAtInput: blocker.dueAt.slice(0, 16),
     ownerName: blocker.ownerName,
     severity: blocker.severity,
@@ -412,7 +413,7 @@ export function getPersistedHandoverBlockerDisplay(locale: SupportedLocale, hand
     title: getHandoverBlockerTypeLabel(locale, blocker.type),
     type: blocker.type,
     typeDetail: getHandoverBlockerTypeDetail(locale, blocker.type),
-    updatedAt: new Date(blocker.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(blocker.updatedAt, locale)
   }));
 }
 
@@ -424,20 +425,20 @@ export function getPersistedHandoverMilestoneDisplay(locale: SupportedLocale, ha
     statusLabel: getHandoverMilestoneStatusLabel(locale, milestone.status),
     statusTone: getHandoverMilestoneTone(milestone.status),
     summary: getHandoverMilestoneTypeDetail(locale, milestone.type),
-    targetAt: new Date(milestone.targetAt).toLocaleString(locale),
+    targetAt: formatDateTime(milestone.targetAt, locale),
     targetAtInput: milestone.targetAt.slice(0, 16),
     title: getHandoverMilestoneTypeLabel(locale, milestone.type),
     type: milestone.type,
-    updatedAt: new Date(milestone.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(milestone.updatedAt, locale)
   }));
 }
 
 export function getPersistedHandoverCustomerUpdateDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {
   return handoverCase.customerUpdates.map((customerUpdate) => ({
     customerUpdateId: customerUpdate.customerUpdateId,
-    deliveryPreparedAt: customerUpdate.deliveryPreparedAt ? new Date(customerUpdate.deliveryPreparedAt).toLocaleString(locale) : null,
+    deliveryPreparedAt: customerUpdate.deliveryPreparedAt ? formatDateTime(customerUpdate.deliveryPreparedAt, locale) : null,
     deliverySummary: customerUpdate.deliverySummary,
-    dispatchReadyAt: customerUpdate.dispatchReadyAt ? new Date(customerUpdate.dispatchReadyAt).toLocaleString(locale) : null,
+    dispatchReadyAt: customerUpdate.dispatchReadyAt ? formatDateTime(customerUpdate.dispatchReadyAt, locale) : null,
     qaPolicySignalLabels: customerUpdate.qaPolicySignals.map((signal) => getHandoverCustomerUpdateQaPolicySignalLabel(locale, signal)),
     qaPolicySignals: customerUpdate.qaPolicySignals,
     qaReviewSampleSummary: customerUpdate.qaReviewSampleSummary,
@@ -445,7 +446,7 @@ export function getPersistedHandoverCustomerUpdateDisplay(locale: SupportedLocal
     qaReviewStatusLabel: getHandoverCustomerUpdateQaReviewStatusLabel(locale, customerUpdate.qaReviewStatus),
     qaReviewStatusTone: getHandoverCustomerUpdateQaReviewTone(customerUpdate.qaReviewStatus),
     qaReviewSummary: customerUpdate.qaReviewSummary,
-    qaReviewedAt: customerUpdate.qaReviewedAt ? new Date(customerUpdate.qaReviewedAt).toLocaleString(locale) : null,
+    qaReviewedAt: customerUpdate.qaReviewedAt ? formatDateTime(customerUpdate.qaReviewedAt, locale) : null,
     qaReviewerName: customerUpdate.qaReviewerName,
     qaTriggerEvidence: customerUpdate.qaTriggerEvidence,
     status: customerUpdate.status,
@@ -454,7 +455,7 @@ export function getPersistedHandoverCustomerUpdateDisplay(locale: SupportedLocal
     summary: getHandoverCustomerUpdateTypeDetail(locale, customerUpdate.type),
     title: getHandoverCustomerUpdateTypeLabel(locale, customerUpdate.type),
     type: customerUpdate.type,
-    updatedAt: new Date(customerUpdate.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(customerUpdate.updatedAt, locale)
   }));
 }
 
@@ -467,12 +468,12 @@ export function getPersistedHandoverAppointmentDisplay(locale: SupportedLocale, 
     appointmentId: handoverCase.appointment.appointmentId,
     coordinatorName: handoverCase.appointment.coordinatorName,
     location: handoverCase.appointment.location,
-    scheduledAt: new Date(handoverCase.appointment.scheduledAt).toLocaleString(locale),
+    scheduledAt: formatDateTime(handoverCase.appointment.scheduledAt, locale),
     scheduledAtInput: handoverCase.appointment.scheduledAt.slice(0, 16),
     status: handoverCase.appointment.status,
     statusLabel: getHandoverAppointmentStatusLabel(locale, handoverCase.appointment.status),
     statusTone: getHandoverAppointmentTone(handoverCase.appointment.status),
-    updatedAt: new Date(handoverCase.appointment.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(handoverCase.appointment.updatedAt, locale)
   };
 }
 
@@ -486,7 +487,7 @@ export function getPersistedHandoverReviewDisplay(locale: SupportedLocale, hando
     outcomeLabel: getHandoverReviewOutcomeLabel(locale, handoverCase.review.outcome),
     reviewId: handoverCase.review.reviewId,
     summary: handoverCase.review.summary,
-    updatedAt: new Date(handoverCase.review.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(handoverCase.review.updatedAt, locale)
   };
 }
 
@@ -500,7 +501,7 @@ export function getPersistedHandoverArchiveReviewDisplay(locale: SupportedLocale
     outcomeLabel: getHandoverArchiveOutcomeLabel(locale, handoverCase.archiveReview.outcome),
     reviewId: handoverCase.archiveReview.reviewId,
     summary: handoverCase.archiveReview.summary,
-    updatedAt: new Date(handoverCase.archiveReview.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(handoverCase.archiveReview.updatedAt, locale)
   };
 }
 
@@ -517,7 +518,7 @@ export function getPersistedHandoverArchiveStatusDisplay(locale: SupportedLocale
     statusLabel: getHandoverArchiveStatusLabel(locale, handoverCase.archiveStatus.status),
     statusTone,
     summary: handoverCase.archiveStatus.summary,
-    updatedAt: new Date(handoverCase.archiveStatus.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(handoverCase.archiveStatus.updatedAt, locale)
   };
 }
 
@@ -529,19 +530,19 @@ export function getPersistedHandoverPostCompletionFollowUpDisplay(locale: Suppor
   const statusTone: "success" | "warning" = handoverCase.postCompletionFollowUp.status === "resolved" ? "success" : "warning";
 
   return {
-    dueAt: new Date(handoverCase.postCompletionFollowUp.dueAt).toLocaleString(locale),
+    dueAt: formatDateTime(handoverCase.postCompletionFollowUp.dueAt, locale),
     dueAtInput: handoverCase.postCompletionFollowUp.dueAt.slice(0, 16),
     followUpId: handoverCase.postCompletionFollowUp.followUpId,
     ownerName: handoverCase.postCompletionFollowUp.ownerName,
     resolutionSummary: handoverCase.postCompletionFollowUp.resolutionSummary,
     resolvedAt: handoverCase.postCompletionFollowUp.resolvedAt
-      ? new Date(handoverCase.postCompletionFollowUp.resolvedAt).toLocaleString(locale)
+      ? formatDateTime(handoverCase.postCompletionFollowUp.resolvedAt, locale)
       : null,
     status: handoverCase.postCompletionFollowUp.status,
     statusLabel: getHandoverPostCompletionFollowUpStatusLabel(locale, handoverCase.postCompletionFollowUp.status),
     statusTone,
     summary: handoverCase.postCompletionFollowUp.summary,
-    updatedAt: new Date(handoverCase.postCompletionFollowUp.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(handoverCase.postCompletionFollowUp.updatedAt, locale)
   };
 }
 
@@ -555,10 +556,10 @@ export function getPersistedHandoverStatusLabel(locale: SupportedLocale, handove
 
 export function getPersistedInterventionDisplay(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.managerInterventions.map((intervention) => ({
-    createdAt: new Date(intervention.createdAt).toLocaleString(locale),
+    createdAt: formatDateTime(intervention.createdAt, locale),
     interventionId: intervention.interventionId,
     resolutionNote: intervention.resolutionNote,
-    resolvedAt: intervention.resolvedAt ? new Date(intervention.resolvedAt).toLocaleString(locale) : null,
+    resolvedAt: intervention.resolvedAt ? formatDateTime(intervention.resolvedAt, locale) : null,
     severityLabel: getInterventionSeverityLabel(locale, intervention.severity),
     severityTone: getInterventionTone(intervention.severity),
     status: intervention.status,
@@ -586,7 +587,7 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
     qaReviewId: caseDetail.currentQaReview.qaReviewId,
     requestedByName: caseDetail.currentQaReview.requestedByName,
     reviewSummary: caseDetail.currentQaReview.reviewSummary,
-    reviewedAt: caseDetail.currentQaReview.reviewedAt ? new Date(caseDetail.currentQaReview.reviewedAt).toLocaleString(locale) : null,
+    reviewedAt: caseDetail.currentQaReview.reviewedAt ? formatDateTime(caseDetail.currentQaReview.reviewedAt, locale) : null,
     reviewerName: caseDetail.currentQaReview.reviewerName,
     sampleSummary: caseDetail.currentQaReview.sampleSummary,
     status: caseDetail.currentQaReview.status,
@@ -597,7 +598,7 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
     triggerEvidence: caseDetail.currentQaReview.triggerEvidence,
     triggerSource: caseDetail.currentQaReview.triggerSource,
     triggerSourceLabel: getCaseQaReviewTriggerSourceLabel(locale, caseDetail.currentQaReview.triggerSource),
-    updatedAt: new Date(caseDetail.currentQaReview.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(caseDetail.currentQaReview.updatedAt, locale)
   };
 }
 
@@ -623,13 +624,13 @@ export function getPersistedHandoverCustomerUpdateQaReviewDisplay(
     reviewStatusTone: getHandoverCustomerUpdateQaReviewTone(caseDetail.currentHandoverCustomerUpdateQaReview.reviewStatus),
     reviewSummary: caseDetail.currentHandoverCustomerUpdateQaReview.reviewSummary,
     reviewedAt: caseDetail.currentHandoverCustomerUpdateQaReview.reviewedAt
-      ? new Date(caseDetail.currentHandoverCustomerUpdateQaReview.reviewedAt).toLocaleString(locale)
+      ? formatDateTime(caseDetail.currentHandoverCustomerUpdateQaReview.reviewedAt, locale)
       : null,
     reviewerName: caseDetail.currentHandoverCustomerUpdateQaReview.reviewerName,
     triggerEvidence: caseDetail.currentHandoverCustomerUpdateQaReview.triggerEvidence,
     type: caseDetail.currentHandoverCustomerUpdateQaReview.type,
     typeLabel: getHandoverCustomerUpdateTypeLabel(locale, caseDetail.currentHandoverCustomerUpdateQaReview.type),
-    updatedAt: new Date(caseDetail.currentHandoverCustomerUpdateQaReview.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(caseDetail.currentHandoverCustomerUpdateQaReview.updatedAt, locale)
   };
 }
 
@@ -707,14 +708,14 @@ export function getPersistedActiveQaItemDisplay(locale: SupportedLocale, caseDet
 
 export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.qaReviews.map((qaReview) => ({
-    createdAt: new Date(qaReview.createdAt).toLocaleString(locale),
+    createdAt: formatDateTime(qaReview.createdAt, locale),
     draftMessage: qaReview.draftMessage,
     policySignalLabels: qaReview.policySignals.map((signal) => getCaseQaPolicySignalLabel(locale, signal)),
     policySignals: qaReview.policySignals,
     qaReviewId: qaReview.qaReviewId,
     requestedByName: qaReview.requestedByName,
     reviewSummary: qaReview.reviewSummary,
-    reviewedAt: qaReview.reviewedAt ? new Date(qaReview.reviewedAt).toLocaleString(locale) : null,
+    reviewedAt: qaReview.reviewedAt ? formatDateTime(qaReview.reviewedAt, locale) : null,
     reviewerName: qaReview.reviewerName,
     sampleSummary: qaReview.sampleSummary,
     status: qaReview.status,
@@ -730,7 +731,7 @@ export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail:
     triggerEvidence: qaReview.triggerEvidence,
     triggerSource: qaReview.triggerSource,
     triggerSourceLabel: getCaseQaReviewTriggerSourceLabel(locale, qaReview.triggerSource),
-    updatedAt: new Date(qaReview.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(qaReview.updatedAt, locale)
   }));
 }
 
@@ -744,7 +745,7 @@ export function getPersistedQualificationSummary(locale: SupportedLocale, caseDe
     intentSummary: caseDetail.qualificationSnapshot.intentSummary,
     moveInTimeline: caseDetail.qualificationSnapshot.moveInTimeline,
     readiness: getQualificationReadinessLabel(locale, caseDetail.qualificationSnapshot.readiness),
-    updatedAt: new Date(caseDetail.qualificationSnapshot.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(caseDetail.qualificationSnapshot.updatedAt, locale)
   };
 }
 
@@ -773,7 +774,7 @@ export function getPersistedHandoverClosureDisplay(locale: SupportedLocale, case
     status: caseSummary.handoverClosure.status,
     statusLabel: getHandoverClosureStateLabel(locale, caseSummary.handoverClosure.status),
     statusTone,
-    updatedAt: new Date(caseSummary.handoverClosure.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(caseSummary.handoverClosure.updatedAt, locale)
   };
 }
 
@@ -811,7 +812,7 @@ export function getPersistedHandoverWorkspaceDisplay(locale: SupportedLocale, ca
     statusTone: getPersistedHandoverCaseTone(caseSummary.handoverCase.status),
     surface,
     surfaceLabel: getPersistedHandoverWorkspaceSurfaceLabel(locale, surface),
-    updatedAt: new Date(caseSummary.handoverCase.updatedAt).toLocaleString(locale)
+    updatedAt: formatDateTime(caseSummary.handoverCase.updatedAt, locale)
   };
 }
 
@@ -1271,8 +1272,8 @@ function describeHandoverAuditEvent(
   return eventCopy[variant];
 }
 
-function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString("en-US", {
+function formatTimestamp(value: string, locale: SupportedLocale) {
+  return formatDateTime(value, locale, {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",

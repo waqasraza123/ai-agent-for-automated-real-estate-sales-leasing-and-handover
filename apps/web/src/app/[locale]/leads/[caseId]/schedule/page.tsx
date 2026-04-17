@@ -10,6 +10,7 @@ import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { ScreenIntro } from "@/components/screen-intro";
 import { VisitSchedulingForm } from "@/components/visit-scheduling-form";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
+import { formatDateTime } from "@/lib/format";
 import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import { buildCaseReferenceCode } from "@/lib/persisted-case-presenters";
@@ -60,7 +61,7 @@ export default async function SchedulePage(props: PageProps) {
             {persistedCase.currentVisit ? (
               <div className="stack-list">
                 <div className="case-stack-card">
-                  <p className="detail-label">{new Date(persistedCase.currentVisit.scheduledAt).toLocaleString(locale)}</p>
+                  <p className="detail-label">{formatDateTime(persistedCase.currentVisit.scheduledAt, locale)}</p>
                   <h3>{persistedCase.currentVisit.location}</h3>
                   <p>
                     {locale === "ar"

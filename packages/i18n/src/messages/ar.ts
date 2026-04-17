@@ -1,81 +1,37 @@
-export const arMessages = {
-  app: {
-    name: "وكيل ذكي لأتمتة مبيعات وتأجير وتسليم العقارات",
-    phaseLabel: "قالب المرحلة 1A",
-    shellNote: "أساس عرض تجريبي يعتمد على بيانات ثابتة"
-  },
-  navigation: {
-    landing: "الواجهة",
-    dashboard: "لوحة المتابعة",
-    leads: "صندوق العملاء",
-    manager: "الإدارة"
-  },
-  landing: {
-    eyebrow: "طبقة تشغيل ثنائية اللغة بمستوى فاخر",
-    title: "حوّل سرعة الرد والانضباط التشغيلي ووضوح التسليم إلى ميزة تنافسية.",
-    summary:
-      "هذه المرحلة الأولى تبني المونوريبو، وقشرة التطبيق ثنائية اللغة، وأساس المسارات المميزة دون الادعاء بأن الرحلات التشغيلية الأعمق أصبحت حية.",
-    primaryAction: "فتح قالب لوحة المتابعة",
-    secondaryAction: "استعراض صندوق العملاء",
-    spotlightTitle: "لماذا هذا القالب مهم",
-    spotlightSummary:
-      "لأنه يثبت النظام البصري، وهيكل المسارات، ومعالجة اللغة، ومفردات الحالات قبل إدخال البنية التشغيلية الفعلية."
-  },
-  dashboard: {
-    title: "مركز قيادة عمليات الإيرادات",
-    summary: "قالب لوحة متابعة مميزة للمرحلة الأولى يعرض مؤشرات مزروعة واهتمام الإدارة وجاهزية ثنائية اللغة."
-  },
-  leads: {
-    title: "صندوق العملاء الموحد",
-    summary: "سجلات حالات مزروعة للتحقق من المسارات ووضوح المراحل والتنقل الثنائي اللغة."
-  },
-  profile: {
-    title: "ملف العميل",
-    summary: "قالب مستقر لعرض السياق الزمني والخطوات التالية ووضوح الملكية."
-  },
-  conversation: {
-    title: "وحدة المحادثة",
-    summary: "عرض ثنائي اللغة للمحادثة مع إظهار حالة الأتمتة واستعداد التدخل البشري."
-  },
-  schedule: {
-    title: "وحدة الجدولة",
-    summary: "مساحات جدولة تعتمد على بيانات تجريبية لإظهار جاهزية الزيارة وخيارات المواعيد."
-  },
-  documents: {
-    title: "مركز المستندات",
-    summary: "وضوح قائمة المستندات المطلوبة دون الإيحاء بأن الرفع المباشر متاح في هذه المرحلة."
-  },
-  handover: {
-    title: "مساحة التسليم",
-    summary: "قالب جاهزية فاخر لعرض المراحل والعوائق قبل تفعيل رحلة التسليم الفعلية."
-  },
-  manager: {
-    title: "مركز تحكم الإدارة",
-    summary: "قائمة اهتمام مزروعة تثبت وضوح المتابعة قبل تفعيل الأتمتة الحقيقية."
-  },
-  common: {
-    switchLanguage: "تبديل اللغة",
-    operatorRole: "دور المشغل",
-    applyRole: "تطبيق الدور",
-    roleGuardNote: "الضوابط الحساسة تعتمد الآن على جلسة مشغل محلية موثوقة مع حدود واضحة للدور ومساحة العمل.",
-    skipToContent: "تخطي إلى المحتوى الرئيسي",
-    primaryNavigation: "التنقل الرئيسي",
-    demoState: "بيانات تجريبية فقط",
-    lead: "العميل",
-    currentOwner: "المسؤول الحالي",
-    nextAction: "الخطوة التالية",
-    lastChange: "آخر تغيير مهم",
-    timeline: "التسلسل الزمني",
-    documents: "المستندات",
-    visitReadiness: "جاهزية الزيارة",
-    handoverReadiness: "جاهزية التسليم",
-    stage: "المرحلة الحالية",
-    customer: "العميل",
-    automation: "الأتمتة",
-    manager: "المدير",
-    placeholderNotice:
-      "هذه الشاشة تعتمد عمداً على بيانات تجريبية في المرحلة 1A حتى يتم تثبيت هيكل المستودع قبل إضافة خدمات التشغيل الفعلية."
-  },
+import type { AppMessages } from "./types";
+
+import { arApp } from "./ar/app";
+import { arCommon } from "./ar/common";
+import { arActions, arErrors, arForms, arValidation } from "./ar/feedback";
+import { arNavigation } from "./ar/navigation";
+import { arStates } from "./ar/states";
+import {
+  arConversation,
+  arDashboard,
+  arDocuments,
+  arHandover,
+  arLanding,
+  arLeads,
+  arManager,
+  arProfile,
+  arQa,
+  arSchedule
+} from "./ar/workspaces";
+
+export const arMessages: AppMessages = {
+  app: arApp,
+  navigation: arNavigation,
+  landing: arLanding,
+  dashboard: arDashboard,
+  leads: arLeads,
+  profile: arProfile,
+  conversation: arConversation,
+  schedule: arSchedule,
+  documents: arDocuments,
+  handover: arHandover,
+  manager: arManager,
+  qa: arQa,
+  common: arCommon,
   roles: {
     sales_manager: "مدير المبيعات",
     handover_coordinator: "منسق التسليم",
@@ -83,23 +39,9 @@ export const arMessages = {
     qa_reviewer: "مراجع الجودة",
     admin: "المشرف"
   },
-  states: {
-    loadingTitle: "جارٍ تجهيز القالب",
-    loadingSummary: "يتم تحميل الواجهة الثنائية اللغة بطريقة تحافظ على وضوح الانتقال بين المسارات.",
-    errorTitle: "تعذر إكمال عرض القالب",
-    errorSummary: "إطار التطبيق ما زال سليماً، لكن هذه الشاشة تحتاج محاولة أخرى قبل متابعة الشريحة التالية.",
-    retry: "إعادة المحاولة",
-    emptyAlertsTitle: "لا توجد تنبيهات إدارية في هذه البيانات",
-    emptyAlertsSummary: "القالب جاهز لعرض إشارات التدخل فور توفرها من البيانات التجريبية أو الحية.",
-    emptyCasesTitle: "لا توجد حالات مزروعة حالياً",
-    emptyCasesSummary: "هذه الشاشة جاهزة لعرض خط الأنابيب، لكن مجموعة البيانات الحالية لا تحتوي على حالات.",
-    emptyMessagesTitle: "لا يوجد سجل محادثة بعد",
-    emptyMessagesSummary: "وحدة المحادثة جاهزة، لكن هذه الحالة التجريبية لا تحتوي حالياً على رسائل.",
-    emptyDocumentsTitle: "لا توجد عوائق مستندات حالياً",
-    emptyDocumentsSummary: "تم تجهيز قالب قائمة المستندات لحالات مستقبلية أكثر تفصيلاً.",
-    emptyTimelineTitle: "لا توجد أحداث زمنية بعد",
-    emptyTimelineSummary: "يمكن لهذه الشاشة عرض التسلسل الزمني فور توفر الأحداث التجريبية أو الفعلية.",
-    emptyMilestonesTitle: "لا توجد مراحل تسليم حالياً",
-    emptyMilestonesSummary: "قالب التسليم جاهز، لكن مجموعة البيانات الحالية لا تتضمن مراحل نشطة."
-  }
-} as const;
+  states: arStates,
+  validation: arValidation,
+  errors: arErrors,
+  forms: arForms,
+  actions: arActions
+};

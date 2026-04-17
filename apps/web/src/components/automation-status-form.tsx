@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { AutomationStatus, SupportedLocale } from "@real-estate-ai/contracts";
+import { getMessages } from "@real-estate-ai/i18n";
 import { cx } from "@real-estate-ai/ui";
 
 import { initialFormActionState, updateAutomationStatusAction } from "@/app/actions";
@@ -18,6 +19,7 @@ export function AutomationStatusForm(props: {
   status: AutomationStatus;
 }) {
   const copy = getAutomationStatusCopy(props.locale);
+  const messages = getMessages(props.locale);
   const [state, action] = useActionState(updateAutomationStatusAction, initialFormActionState);
   const nextStatus: AutomationStatus = props.status === "active" ? "paused" : "active";
 
@@ -33,7 +35,7 @@ export function AutomationStatusForm(props: {
           disabled={!props.canManage}
           disabledLabel={props.disabledLabel}
           idleLabel={nextStatus === "paused" ? copy.paused : copy.active}
-          pendingLabel={props.locale === "ar" ? "جارٍ التحديث..." : "Updating..."}
+          pendingLabel={messages.forms.pendingUpdate}
         />
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}

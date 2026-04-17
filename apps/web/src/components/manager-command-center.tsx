@@ -17,6 +17,7 @@ import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
 import { ManagerBulkFollowUpForm } from "@/components/manager-bulk-follow-up-form";
 import { ManagerFollowUpForm } from "@/components/manager-follow-up-form";
 import type { ExportRecipient } from "@/lib/export-summary";
+import { formatDateTime, formatShortDate } from "@/lib/format";
 import {
   getCaseQaPolicySignalLabel,
   getFollowUpManagerCopy,
@@ -766,7 +767,7 @@ export function RevenueManagerCommandCenter(props: {
   const hasScopedBatchView = Boolean(revenueScope.batchScope);
   const hasChangedLaterBatchView = hasScopedBatchView && props.filters.batchDrift === "changed_later";
   const hasChangedLaterReasonScopedView = hasChangedLaterBatchView && Boolean(props.filters.batchDriftReason);
-  const batchScopeSavedAt = revenueScope.batchScope ? new Date(revenueScope.batchScope.savedAt).toLocaleString(props.locale) : null;
+  const batchScopeSavedAt = revenueScope.batchScope ? formatDateTime(revenueScope.batchScope.savedAt, props.locale) : null;
   const batchOwnerGroups = revenueScope.batchOwnerGroups;
   const hasScopedView = props.filters.queue !== "all" || Boolean(props.filters.ownerName) || hasScopedBatchView;
   const canShowBulkOperationalRiskActioning =
@@ -1284,8 +1285,8 @@ export function RevenueManagerCommandCenter(props: {
                     </div>
                     <div className="page-stack">
                       {historyCase.entries.map((entry) => {
-                        const savedAt = new Date(entry.createdAt).toLocaleString(props.locale);
-                        const dueAt = new Date(entry.nextActionDueAt).toLocaleString(props.locale);
+                        const savedAt = formatDateTime(entry.createdAt, props.locale);
+                        const dueAt = formatDateTime(entry.nextActionDueAt, props.locale);
                         const entryLabel =
                           entry.type === "scoped_batch_reset"
                             ? props.locale === "ar"
@@ -1471,8 +1472,8 @@ export function RevenueManagerCommandCenter(props: {
                           </div>
                           <p className="case-link-meta">
                             {props.locale === "ar"
-                              ? `آخر سبب انجراف سُجّل ${new Date(batchDriftReasonSummary.latestDriftAt).toLocaleString(props.locale)}.`
-                              : `Latest drift reason was recorded ${new Date(batchDriftReasonSummary.latestDriftAt).toLocaleString(props.locale)}.`}
+                              ? `آخر سبب انجراف سُجّل ${formatDateTime(batchDriftReasonSummary.latestDriftAt, props.locale)}.`
+                              : `Latest drift reason was recorded ${formatDateTime(batchDriftReasonSummary.latestDriftAt, props.locale)}.`}
                           </p>
                         </>
                       ) : null}
@@ -2026,7 +2027,7 @@ function GovernanceActivityPanel(props: {
       renderItem={(item) => (
         <article key={item.date} className="intervention-row">
           <div className="row-between">
-            <h3>{new Date(`${item.date}T00:00:00.000Z`).toLocaleDateString(props.locale, { month: "short", day: "numeric" })}</h3>
+            <h3>{formatShortDate(`${item.date}T00:00:00.000Z`, props.locale)}</h3>
             <div className="status-row-wrap">
               <StatusBadge tone={item.openedCount > item.resolvedCount ? "warning" : "success"}>
                 {props.locale === "ar" ? `${item.openedCount} فتحت` : `${item.openedCount} opened`}
@@ -2078,7 +2079,7 @@ function GovernanceRecentEventsPanel(props: {
             <div className="row-between">
               <div className="stack-tight">
                 <h3>{event.customerName}</h3>
-                <p className="case-link-meta">{new Date(event.createdAt).toLocaleString(props.locale)}</p>
+                <p className="case-link-meta">{formatDateTime(event.createdAt, props.locale)}</p>
               </div>
               <div className="status-row-wrap">
                 <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>

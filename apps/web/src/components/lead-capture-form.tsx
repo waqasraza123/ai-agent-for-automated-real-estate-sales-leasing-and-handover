@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { SupportedLocale } from "@real-estate-ai/contracts";
+import { getMessages } from "@real-estate-ai/i18n";
 import { cx } from "@real-estate-ai/ui";
 
 import { initialFormActionState, submitWebsiteLeadAction } from "@/app/actions";
@@ -13,6 +14,7 @@ export function LeadCaptureForm(props: {
   locale: SupportedLocale;
 }) {
   const copy = getIntakeCopy(props.locale);
+  const messages = getMessages(props.locale);
   const [state, action] = useActionState(submitWebsiteLeadAction, initialFormActionState);
 
   return (
@@ -22,29 +24,35 @@ export function LeadCaptureForm(props: {
       <div className="field-grid">
         <label className="field-stack">
           <span>{copy.customerName}</span>
-          <input className="input-shell" name="customerName" placeholder="Maha Al-Qahtani" required type="text" />
+          <input className="input-shell" name="customerName" placeholder={messages.forms.leadCapture.customerNamePlaceholder} required type="text" />
         </label>
         <label className="field-stack">
           <span>{copy.email}</span>
-          <input className="input-shell" name="email" placeholder="maha@example.com" required type="email" />
+          <input className="input-shell input-shell-ltr" dir="ltr" name="email" placeholder={messages.forms.leadCapture.emailPlaceholder} required type="email" />
         </label>
         <label className="field-stack">
           <span>{copy.phone}</span>
-          <input className="input-shell" name="phone" placeholder="+966 5X XXX XXXX" type="tel" />
+          <input className="input-shell input-shell-ltr" dir="ltr" name="phone" placeholder={messages.forms.leadCapture.phonePlaceholder} type="tel" />
         </label>
         <label className="field-stack">
           <span>{copy.projectInterest}</span>
-          <input className="input-shell" name="projectInterest" placeholder="Sunrise Residences" required type="text" />
+          <input
+            className="input-shell"
+            name="projectInterest"
+            placeholder={messages.forms.leadCapture.projectInterestPlaceholder}
+            required
+            type="text"
+          />
         </label>
         <label className="field-stack">
           <span>{copy.budget}</span>
-          <input className="input-shell" name="budget" placeholder="SAR 1.8M to 2.1M" type="text" />
+          <input className="input-shell input-shell-ltr" dir="ltr" name="budget" placeholder={messages.forms.leadCapture.budgetPlaceholder} type="text" />
         </label>
         <label className="field-stack">
           <span>{copy.preferredLanguage}</span>
           <select className="select-shell" defaultValue={props.locale} name="preferredLocale">
-            <option value="en">English</option>
-            <option value="ar">العربية</option>
+            <option value="ar">{messages.forms.leadCapture.preferredLanguageAr}</option>
+            <option value="en">{messages.forms.leadCapture.preferredLanguageEn}</option>
           </select>
         </label>
       </div>
@@ -54,11 +62,7 @@ export function LeadCaptureForm(props: {
         <textarea
           className="textarea-shell"
           name="message"
-          placeholder={
-            props.locale === "ar"
-              ? "عميلة جادة تبحث عن شقة ثلاث غرف نوم وتفضّل زيارة نهاية الأسبوع."
-              : "Serious buyer looking for a three-bedroom apartment and prefers a weekend site visit."
-          }
+          placeholder={messages.forms.leadCapture.messagePlaceholder}
           required
           rows={5}
         />
@@ -67,7 +71,7 @@ export function LeadCaptureForm(props: {
       <p className="form-helper">{copy.helper}</p>
 
       <div className="form-actions-row">
-        <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ إنشاء الحالة..." : "Creating case..."} />
+        <FormSubmitButton idleLabel={copy.action} pendingLabel={messages.forms.pendingCreate} />
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
           {state.message}
         </p>

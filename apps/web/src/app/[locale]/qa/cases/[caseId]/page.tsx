@@ -203,7 +203,7 @@ export default async function QaCaseDetailPage(props: PageProps) {
 
       <div className="two-column-grid">
         <Panel title={locale === "ar" ? "سياق المحادثة الحية" : "Live conversation context"}>
-          <MessageThread locale={locale} messages={buildPersistedConversation(persistedCase)} />
+          <MessageThread locale={locale} messages={buildPersistedConversation(persistedCase, locale)} />
         </Panel>
 
         <Panel title={resolutionCopy.title}>
@@ -318,7 +318,7 @@ export default async function QaCaseDetailPage(props: PageProps) {
         />
       </Panel>
 
-      <TimelinePanel events={buildPersistedTimeline(persistedCase)} locale={locale} />
+      <TimelinePanel events={buildPersistedTimeline(persistedCase, locale)} locale={locale} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getDirection, getMessages, toggleLocale } from "./index";
+import { defaultLocale, getDirection, getMessages, getIntlLocale, toggleLocale } from "./index";
 
 describe("i18n helpers", () => {
   it("returns the correct text direction", () => {
@@ -11,5 +11,13 @@ describe("i18n helpers", () => {
   it("toggles locale and returns localized copy", () => {
     expect(toggleLocale("en")).toBe("ar");
     expect(getMessages("ar").navigation.dashboard).toBe("لوحة المتابعة");
+  });
+
+  it("defaults to arabic-first locale settings", () => {
+    expect(defaultLocale).toBe("ar");
+    expect(getIntlLocale("ar")).toBe("ar-SA-u-nu-latn");
+    expect(getMessages("en").navigation.qa).toBe("QA");
+    expect(getMessages("ar").forms.pendingComplete).toBe("جارٍ الإتمام...");
+    expect(getMessages("en").actions.handoverExecutionStarted).toContain("handover-day execution");
   });
 });

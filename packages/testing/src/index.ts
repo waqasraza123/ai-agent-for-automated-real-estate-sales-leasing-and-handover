@@ -1,5 +1,6 @@
 export const smokeRoutes = {
-  landing: "/en",
+  root: "/",
+  landing: "/ar",
   leads: "/en/leads",
   dashboardArabic: "/ar/dashboard",
   leadConversation: "/en/leads/lead-sunrise-001/conversation",

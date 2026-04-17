@@ -15,6 +15,8 @@
   --radius-xl: 28px;
   --radius-lg: 20px;
   --radius-md: 16px;
+  --font-latin-stack: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-arabic-stack: "Noto Sans Arabic", "IBM Plex Sans Arabic", "Geeza Pro", Tahoma, sans-serif;
 }
 
 * {
@@ -33,11 +35,18 @@ body {
     radial-gradient(circle at 80% 20%, rgba(232, 184, 111, 0.16), transparent 24%),
     linear-gradient(180deg, #07111f 0%, #07111f 45%, #0b1626 100%);
   color: var(--text);
-  font-family: var(--font-latin), sans-serif;
+  font-family: var(--font-latin-stack);
 }
 
 body.locale-ar {
-  font-family: var(--font-arabic), sans-serif;
+  font-family: var(--font-arabic-stack);
+}
+
+body.locale-ar .case-link-meta,
+body.locale-ar .table-link span,
+body.locale-ar .message-meta,
+body.locale-ar .milestone-meta {
+  unicode-bidi: plaintext;
 }
 
 a {
@@ -247,6 +256,10 @@ textarea {
   padding: 1.4rem;
 }
 
+html[dir="rtl"] .chrome-layout {
+  grid-template-columns: minmax(0, 1fr) 17.5rem;
+}
+
 .chrome-sidebar {
   align-self: start;
   position: sticky;
@@ -256,6 +269,15 @@ textarea {
   background: linear-gradient(180deg, rgba(12, 28, 48, 0.88), rgba(8, 18, 32, 0.82));
   box-shadow: var(--shadow);
   padding: 1.2rem;
+}
+
+html[dir="rtl"] .chrome-sidebar {
+  grid-column: 2;
+}
+
+html[dir="rtl"] .chrome-main {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .sidebar-stack {
@@ -271,6 +293,20 @@ textarea {
   font-size: 0.85rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+html[dir="rtl"] .sidebar-label,
+html[dir="rtl"] .hero-eyebrow,
+html[dir="rtl"] .surface-eyebrow,
+html[dir="rtl"] .screen-intro-badge,
+html[dir="rtl"] .metric-label,
+html[dir="rtl"] .detail-label,
+html[dir="rtl"] .lead-table th,
+html[dir="rtl"] .detail-list dt,
+html[dir="rtl"] .field-stack span,
+html[dir="rtl"] .lead-table td::before {
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .sidebar-link {
@@ -338,6 +374,17 @@ textarea {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   background: linear-gradient(180deg, rgba(14, 29, 50, 0.9), rgba(7, 17, 31, 0.86));
+}
+
+.hero-copy,
+.surface-panel,
+.screen-intro,
+.detail-list,
+.form-stack,
+.field-stack,
+.placeholder-note,
+.empty-state {
+  text-align: start;
 }
 
 .hero-copy {
@@ -757,6 +804,10 @@ textarea {
   padding: 1rem;
 }
 
+html[dir="rtl"] .message-card {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
 .message-meta,
 .milestone-meta {
   display: flex;
@@ -811,6 +862,13 @@ textarea {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
+}
+
+.input-shell-ltr,
+.technical-value {
+  direction: ltr;
+  text-align: start;
+  unicode-bidi: plaintext;
 }
 
 .input-shell,
@@ -929,6 +987,18 @@ textarea {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.75rem;
+}
+
+html[dir="rtl"] .chrome-actions {
+  justify-content: flex-start;
+}
+
+html[dir="rtl"] .chrome-role-group {
+  align-items: flex-start;
+}
+
+html[dir="rtl"] .document-row-actions {
+  align-items: flex-start;
 }
 
 .document-update-form {

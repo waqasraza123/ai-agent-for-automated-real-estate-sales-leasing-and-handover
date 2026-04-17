@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { HandoverCaseStatus, SupportedLocale } from "@real-estate-ai/contracts";
+import { getMessages } from "@real-estate-ai/i18n";
 import { cx } from "@real-estate-ai/ui";
 
 import { completeHandoverAction, initialFormActionState } from "@/app/actions";
@@ -19,6 +20,7 @@ export function HandoverCompletionForm(props: {
   status: HandoverCaseStatus;
 }) {
   const copy = getHandoverCompletionCopy(props.locale);
+  const messages = getMessages(props.locale);
   const [state, action] = useActionState(completeHandoverAction, initialFormActionState);
   const canComplete = props.status === "in_progress";
   const isCompleted = props.status === "completed";
@@ -45,17 +47,17 @@ export function HandoverCompletionForm(props: {
       <div className="form-actions-row">
         {isCompleted ? (
           <button className="primary-button" disabled type="button">
-            {props.locale === "ar" ? "مكتملة" : "Completed"}
+            {messages.forms.alreadyCompleted}
           </button>
         ) : !props.canManage ? (
           <button className="primary-button" disabled type="button">
             {props.disabledLabel}
           </button>
         ) : canComplete ? (
-          <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الإتمام..." : "Completing..."} />
+          <FormSubmitButton idleLabel={copy.action} pendingLabel={messages.forms.pendingComplete} />
         ) : (
           <button className="primary-button" disabled type="button">
-            {props.locale === "ar" ? "بانتظار التنفيذ" : "Waiting for execution"}
+            {messages.forms.waitingForExecution}
           </button>
         )}
         <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
