@@ -10,12 +10,10 @@ import {
 import { demoDataset, getLocalizedText } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import {
-  alertCardClassName,
   bulkFollowUpShellClassName,
   caseLinkAsideClassName,
   caseLinkCardClassName,
   caseMetaClassName,
-  criticalAlertCardClassName,
   fieldNoteClassName,
   inlineLinkClassName,
   metricDetailClassName,
@@ -422,35 +420,38 @@ export function HandoverManagerCommandCenter(props: {
               }
 
               return (
-                <article key={caseItem.caseId} className={criticalAlertCardClassName}>
-                  <div className={rowBetweenClassName}>
-                    <div className={stackTightClassName}>
-                      <h3>{caseItem.customerName}</h3>
-                      <p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>
-                    </div>
-                    <div className={statusRowWrapClassName}>
+                <WorkflowCard
+                  key={caseItem.caseId}
+                  actions={
+                    <>
+                      <Link className={inlineLinkClassName} href={`/${props.locale}/handover/${qaReviewDisplay.handoverCaseId}`}>
+                        {props.locale === "ar" ? "فتح سجل التسليم" : "Open handover"}
+                      </Link>
+                      {canAccessQaWorkspace ? (
+                        <Link className={inlineLinkClassName} href={`/${props.locale}/qa/cases/${caseItem.caseId}`}>
+                          {props.locale === "ar" ? "فتح سجل الجودة" : "Open QA record"}
+                        </Link>
+                      ) : null}
+                    </>
+                  }
+                  badges={
+                    <>
                       <StatusBadge tone={qaReviewDisplay.reviewStatusTone}>{qaReviewDisplay.reviewStatusLabel}</StatusBadge>
                       <StatusBadge>{qaReviewDisplay.typeLabel}</StatusBadge>
-                    </div>
-                  </div>
-                  <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.reviewSampleSummary}</p>
+                    </>
+                  }
+                  meta={<p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>}
+                  summary={qaReviewDisplay.reviewSummary ?? qaReviewDisplay.reviewSampleSummary}
+                  title={caseItem.customerName}
+                  tone="critical"
+                >
                   <p className={caseMetaClassName}>{qaReviewDisplay.updatedAt}</p>
                   <div className={statusRowWrapClassName}>
                     {qaReviewDisplay.policySignalLabels.map((label) => (
                       <StatusBadge key={`${caseItem.caseId}-${label}`}>{label}</StatusBadge>
                     ))}
                   </div>
-                  <div className={statusRowWrapClassName}>
-                    <Link className={inlineLinkClassName} href={`/${props.locale}/handover/${qaReviewDisplay.handoverCaseId}`}>
-                      {props.locale === "ar" ? "فتح سجل التسليم" : "Open handover"}
-                    </Link>
-                    {canAccessQaWorkspace ? (
-                      <Link className={inlineLinkClassName} href={`/${props.locale}/qa/cases/${caseItem.caseId}`}>
-                        {props.locale === "ar" ? "فتح سجل الجودة" : "Open QA record"}
-                      </Link>
-                    ) : null}
-                  </div>
-                </article>
+                </WorkflowCard>
               );
             }}
           />
@@ -894,13 +895,13 @@ export function RevenueManagerCommandCenter(props: {
               emptyTitle={messages.states.emptyAlertsTitle}
               items={demoDataset.managerAlerts}
               renderItem={(alert) => (
-                <article key={alert.id} className={alert.severity === "high" ? criticalAlertCardClassName : alertCardClassName}>
-                  <div className={rowBetweenClassName}>
-                    <h3>{getLocalizedText(alert.title, props.locale)}</h3>
-                    <StatusBadge tone={alert.severity === "high" ? "critical" : "warning"}>{alert.severity}</StatusBadge>
-                  </div>
-                  <p>{getLocalizedText(alert.detail, props.locale)}</p>
-                </article>
+                <WorkflowCard
+                  key={alert.id}
+                  badges={<StatusBadge tone={alert.severity === "high" ? "critical" : "warning"}>{alert.severity}</StatusBadge>}
+                  summary={getLocalizedText(alert.detail, props.locale)}
+                  title={getLocalizedText(alert.title, props.locale)}
+                  tone={alert.severity === "high" ? "critical" : "warning"}
+                />
               )}
             />
           </Panel>
@@ -1176,30 +1177,9 @@ export function RevenueManagerCommandCenter(props: {
                   );
 
                   return (
-                    <article key={`${revenueScope.batchScope?.batchId}:${ownerGroup.ownerName}`} className={criticalAlertCardClassName}>
-                      <div className={rowBetweenClassName}>
-                        <div className={stackTightClassName}>
-                          <h3>{ownerGroup.ownerName}</h3>
-                          <p className={caseMetaClassName}>
-                            {props.locale === "ar"
-                              ? `${ownerGroup.caseCount} حالات من هذه الدفعة تحت هذا المالك الآن`
-                              : `${ownerGroup.caseCount} batch cases now sit with this owner`}
-                          </p>
-                        </div>
-                        <div className={statusRowWrapClassName}>
-                          <StatusBadge tone={ownerGroup.stillEscalatedCaseCount > 0 ? "warning" : "success"}>
-                            {props.locale === "ar"
-                              ? `${ownerGroup.stillEscalatedCaseCount} ما زالت متصاعدة`
-                              : `${ownerGroup.stillEscalatedCaseCount} still escalated`}
-                          </StatusBadge>
-                          <StatusBadge tone={ownerGroup.clearedCaseCount > 0 ? "success" : "warning"}>
-                            {props.locale === "ar"
-                              ? `${ownerGroup.clearedCaseCount} خرجت من الخطر`
-                              : `${ownerGroup.clearedCaseCount} now cleared`}
-                          </StatusBadge>
-                        </div>
-                      </div>
-                      <div className={statusRowWrapClassName}>
+                    <WorkflowCard
+                      key={`${revenueScope.batchScope?.batchId}:${ownerGroup.ownerName}`}
+                      actions={
                         <Link
                           className={inlineLinkClassName}
                           href={buildRevenueManagerHref(
@@ -1213,7 +1193,31 @@ export function RevenueManagerCommandCenter(props: {
                         >
                           {props.locale === "ar" ? "فتح طابور هذا المالك" : "Open this owner queue"}
                         </Link>
-                      </div>
+                      }
+                      badges={
+                        <>
+                          <StatusBadge tone={ownerGroup.stillEscalatedCaseCount > 0 ? "warning" : "success"}>
+                            {props.locale === "ar"
+                              ? `${ownerGroup.stillEscalatedCaseCount} ما زالت متصاعدة`
+                              : `${ownerGroup.stillEscalatedCaseCount} still escalated`}
+                          </StatusBadge>
+                          <StatusBadge tone={ownerGroup.clearedCaseCount > 0 ? "success" : "warning"}>
+                            {props.locale === "ar"
+                              ? `${ownerGroup.clearedCaseCount} خرجت من الخطر`
+                              : `${ownerGroup.clearedCaseCount} now cleared`}
+                          </StatusBadge>
+                        </>
+                      }
+                      meta={
+                        <p className={caseMetaClassName}>
+                          {props.locale === "ar"
+                            ? `${ownerGroup.caseCount} حالات من هذه الدفعة تحت هذا المالك الآن`
+                            : `${ownerGroup.caseCount} batch cases now sit with this owner`}
+                        </p>
+                      }
+                      title={ownerGroup.ownerName}
+                      tone="critical"
+                    >
                       {stillEscalatedCases.length > 1 ? (
                         <div className={bulkFollowUpShellClassName}>
                           <p className={caseMetaClassName}>
@@ -1247,7 +1251,7 @@ export function RevenueManagerCommandCenter(props: {
                             : "Every case in this owner group is already clear of the current risk, so no new bulk reset is needed here."}
                         </p>
                       )}
-                    </article>
+                    </WorkflowCard>
                   );
                 })}
               </div>
@@ -1291,13 +1295,10 @@ export function RevenueManagerCommandCenter(props: {
                   </div>
                 </div>
                 {props.batchHistory.historyCases.map((historyCase) => (
-                  <article key={`history:${historyCase.caseId}`} className={alertCardClassName}>
-                    <div className={rowBetweenClassName}>
-                      <div className={stackTightClassName}>
-                        <h3>{historyCase.customerName}</h3>
-                        <p className={caseMetaClassName}>{buildCaseReferenceCode(historyCase.caseId)}</p>
-                      </div>
-                      <div className={statusRowWrapClassName}>
+                  <WorkflowCard
+                    key={`history:${historyCase.caseId}`}
+                    badges={
+                      <>
                         <StatusBadge>{historyCase.currentOwnerName}</StatusBadge>
                         <StatusBadge tone={historyCase.currentRiskStatus === "still_escalated" ? "warning" : "success"}>
                           {historyCase.currentRiskStatus === "still_escalated"
@@ -1308,8 +1309,12 @@ export function RevenueManagerCommandCenter(props: {
                               ? "خرجت من الخطر"
                               : "Now cleared"}
                         </StatusBadge>
-                      </div>
-                    </div>
+                      </>
+                    }
+                    meta={<p className={caseMetaClassName}>{buildCaseReferenceCode(historyCase.caseId)}</p>}
+                    title={historyCase.customerName}
+                    tone="warning"
+                  >
                     <div className={pageStackClassName}>
                       {historyCase.entries.map((entry) => {
                         const savedAt = formatDateTime(entry.createdAt, props.locale);
@@ -1351,7 +1356,7 @@ export function RevenueManagerCommandCenter(props: {
                         );
                       })}
                     </div>
-                  </article>
+                  </WorkflowCard>
                 ))}
               </div>
             ) : null}
@@ -1439,13 +1444,32 @@ export function RevenueManagerCommandCenter(props: {
                 );
 
                 return (
-                  <article key={caseItem.caseId} className={criticalAlertCardClassName}>
-                    <div className={rowBetweenClassName}>
-                      <div className={stackTightClassName}>
-                        <h3>{caseItem.customerName}</h3>
-                        <p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>
-                      </div>
-                      <div className={statusRowWrapClassName}>
+                  <WorkflowCard
+                    key={caseItem.caseId}
+                    actions={
+                      <>
+                        <Link className={inlineLinkClassName} href={`/${props.locale}/leads/${caseItem.caseId}`}>
+                          {props.locale === "ar" ? "فتح الحالة" : "Open case"}
+                        </Link>
+                        {hasScopedBatchView && isStillEscalated ? (
+                          <Link
+                            className={inlineLinkClassName}
+                            href={buildRevenueManagerHref(
+                              props.locale,
+                              {
+                                ownerName: caseItem.ownerName,
+                                queue: "escalated_handoffs"
+                              },
+                              { hash: revenueManagerFocusedQueueId }
+                            )}
+                          >
+                            {props.locale === "ar" ? "فتح طابور المالك الحالي" : "Open current owner queue"}
+                          </Link>
+                        ) : null}
+                      </>
+                    }
+                    badges={
+                      <>
                         <StatusBadge tone={isStillEscalated ? "warning" : "success"}>{getPersistedFollowUpLabel(props.locale, caseItem)}</StatusBadge>
                         {caseItem.openInterventionsCount > 0 ? (
                           <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
@@ -1460,13 +1484,17 @@ export function RevenueManagerCommandCenter(props: {
                                   : "Still escalated"
                                 : props.locale === "ar"
                                   ? "خرجت من الخطر"
-                                  : "Now cleared"}
+                                : "Now cleared"}
                             </StatusBadge>
                           </>
                         ) : null}
-                      </div>
-                    </div>
-                    <p>{caseItem.nextAction}</p>
+                      </>
+                    }
+                    meta={<p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>}
+                    summary={caseItem.nextAction}
+                    title={caseItem.customerName}
+                    tone="critical"
+                  >
                     <div className={stackTightClassName}>
                       {hasChangedLaterBatchView && batchDriftReasonSummary ? (
                         <>
@@ -1524,26 +1552,6 @@ export function RevenueManagerCommandCenter(props: {
                         </>
                       ) : null}
                     </div>
-                    <div className={statusRowWrapClassName}>
-                      <Link className={inlineLinkClassName} href={`/${props.locale}/leads/${caseItem.caseId}`}>
-                        {props.locale === "ar" ? "فتح الحالة" : "Open case"}
-                      </Link>
-                      {hasScopedBatchView && isStillEscalated ? (
-                        <Link
-                          className={inlineLinkClassName}
-                          href={buildRevenueManagerHref(
-                            props.locale,
-                            {
-                              ownerName: caseItem.ownerName,
-                              queue: "escalated_handoffs"
-                            },
-                            { hash: revenueManagerFocusedQueueId }
-                          )}
-                        >
-                          {props.locale === "ar" ? "فتح طابور المالك الحالي" : "Open current owner queue"}
-                        </Link>
-                      ) : null}
-                    </div>
                     {hasScopedBatchView ? (
                       isStillEscalated ? (
                         <div className={pageStackClassName}>
@@ -1581,7 +1589,7 @@ export function RevenueManagerCommandCenter(props: {
                         />
                       </div>
                     )}
-                  </article>
+                  </WorkflowCard>
                 );
               }}
             />
