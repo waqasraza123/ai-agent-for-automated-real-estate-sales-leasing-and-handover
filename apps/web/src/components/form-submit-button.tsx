@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
+import { Button } from "@real-estate-ai/ui";
 
 export function FormSubmitButton(props: {
   disabled?: boolean;
@@ -12,8 +13,8 @@ export function FormSubmitButton(props: {
   const isDisabled = pending || props.disabled;
 
   return (
-    <button className="primary-button" disabled={isDisabled} type="submit">
+    <Button disabled={isDisabled} type="submit">
       {pending ? props.pendingLabel : props.disabled ? props.disabledLabel ?? props.idleLabel : props.idleLabel}
-    </button>
+    </Button>
   );
 }

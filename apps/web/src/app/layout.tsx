@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 
 import type { SupportedLocale } from "@real-estate-ai/domain";
 import { defaultLocale, getDirection, getMessages, isSupportedLocale } from "@real-estate-ai/i18n";
+import { appBodyClassName } from "@real-estate-ai/ui";
 
 import { AppChrome } from "@/components/app-chrome";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
@@ -21,7 +22,7 @@ export default async function RootLayout(props: {
 
   return (
     <html dir={getDirection(locale)} lang={locale}>
-      <body className={`app-body locale-${locale}`}>
+      <body className={appBodyClassName(locale)}>
         <AppChrome currentOperatorRole={currentOperatorRole} locale={locale} messages={messages}>
           {props.children}
         </AppChrome>

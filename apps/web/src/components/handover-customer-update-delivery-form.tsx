@@ -3,7 +3,17 @@
 import { useActionState } from "react";
 
 import type { HandoverCustomerUpdateQaReviewStatus, HandoverCustomerUpdateStatus, SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import {
+  Button,
+  cx,
+  fieldLabelClassName,
+  fieldSpanFullClassName,
+  fieldStackClassName,
+  formActionsRowClassName,
+  formFeedbackClassName,
+  formStackClassName,
+  TextArea
+} from "@real-estate-ai/ui";
 
 import { initialFormActionState, prepareHandoverCustomerUpdateDeliveryAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -27,17 +37,16 @@ export function HandoverCustomerUpdateDeliveryForm(props: {
   const isPrepared = props.status === "prepared_for_delivery" && props.qaReviewStatus !== "follow_up_required";
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="customerUpdateId" type="hidden" value={props.customerUpdateId} />
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
       <input name="status" type="hidden" value="prepared_for_delivery" />
 
-      <label className="field-stack field-span-full">
-        <span>{copy.deliverySummary}</span>
-        <textarea
-          className="textarea-shell"
+      <label className={cx(fieldStackClassName, fieldSpanFullClassName)}>
+        <span className={fieldLabelClassName}>{copy.deliverySummary}</span>
+        <TextArea
           defaultValue={props.deliverySummary}
           disabled={!props.canManage}
           name="deliverySummary"
@@ -46,19 +55,19 @@ export function HandoverCustomerUpdateDeliveryForm(props: {
         />
       </label>
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         {isDispatchReady ? (
-          <button className="primary-button" disabled type="button">
+          <Button disabled type="button">
             {props.locale === "ar" ? "جاهز للإرسال" : "Ready to dispatch"}
-          </button>
+          </Button>
         ) : isPendingQaReview ? (
-          <button className="primary-button" disabled type="button">
+          <Button disabled type="button">
             {props.locale === "ar" ? "بانتظار الجودة" : "Pending QA review"}
-          </button>
+          </Button>
         ) : isPrepared ? (
-          <button className="primary-button" disabled type="button">
+          <Button disabled type="button">
             {props.locale === "ar" ? "تم التجهيز" : "Already prepared"}
-          </button>
+          </Button>
         ) : (
           <FormSubmitButton
             disabled={!props.canManage}
@@ -67,7 +76,7 @@ export function HandoverCustomerUpdateDeliveryForm(props: {
             pendingLabel={props.locale === "ar" ? "جارٍ التجهيز..." : "Preparing..."}
           />
         )}
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+        <p className={formFeedbackClassName(state.status)}>
           {state.message}
         </p>
       </div>

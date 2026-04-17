@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 
 import type { HandoverAppointmentStatus, SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import { Button, formActionsRowClassName, formFeedbackClassName, formStackClassName } from "@real-estate-ai/ui";
 
 import { confirmHandoverAppointmentAction, initialFormActionState } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -23,18 +23,18 @@ export function HandoverAppointmentConfirmationForm(props: {
   const isConfirmed = props.status === "internally_confirmed";
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="appointmentId" type="hidden" value={props.appointmentId} />
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
       <input name="status" type="hidden" value="internally_confirmed" />
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         {isConfirmed ? (
-          <button className="primary-button" disabled type="button">
+          <Button disabled type="button">
             {props.locale === "ar" ? "تم التأكيد" : "Already confirmed"}
-          </button>
+          </Button>
         ) : (
           <FormSubmitButton
             disabled={!props.canManage}
@@ -43,7 +43,7 @@ export function HandoverAppointmentConfirmationForm(props: {
             pendingLabel={props.locale === "ar" ? "جارٍ التأكيد..." : "Confirming..."}
           />
         )}
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+        <p className={formFeedbackClassName(state.status)}>
           {state.message}
         </p>
       </div>

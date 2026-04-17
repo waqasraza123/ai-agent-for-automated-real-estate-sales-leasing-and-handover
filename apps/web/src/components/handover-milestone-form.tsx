@@ -3,7 +3,18 @@
 import { useActionState } from "react";
 
 import type { HandoverMilestoneStatus, SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import {
+  cx,
+  fieldGridClassName,
+  fieldLabelClassName,
+  fieldSpanFullClassName,
+  fieldStackClassName,
+  formActionsRowClassName,
+  formFeedbackClassName,
+  formStackClassName,
+  Select,
+  TextInput
+} from "@real-estate-ai/ui";
 
 import { initialFormActionState, updateHandoverMilestoneAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -25,27 +36,26 @@ export function HandoverMilestoneForm(props: {
   const statusOptions: HandoverMilestoneStatus[] = ["planned", "blocked", "ready"];
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="milestoneId" type="hidden" value={props.milestoneId} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
 
-      <div className="field-grid">
-        <label className="field-stack">
-          <span>{copy.status}</span>
-          <select className="select-shell" defaultValue={props.status} disabled={!props.canManage} name="status">
+      <div className={fieldGridClassName}>
+        <label className={fieldStackClassName}>
+          <span className={fieldLabelClassName}>{copy.status}</span>
+          <Select defaultValue={props.status} disabled={!props.canManage} name="status">
             {statusOptions.map((statusOption) => (
               <option key={statusOption} value={statusOption}>
                 {getHandoverMilestoneStatusLabel(props.locale, statusOption)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
-        <label className="field-stack">
-          <span>{copy.targetAt}</span>
-          <input
-            className="input-shell"
+        <label className={fieldStackClassName}>
+          <span className={fieldLabelClassName}>{copy.targetAt}</span>
+          <TextInput
             defaultValue={props.targetAt}
             disabled={!props.canManage}
             name="targetAt"
@@ -53,20 +63,20 @@ export function HandoverMilestoneForm(props: {
             type="datetime-local"
           />
         </label>
-        <label className="field-stack field-span-full">
-          <span>{copy.ownerName}</span>
-          <input className="input-shell" defaultValue={props.ownerName} disabled={!props.canManage} name="ownerName" type="text" />
+        <label className={cx(fieldStackClassName, fieldSpanFullClassName)}>
+          <span className={fieldLabelClassName}>{copy.ownerName}</span>
+          <TextInput defaultValue={props.ownerName} disabled={!props.canManage} name="ownerName" type="text" />
         </label>
       </div>
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         <FormSubmitButton
           disabled={!props.canManage}
           disabledLabel={props.disabledLabel}
           idleLabel={copy.action}
           pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."}
         />
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+        <p className={formFeedbackClassName(state.status)}>
           {state.message}
         </p>
       </div>

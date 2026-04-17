@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import type { OperatorRole } from "@real-estate-ai/contracts";
 import type { AppMessages } from "@real-estate-ai/i18n";
+import { Button, Select, TextInput } from "@real-estate-ai/ui";
 
 import { setOperatorRoleAction } from "@/app/actions";
 import { operatorRoleOptions } from "@/lib/operator-role";
@@ -17,21 +18,21 @@ export function OperatorRoleSwitcher(props: {
   const pathname = usePathname();
 
   return (
-    <form action={setOperatorRoleAction} className="role-switcher" data-testid="operator-role-switcher">
+    <form action={setOperatorRoleAction} className="flex flex-wrap items-end gap-3" data-testid="operator-role-switcher">
       <input name="returnPath" type="hidden" value={pathname} />
-      <label className="role-switcher-label">
+      <label className="flex min-w-[12rem] flex-col gap-2 text-xs font-semibold tracking-[0.16em] text-ink-soft">
         <span>{props.messages.common.operatorRole}</span>
-        <select defaultValue={props.currentOperatorRole} name="operatorRole">
+        <Select defaultValue={props.currentOperatorRole} name="operatorRole">
           {operatorRoleOptions.map((role) => (
             <option key={role} value={role}>
               {props.messages.roles[role]}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
-      <label className="role-switcher-label">
+      <label className="flex min-w-[12rem] flex-col gap-2 text-xs font-semibold tracking-[0.16em] text-ink-soft">
         <span>Access key</span>
-        <input autoComplete="off" name="accessKey" required type="password" />
+        <TextInput autoComplete="off" name="accessKey" required type="password" />
       </label>
       <RoleSubmitButton label={props.messages.common.applyRole} />
     </form>
@@ -44,8 +45,8 @@ function RoleSubmitButton(props: {
   const status = useFormStatus();
 
   return (
-    <button className="role-switcher-button" disabled={status.pending} type="submit">
+    <Button disabled={status.pending} tone="secondary" type="submit">
       {props.label}
-    </button>
+    </Button>
   );
 }

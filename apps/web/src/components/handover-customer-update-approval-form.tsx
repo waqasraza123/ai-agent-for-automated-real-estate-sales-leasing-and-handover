@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 
 import type { HandoverCustomerUpdateStatus, SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import { Button, formActionsRowClassName, formFeedbackClassName, formStackClassName } from "@real-estate-ai/ui";
 
 import { approveHandoverCustomerUpdateAction, initialFormActionState } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -24,14 +24,14 @@ export function HandoverCustomerUpdateApprovalForm(props: {
   const isApproved = props.status === "approved" || props.status === "prepared_for_delivery" || props.status === "ready_to_dispatch";
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="customerUpdateId" type="hidden" value={props.customerUpdateId} />
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
       <input name="status" type="hidden" value="approved" />
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         {isReady ? (
           <FormSubmitButton
             disabled={!props.canManage}
@@ -40,11 +40,11 @@ export function HandoverCustomerUpdateApprovalForm(props: {
             pendingLabel={props.locale === "ar" ? "جارٍ الاعتماد..." : "Approving..."}
           />
         ) : (
-          <button className="primary-button" disabled type="button">
+          <Button disabled type="button">
             {isApproved ? (props.locale === "ar" ? "تم الاعتماد" : "Already approved") : (props.locale === "ar" ? "بانتظار الجاهزية" : "Waiting for readiness")}
-          </button>
+          </Button>
         )}
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+        <p className={formFeedbackClassName(state.status)}>
           {state.message}
         </p>
       </div>

@@ -43,11 +43,14 @@ export function CaseRouteTabs(props: {
   }>;
 
   return (
-    <nav className="case-route-tabs">
+    <nav className="flex flex-wrap items-center gap-2 rounded-full border border-canvas-line/80 bg-white/80 p-1 shadow-panel">
       {tabs.map((tab) => (
         <Link
           key={tab.href}
-          className={cx("case-route-tab", pathname === tab.href && "case-route-tab-active")}
+          className={cx(
+            "inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition",
+            pathname === tab.href ? "bg-brand-600 text-white shadow-brand-glow" : "text-ink-soft hover:bg-brand-50 hover:text-brand-700"
+          )}
           href={tab.href}
         >
           {tab.label}

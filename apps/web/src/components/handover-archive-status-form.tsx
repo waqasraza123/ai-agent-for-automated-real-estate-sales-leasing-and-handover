@@ -3,7 +3,19 @@
 import { useActionState } from "react";
 
 import type { HandoverArchiveStatus, SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import {
+  Button,
+  cx,
+  fieldGridClassName,
+  fieldLabelClassName,
+  fieldSpanFullClassName,
+  fieldStackClassName,
+  formActionsRowClassName,
+  formFeedbackClassName,
+  formStackClassName,
+  Select,
+  TextArea
+} from "@real-estate-ai/ui";
 
 import { initialFormActionState, updateHandoverArchiveStatusAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -22,44 +34,37 @@ export function HandoverArchiveStatusForm(props: {
   const isArchived = props.status === "archived";
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
 
-      <div className="field-grid">
-        <label className="field-stack">
-          <span>{copy.status}</span>
-          <select className="select-shell" defaultValue={props.status} disabled={isArchived} name="status">
+      <div className={fieldGridClassName}>
+        <label className={fieldStackClassName}>
+          <span className={fieldLabelClassName}>{copy.status}</span>
+          <Select defaultValue={props.status} disabled={isArchived} name="status">
             {props.statusOptions.map((statusOption) => (
               <option key={statusOption} value={statusOption}>
                 {getHandoverArchiveStatusLabel(props.locale, statusOption)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
-        <label className="field-stack field-span-full">
-          <span>{copy.summary}</span>
-          <textarea
-            className="textarea-shell"
-            defaultValue={props.summary}
-            disabled={isArchived}
-            name="summary"
-            required
-            rows={4}
-          />
+        <label className={cx(fieldStackClassName, fieldSpanFullClassName)}>
+          <span className={fieldLabelClassName}>{copy.summary}</span>
+          <TextArea defaultValue={props.summary} disabled={isArchived} name="summary" required rows={4} />
         </label>
       </div>
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         {isArchived ? (
-          <button className="primary-button" disabled type="button">
+          <Button disabled tone="primary" type="button">
             {props.locale === "ar" ? "مؤرشف" : "Archived"}
-          </button>
+          </Button>
         ) : (
           <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."} />
         )}
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+        <p className={formFeedbackClassName(state.status)}>
           {state.message}
         </p>
       </div>

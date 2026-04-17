@@ -3,7 +3,15 @@
 import { useActionState } from "react";
 
 import type { HandoverPostCompletionFollowUpStatus, SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import {
+  Button,
+  fieldLabelClassName,
+  fieldStackClassName,
+  formActionsRowClassName,
+  formFeedbackClassName,
+  formStackClassName,
+  TextArea
+} from "@real-estate-ai/ui";
 
 import { initialFormActionState, resolveHandoverPostCompletionFollowUpAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -22,17 +30,16 @@ export function HandoverPostCompletionFollowUpResolutionForm(props: {
   const isResolved = props.status === "resolved";
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="followUpId" type="hidden" value={props.followUpId} />
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
       <input name="status" type="hidden" value="resolved" />
 
-      <label className="field-stack">
-        <span>{copy.resolutionSummary}</span>
-        <textarea
-          className="textarea-shell"
+      <label className={fieldStackClassName}>
+        <span className={fieldLabelClassName}>{copy.resolutionSummary}</span>
+        <TextArea
           defaultValue={props.resolutionSummary}
           disabled={isResolved}
           name="resolutionSummary"
@@ -41,15 +48,15 @@ export function HandoverPostCompletionFollowUpResolutionForm(props: {
         />
       </label>
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         {isResolved ? (
-          <button className="primary-button" disabled type="button">
+          <Button disabled type="button">
             {props.locale === "ar" ? "مغلقة" : "Resolved"}
-          </button>
+          </Button>
         ) : (
           <FormSubmitButton idleLabel={copy.action} pendingLabel={props.locale === "ar" ? "جارٍ الإغلاق..." : "Resolving..."} />
         )}
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+        <p className={formFeedbackClassName(state.status)}>
           {state.message}
         </p>
       </div>

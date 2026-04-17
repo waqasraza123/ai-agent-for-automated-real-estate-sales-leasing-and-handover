@@ -9,7 +9,32 @@ import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 import type { SupportedLocale } from "@real-estate-ai/domain";
 import type { AppMessages } from "@real-estate-ai/i18n";
 import { getLocaleLabel, locales } from "@real-estate-ai/i18n";
-import { cx } from "@real-estate-ai/ui";
+import {
+  appBackdropClassName,
+  chromeActionsClassName,
+  chromeBrandClassName,
+  chromeBrandCopyClassName,
+  chromeBrandTitleClassName,
+  chromeHeaderClassName,
+  chromeHeaderInnerClassName,
+  chromeLayoutClassName,
+  chromeMainClassName,
+  chromeRoleGroupClassName,
+  chromeRoleNoteClassName,
+  chromeShellClassName,
+  chromeSidebarClassName,
+  chromeStatusClassName,
+  cx,
+  legacyUiBridgeClassName,
+  localeLinkClassName,
+  localeSwitchClassName,
+  sidebarLabelClassName,
+  sidebarLinkClassName,
+  sidebarLinkSummaryClassName,
+  sidebarLinkTitleClassName,
+  sidebarStackClassName,
+  skipLinkClassName
+} from "@real-estate-ai/ui";
 
 import { OperatorRoleSwitcher } from "@/components/operator-role-switcher";
 import { replacePathLocale } from "@/lib/locale";
@@ -59,60 +84,63 @@ export function AppChrome(props: {
   ].filter((item) => item.visible);
 
   return (
-    <div className="chrome-shell" data-testid="app-chrome">
-      <a className="skip-link" href="#main-content">
+    <div className={chromeShellClassName} data-testid="app-chrome">
+      <div aria-hidden="true" className={appBackdropClassName} />
+      <a className={skipLinkClassName} href="#main-content">
         {props.messages.common.skipToContent}
       </a>
 
-      <header className="chrome-header">
-        <div className="chrome-brand">
-          <strong>{props.messages.app.name}</strong>
-          <p>{props.messages.app.shellNote}</p>
-        </div>
-        <div className="chrome-actions">
-          <span className="chrome-status">{props.messages.app.phaseLabel}</span>
-          <div className="chrome-role-group">
-            <OperatorRoleSwitcher currentOperatorRole={props.currentOperatorRole} messages={props.messages} />
-            <p className="chrome-role-note">{props.messages.common.roleGuardNote}</p>
+      <header className={chromeHeaderClassName}>
+        <div className={chromeHeaderInnerClassName}>
+          <div className={chromeBrandClassName}>
+            <strong className={chromeBrandTitleClassName}>{props.messages.app.name}</strong>
+            <p className={chromeBrandCopyClassName}>{props.messages.app.shellNote}</p>
           </div>
-          <nav aria-label={props.messages.common.switchLanguage} className="locale-switch">
-            {locales.map((locale) => (
-              <Link
-                key={locale}
-                aria-current={props.locale === locale ? "page" : undefined}
-                className={cx(props.locale === locale && "locale-active")}
-                href={replacePathLocale(pathname, locale)}
-              >
-                {getLocaleLabel(locale)}
-              </Link>
-            ))}
-          </nav>
+          <div className={chromeActionsClassName}>
+            <span className={chromeStatusClassName}>{props.messages.app.phaseLabel}</span>
+            <div className={chromeRoleGroupClassName}>
+              <OperatorRoleSwitcher currentOperatorRole={props.currentOperatorRole} messages={props.messages} />
+              <p className={chromeRoleNoteClassName}>{props.messages.common.roleGuardNote}</p>
+            </div>
+            <nav aria-label={props.messages.common.switchLanguage} className={localeSwitchClassName}>
+              {locales.map((locale) => (
+                <Link
+                  key={locale}
+                  aria-current={props.locale === locale ? "page" : undefined}
+                  className={localeLinkClassName(props.locale === locale)}
+                  href={replacePathLocale(pathname, locale)}
+                >
+                  {getLocaleLabel(locale)}
+                </Link>
+              ))}
+            </nav>
+          </div>
         </div>
       </header>
 
-      <div className="chrome-layout">
-        <aside className="chrome-sidebar">
-          <p className="sidebar-label">{props.messages.app.phaseLabel}</p>
+      <div className={chromeLayoutClassName}>
+        <aside className={chromeSidebarClassName}>
+          <p className={sidebarLabelClassName}>{props.messages.app.phaseLabel}</p>
           <nav
             aria-label={props.messages.common.primaryNavigation}
-            className="sidebar-stack"
+            className={sidebarStackClassName}
             data-testid="primary-navigation"
           >
             {navigation.map((item) => (
               <Link
                 key={item.href}
                 aria-current={pathname === item.href ? "page" : undefined}
-                className={cx("sidebar-link", pathname === item.href && "sidebar-link-active")}
+                className={sidebarLinkClassName(pathname === item.href)}
                 href={item.href}
               >
-                <strong>{item.label}</strong>
-                <span>{item.summary}</span>
+                <strong className={sidebarLinkTitleClassName}>{item.label}</strong>
+                <span className={sidebarLinkSummaryClassName}>{item.summary}</span>
               </Link>
             ))}
           </nav>
         </aside>
 
-        <main className="chrome-main" data-testid="chrome-main" id="main-content" tabIndex={-1}>
+        <main className={cx(chromeMainClassName, legacyUiBridgeClassName)} data-testid="chrome-main" id="main-content" tabIndex={-1}>
           {props.children}
         </main>
       </div>

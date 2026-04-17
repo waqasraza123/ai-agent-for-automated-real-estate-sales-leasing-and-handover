@@ -21,6 +21,8 @@
 - Local working memory is kept in `docs/_local/current-session.md` and must remain uncommitted
 - Shared localization now lives behind typed domain resources in `packages/i18n`, with Arabic as the authored default, English as the secondary locale, and shared helpers for locale direction, labels, and formatter locale selection
 - Shared web formatting now routes date and number presentation through locale-aware helpers in `apps/web/src/lib/format.ts`, and the web shell now uses local Arabic-capable system font stacks instead of runtime Google font fetches
+- The web frontend is now Tailwind-first: `apps/web` uses Tailwind, Tailwind Forms, `tailwindcss-animate`, and a selective Flowbite plugin foundation, while the prior custom global CSS system has been removed in favor of utility-driven primitives and theme tokens
+- `packages/ui` is now the shared Tailwind design-system layer for the app shell, cards, buttons, inputs, tables, badges, empty states, and skeletons, with Arabic-first spacing, premium light-theme tokens, motion utilities, and a temporary Tailwind descendant bridge for remaining route-level legacy markup during migration completion
 
 ## Non-Negotiable Rules
 - Never store secrets in repository memory files
@@ -258,6 +260,7 @@
 - The premium product promise raises the bar for motion, state design, and visual quality from the first demo
 - AI trust will fail quickly if escalation, approval, and inspection paths are not explicit
 - The web shell must not drift into mixed fixture and persisted state without an explicit boundary during Phase 2
+- The remaining manager, governance, and deep detail routes still carry some legacy class names in markup, so the Tailwind descendant bridge inside `packages/ui` must stay aligned until those larger route components are fully rewritten
 - The local `PGlite` alpha store is a development convenience and must not be mistaken for the long-term production deployment model
 - The current local queue model is intentionally transitional and must not be mistaken for the long-term distributed worker architecture
 - Phase 4 should not be overextended prematurely; the current handover slice is intentionally limited to intake, milestone planning, approval-only customer boundaries, internal appointment confirmation, dispatch-ready preparation, blocker tracking, explicit execution start, controlled completion, aftercare, and a narrow admin-closure boundary, not live provider sending, external archiving, or downstream automation

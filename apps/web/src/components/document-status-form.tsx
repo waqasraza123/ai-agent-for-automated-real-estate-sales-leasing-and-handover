@@ -4,7 +4,7 @@ import { useActionState } from "react";
 
 import type { DocumentRequestStatus, SupportedLocale } from "@real-estate-ai/contracts";
 import { getMessages } from "@real-estate-ai/i18n";
-import { cx } from "@real-estate-ai/ui";
+import { Select, formFeedbackClassName } from "@real-estate-ai/ui";
 
 import { initialFormActionState, updateDocumentStatusAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -28,19 +28,17 @@ export function DocumentStatusForm(props: {
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
 
-      <select className="select-shell" defaultValue={props.status} name="status">
+      <Select defaultValue={props.status} name="status">
         {statusOptions.map((statusOption) => (
           <option key={statusOption} value={statusOption}>
             {getDocumentRequestStatusLabel(props.locale, statusOption)}
           </option>
         ))}
-      </select>
+      </Select>
 
       <FormSubmitButton idleLabel={messages.forms.updateAction} pendingLabel={messages.forms.pendingSave} />
 
-      <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
-        {state.message}
-      </p>
+      <p className={formFeedbackClassName(state.status)}>{state.message}</p>
     </form>
   );
 }

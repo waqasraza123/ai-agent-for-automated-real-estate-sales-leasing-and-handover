@@ -2,9 +2,28 @@ import Link from "next/link";
 
 import { demoDataset, getLocalizedText, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { MetricTile, Panel, StatusBadge } from "@real-estate-ai/ui";
+import {
+  caseLinkCardClassName,
+  caseMetaClassName,
+  heroActionsClassName,
+  heroCopyClassName,
+  heroEyebrowClassName,
+  heroShellClassName,
+  heroSummaryClassName,
+  heroTitleClassName,
+  metricGridClassName,
+  MetricTile,
+  pageStackClassName,
+  Panel,
+  panelSummaryClassName,
+  primaryLinkClassName,
+  secondaryLinkClassName,
+  StatusBadge,
+  twoColumnGridClassName
+} from "@real-estate-ai/ui";
 
 import { LeadCaptureForm } from "@/components/lead-capture-form";
+import { MarketingOrchestrationVisual } from "@/components/marketing-orchestration-visual";
 import { StatefulStack } from "@/components/stateful-stack";
 import { buildCaseReferenceCode, getPersistedCaseStageLabel } from "@/lib/persisted-case-presenters";
 import { tryListPersistedCases } from "@/lib/live-api";
@@ -20,81 +39,139 @@ export default async function LandingPage(props: PageProps) {
   const highlightedCases = persistedCases.slice(0, 3);
 
   return (
-    <div className="page-stack">
-      <section className="hero-shell">
-        <div className="hero-copy">
-          <p className="hero-eyebrow">{messages.landing.eyebrow}</p>
-          <h1>{messages.landing.title}</h1>
-          <p className="hero-summary">{messages.landing.summary}</p>
-          <div className="hero-actions">
-            <Link className="primary-link" href={`/${locale}/dashboard`}>
-              {messages.landing.primaryAction}
-            </Link>
-            <Link className="secondary-link" href={`/${locale}/leads`}>
-              {messages.landing.secondaryAction}
-            </Link>
+    <div className={pageStackClassName}>
+      <section className={heroShellClassName}>
+        <div className={heroCopyClassName}>
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-300 to-transparent" />
+          <div className="absolute -top-16 start-8 h-40 w-40 rounded-full bg-brand-100/70 blur-3xl" />
+          <div className="absolute end-6 top-12 h-28 w-28 rounded-full bg-ai-100/70 blur-3xl" />
+
+          <div className="relative z-10 flex h-full flex-col justify-between gap-6">
+            <div className="space-y-4">
+              <p className={heroEyebrowClassName}>{messages.landing.eyebrow}</p>
+              <h1 className={heroTitleClassName}>{messages.landing.title}</h1>
+              <p className={heroSummaryClassName}>{messages.landing.summary}</p>
+            </div>
+
+            <div className="space-y-5">
+              <div className={heroActionsClassName}>
+                <Link className={primaryLinkClassName} href={`/${locale}/dashboard`}>
+                  {messages.landing.primaryAction}
+                </Link>
+                <Link className={secondaryLinkClassName} href={`/${locale}/leads`}>
+                  {messages.landing.secondaryAction}
+                </Link>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-4xl border border-white/70 bg-white/85 p-4 shadow-panel">
+                  <p className="text-xs font-semibold tracking-[0.18em] text-sand-700">
+                    {locale === "ar" ? "استجابة متعددة القنوات" : "Multi-channel response"}
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-ink-soft">
+                    {locale === "ar"
+                      ? "من الموقع، واتساب، والبريد إلى مسار موحد للرد والمتابعة."
+                      : "Website, WhatsApp, and email converge into one trusted response and follow-up flow."}
+                  </p>
+                </div>
+                <div className="rounded-4xl border border-white/70 bg-white/85 p-4 shadow-panel">
+                  <p className="text-xs font-semibold tracking-[0.18em] text-sand-700">
+                    {locale === "ar" ? "حوكمة بشرية واضحة" : "Visible human governance"}
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-ink-soft">
+                    {locale === "ar"
+                      ? "الجودة، الموافقات، والتدخلات تظل صريحة وقابلة للتدقيق."
+                      : "QA, approvals, and interventions stay explicit and auditable."}
+                  </p>
+                </div>
+                <div className="rounded-4xl border border-white/70 bg-white/85 p-4 shadow-panel">
+                  <p className="text-xs font-semibold tracking-[0.18em] text-sand-700">
+                    {locale === "ar" ? "تشغيل جاهز للسوق السعودي" : "Saudi-ready operations"}
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-ink-soft">
+                    {locale === "ar"
+                      ? "تجربة عربية أولاً مع واجهة ثنائية اللغة جاهزة للفرق التشغيلية."
+                      : "Arabic-first UX with bilingual control surfaces ready for daily operations."}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <Panel className="hero-spotlight" eyebrow={messages.app.phaseLabel} title={messages.landing.spotlightTitle}>
-          <p className="panel-summary" data-testid="landing-shell-note">
-            {messages.landing.spotlightSummary}
-          </p>
-          <StatusBadge tone="warning">{messages.common.demoState}</StatusBadge>
-          <div className="metric-grid">
-            {demoDataset.dashboardMetrics.map((metric) => (
-              <MetricTile
-                key={metric.id}
-                detail={getLocalizedText(metric.change, locale)}
-                label={getLocalizedText(metric.label, locale)}
-                tone={metric.tone}
-                value={metric.value}
-              />
-            ))}
-          </div>
-        </Panel>
+
+        <div className="space-y-6">
+          <MarketingOrchestrationVisual />
+          <Panel eyebrow={messages.app.phaseLabel} title={messages.landing.spotlightTitle}>
+            <div className="mt-4 space-y-5">
+              <p className={panelSummaryClassName} data-testid="landing-shell-note">
+                {messages.landing.spotlightSummary}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge tone="warning">{messages.common.demoState}</StatusBadge>
+                <StatusBadge>{locale === "ar" ? "تشغيل عربي أولاً" : "Arabic-first operations"}</StatusBadge>
+                <StatusBadge tone="success">{locale === "ar" ? "واجهة موثوقة" : "Trusted operator UX"}</StatusBadge>
+              </div>
+              <div className={metricGridClassName}>
+                {demoDataset.dashboardMetrics.map((metric) => (
+                  <MetricTile
+                    key={metric.id}
+                    detail={getLocalizedText(metric.change, locale)}
+                    label={getLocalizedText(metric.label, locale)}
+                    tone={metric.tone}
+                    value={metric.value}
+                  />
+                ))}
+              </div>
+            </div>
+          </Panel>
+        </div>
       </section>
 
-      <div className="two-column-grid">
+      <div className={twoColumnGridClassName}>
         <Panel title={messages.landing.liveAlphaTitle}>
-          <p className="panel-summary">{messages.landing.liveAlphaSummary}</p>
-          <LeadCaptureForm locale={locale} />
+          <div className="mt-4 space-y-5">
+            <p className={panelSummaryClassName}>{messages.landing.liveAlphaSummary}</p>
+            <LeadCaptureForm locale={locale} />
+          </div>
         </Panel>
 
         <Panel title={messages.leads.title}>
-          <p className="panel-summary">{messages.leads.summary}</p>
-          {highlightedCases.length > 0 ? (
-            <StatefulStack
-              emptySummary={messages.states.emptyCasesSummary}
-              emptyTitle={messages.states.emptyCasesTitle}
-              items={highlightedCases}
-              renderItem={(item) => (
-                <Link key={item.caseId} className="case-link-card" href={`/${locale}/leads/${item.caseId}`}>
-                  <div>
-                    <p className="case-link-meta">{buildCaseReferenceCode(item.caseId)}</p>
-                    <h3>{item.customerName}</h3>
-                    <p>{item.nextAction}</p>
-                  </div>
-                  <StatusBadge>{getPersistedCaseStageLabel(locale, item.stage)}</StatusBadge>
-                </Link>
-              )}
-            />
-          ) : (
-            <StatefulStack
-              emptySummary={messages.states.emptyCasesSummary}
-              emptyTitle={messages.states.emptyCasesTitle}
-              items={demoDataset.cases}
-              renderItem={(item) => (
-                <Link key={item.id} className="case-link-card" href={`/${locale}/leads/${item.id}`}>
-                  <div>
-                    <p className="case-link-meta">{item.referenceCode}</p>
-                    <h3>{item.customerName}</h3>
-                    <p>{getLocalizedText(item.summary, locale)}</p>
-                  </div>
-                  <StatusBadge>{getLocalizedText(item.stage, locale)}</StatusBadge>
-                </Link>
-              )}
-            />
-          )}
+          <div className="mt-4 space-y-5">
+            <p className={panelSummaryClassName}>{messages.leads.summary}</p>
+            {highlightedCases.length > 0 ? (
+              <StatefulStack
+                emptySummary={messages.states.emptyCasesSummary}
+                emptyTitle={messages.states.emptyCasesTitle}
+                items={highlightedCases}
+                renderItem={(item) => (
+                  <Link key={item.caseId} className={caseLinkCardClassName} href={`/${locale}/leads/${item.caseId}`}>
+                    <div className="space-y-1.5">
+                      <p className={caseMetaClassName}>{buildCaseReferenceCode(item.caseId)}</p>
+                      <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{item.customerName}</h3>
+                      <p className="text-sm leading-7 text-ink-soft">{item.nextAction}</p>
+                    </div>
+                    <StatusBadge>{getPersistedCaseStageLabel(locale, item.stage)}</StatusBadge>
+                  </Link>
+                )}
+              />
+            ) : (
+              <StatefulStack
+                emptySummary={messages.states.emptyCasesSummary}
+                emptyTitle={messages.states.emptyCasesTitle}
+                items={demoDataset.cases}
+                renderItem={(item) => (
+                  <Link key={item.id} className={caseLinkCardClassName} href={`/${locale}/leads/${item.id}`}>
+                    <div className="space-y-1.5">
+                      <p className={caseMetaClassName}>{item.referenceCode}</p>
+                      <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{item.customerName}</h3>
+                      <p className="text-sm leading-7 text-ink-soft">{getLocalizedText(item.summary, locale)}</p>
+                    </div>
+                    <StatusBadge>{getLocalizedText(item.stage, locale)}</StatusBadge>
+                  </Link>
+                )}
+              />
+            )}
+          </div>
         </Panel>
       </div>
     </div>

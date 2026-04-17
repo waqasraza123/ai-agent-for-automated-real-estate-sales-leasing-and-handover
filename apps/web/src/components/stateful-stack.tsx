@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { EmptyState } from "@real-estate-ai/ui";
+import { EmptyState, stackListClassName } from "@real-estate-ai/ui";
 
 export function StatefulStack<T>(props: {
   emptySummary: string;
@@ -15,5 +15,5 @@ export function StatefulStack<T>(props: {
     return <EmptyState summary={props.emptySummary} title={props.emptyTitle} {...emptyStateProps} />;
   }
 
-  return <div className="stack-list">{props.items.map(props.renderItem)}</div>;
+  return <div className={stackListClassName}>{props.items.map(props.renderItem)}</div>;
 }

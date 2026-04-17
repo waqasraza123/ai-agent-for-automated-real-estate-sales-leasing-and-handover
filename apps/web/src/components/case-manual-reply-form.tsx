@@ -4,7 +4,19 @@ import { useActionState } from "react";
 
 import type { SupportedLocale } from "@real-estate-ai/contracts";
 import { getMessages } from "@real-estate-ai/i18n";
-import { cx } from "@real-estate-ai/ui";
+import {
+  TextArea,
+  TextInput,
+  cx,
+  fieldGridClassName,
+  fieldLabelClassName,
+  fieldSpanFullClassName,
+  fieldStackClassName,
+  fieldNoteClassName,
+  formActionsRowClassName,
+  formFeedbackClassName,
+  formStackClassName
+} from "@real-estate-ai/ui";
 
 import { initialFormActionState, sendCaseReplyAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -27,48 +39,27 @@ export function CaseManualReplyForm(props: {
   const [state, action] = useActionState(sendCaseReplyAction, initialFormActionState);
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="caseId" type="hidden" value={props.caseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
 
-      <div className="field-grid">
-        <label className="field-stack">
-          <span>{copy.sentByName}</span>
-          <input
-            className="input-shell"
-            defaultValue={props.defaultSentByName}
-            disabled={!props.canSend}
-            name="sentByName"
-            type="text"
-          />
+      <div className={fieldGridClassName}>
+        <label className={fieldStackClassName}>
+          <span className={fieldLabelClassName}>{copy.sentByName}</span>
+          <TextInput defaultValue={props.defaultSentByName} disabled={!props.canSend} name="sentByName" type="text" />
         </label>
-        <label className="field-stack field-span-full">
-          <span>{copy.message}</span>
-          <textarea
-            className="textarea-shell"
-            defaultValue={props.defaultMessage ?? ""}
-            disabled={!props.canSend}
-            name="message"
-            required
-            rows={5}
-          />
+        <label className={cx(fieldStackClassName, fieldSpanFullClassName)}>
+          <span className={fieldLabelClassName}>{copy.message}</span>
+          <TextArea defaultValue={props.defaultMessage ?? ""} disabled={!props.canSend} name="message" required rows={5} />
         </label>
-        <label className="field-stack field-span-full">
-          <span>{copy.nextAction}</span>
-          <textarea
-            className="textarea-shell"
-            defaultValue={props.defaultNextAction}
-            disabled={!props.canSend}
-            name="nextAction"
-            required
-            rows={3}
-          />
+        <label className={cx(fieldStackClassName, fieldSpanFullClassName)}>
+          <span className={fieldLabelClassName}>{copy.nextAction}</span>
+          <TextArea defaultValue={props.defaultNextAction} disabled={!props.canSend} name="nextAction" required rows={3} />
         </label>
-        <label className="field-stack">
-          <span>{copy.nextActionDueAt}</span>
-          <input
-            className="input-shell"
+        <label className={fieldStackClassName}>
+          <span className={fieldLabelClassName}>{copy.nextActionDueAt}</span>
+          <TextInput
             defaultValue={toDateTimeLocalValue(props.defaultNextActionDueAt)}
             disabled={!props.canSend}
             name="nextActionDueAt"
@@ -78,18 +69,16 @@ export function CaseManualReplyForm(props: {
         </label>
       </div>
 
-      {props.showApprovedDraftNote ? <p className="field-note">{copy.approvedDraftNote}</p> : null}
+      {props.showApprovedDraftNote ? <p className={fieldNoteClassName}>{copy.approvedDraftNote}</p> : null}
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         <FormSubmitButton
           disabled={!props.canSend}
           disabledLabel={props.disabledLabel}
           idleLabel={copy.action}
           pendingLabel={messages.forms.pendingSave}
         />
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
-          {state.message}
-        </p>
+        <p className={formFeedbackClassName(state.status)}>{state.message}</p>
       </div>
     </form>
   );

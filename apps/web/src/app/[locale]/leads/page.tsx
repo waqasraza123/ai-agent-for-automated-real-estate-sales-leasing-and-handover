@@ -3,7 +3,23 @@ import Link from "next/link";
 import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 import { demoDataset, getLocalizedText, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { EmptyState, Panel, StatusBadge } from "@real-estate-ai/ui";
+import {
+  caseMetaClassName,
+  dataTableCellClassName,
+  dataTableClassName,
+  dataTableHeaderCellClassName,
+  dataTableWrapperClassName,
+  EmptyState,
+  inlineLinkClassName,
+  pageStackClassName,
+  Panel,
+  stackTightClassName,
+  StatusBadge,
+  statusRowWrapClassName,
+  tableLinkClassName,
+  tableLinkMetaClassName,
+  tableLinkTitleClassName
+} from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
@@ -45,7 +61,7 @@ export default async function LeadsPage(props: PageProps) {
 
   if (!canOperatorRoleAccessWorkspace("sales", currentOperatorRole)) {
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={messages.app.phaseLabel} summary={messages.leads.summary} title={messages.leads.title} />
         <WorkspaceAccessPanel
           actionHref={getPreferredOperatorSurfacePath(locale, currentOperatorRole)}
@@ -76,24 +92,24 @@ export default async function LeadsPage(props: PageProps) {
   };
 
   return (
-    <div className="page-stack">
+    <div className={pageStackClassName}>
       <ScreenIntro badge={messages.app.phaseLabel} summary={messages.leads.summary} title={messages.leads.title} />
 
       <Panel title={messages.leads.title}>
         {persistedCases.length === 0 && demoDataset.cases.length === 0 ? (
           <EmptyState summary={messages.states.emptyCasesSummary} title={messages.states.emptyCasesTitle} />
         ) : persistedCases.length > 0 ? (
-          <div className="lead-table-wrapper" data-testid="lead-table-wrapper">
-            <table className="lead-table">
+          <div className={dataTableWrapperClassName} data-testid="lead-table-wrapper">
+            <table className={dataTableClassName}>
               <thead>
                 <tr>
-                  <th>{columnLabels.lead}</th>
-                  <th>{columnLabels.stage}</th>
-                  <th>{columnLabels.handover}</th>
-                  <th>{columnLabels.currentOwner}</th>
-                  <th>{columnLabels.nextAction}</th>
-                  <th>{columnLabels.dueAt}</th>
-                  <th>{columnLabels.lastChange}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.lead}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.stage}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.handover}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.currentOwner}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.nextAction}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.dueAt}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.lastChange}</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,39 +138,39 @@ export default async function LeadsPage(props: PageProps) {
 
                     return (
                       <tr key={caseItem.caseId}>
-                        <td data-column-label={columnLabels.lead}>
-                          <Link className="table-link" href={`/${locale}/leads/${caseItem.caseId}`}>
-                            <strong>{caseItem.customerName}</strong>
-                            <span>{buildCaseReferenceCode(caseItem.caseId)}</span>
+                        <td className={dataTableCellClassName} data-column-label={columnLabels.lead}>
+                          <Link className={tableLinkClassName} href={`/${locale}/leads/${caseItem.caseId}`}>
+                            <strong className={tableLinkTitleClassName}>{caseItem.customerName}</strong>
+                            <span className={tableLinkMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</span>
                           </Link>
                         </td>
-                        <td data-column-label={columnLabels.stage}>
+                        <td className={dataTableCellClassName} data-column-label={columnLabels.stage}>
                           <StatusBadge>{getPersistedCaseStageLabel(locale, caseItem.stage)}</StatusBadge>
                         </td>
-                        <td data-column-label={columnLabels.handover}>
+                        <td className={dataTableCellClassName} data-column-label={columnLabels.handover}>
                           {handoverDisplay ? (
-                            <div className="stack-tight">
-                              <div className="status-row-wrap">
+                            <div className={stackTightClassName}>
+                              <div className={statusRowWrapClassName}>
                                 <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge>
                                 <StatusBadge>{handoverDisplay.surfaceLabel}</StatusBadge>
                               </div>
                               {canAccessHandoverWorkspace ? (
-                                <Link className="inline-link" href={`/${locale}/handover/${handoverDisplay.handoverCaseId}`}>
+                                <Link className={inlineLinkClassName} href={`/${locale}/handover/${handoverDisplay.handoverCaseId}`}>
                                   {messages.common.openHandover}
                                 </Link>
                               ) : null}
                             </div>
                           ) : (
-                            <span className="case-link-meta">{messages.common.notActive}</span>
+                            <span className={caseMetaClassName}>{messages.common.notActive}</span>
                           )}
                         </td>
-                        <td data-column-label={columnLabels.currentOwner}>{caseItem.ownerName}</td>
-                        <td data-column-label={columnLabels.nextAction}>
-                          <div className="stack-tight">
+                        <td className={dataTableCellClassName} data-column-label={columnLabels.currentOwner}>{caseItem.ownerName}</td>
+                        <td className={dataTableCellClassName} data-column-label={columnLabels.nextAction}>
+                          <div className={stackTightClassName}>
                             <span>{caseItem.nextAction}</span>
                             {caseItem.latestHumanReply ? (
-                              <div className="stack-tight">
-                                <span className="case-link-meta">
+                              <div className={stackTightClassName}>
+                                <span className={caseMetaClassName}>
                                   {latestHumanReplyLabel}
                                   {" · "}
                                   {caseItem.latestHumanReply.sentByName}
@@ -162,26 +178,26 @@ export default async function LeadsPage(props: PageProps) {
                                   {latestHumanReplySentAt}
                                 </span>
                                 {latestHumanReplyOwnershipLabel ? (
-                                  <span className="case-link-meta">{latestHumanReplyOwnershipLabel}</span>
+                                  <span className={caseMetaClassName}>{latestHumanReplyOwnershipLabel}</span>
                                 ) : null}
                                 {latestHumanReplyEscalationLabel ? (
-                                  <span className="case-link-meta">{latestHumanReplyEscalationLabel}</span>
+                                  <span className={caseMetaClassName}>{latestHumanReplyEscalationLabel}</span>
                                 ) : null}
                               </div>
                             ) : null}
                             {caseItem.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
-                              <div className="stack-tight">
-                                <span className="case-link-meta">
+                              <div className={stackTightClassName}>
+                                <span className={caseMetaClassName}>
                                   {latestManagerFollowUpLabel}
                                   {" · "}
                                   {caseItem.latestManagerFollowUp.ownerName}
                                   {" · "}
                                   {latestManagerFollowUpSavedAt}
                                 </span>
-                                {latestManagerFollowUpNote ? <span className="case-link-meta">{latestManagerFollowUpNote}</span> : null}
+                                {latestManagerFollowUpNote ? <span className={caseMetaClassName}>{latestManagerFollowUpNote}</span> : null}
                               </div>
                             ) : null}
-                            <div className="status-row-wrap">
+                            <div className={statusRowWrapClassName}>
                               <StatusBadge>{getPersistedAutomationLabel(locale, caseItem.automationStatus)}</StatusBadge>
                               {automationHoldReasonLabel ? <StatusBadge tone="warning">{automationHoldReasonLabel}</StatusBadge> : null}
                               {caseItem.openInterventionsCount > 0 ? (
@@ -194,8 +210,8 @@ export default async function LeadsPage(props: PageProps) {
                             </StatusBadge>
                           </div>
                         </td>
-                        <td data-column-label={columnLabels.dueAt}>{formatDueAt(caseItem, locale)}</td>
-                        <td data-column-label={columnLabels.lastChange}>{formatCaseLastChange(caseItem, locale)}</td>
+                        <td className={dataTableCellClassName} data-column-label={columnLabels.dueAt}>{formatDueAt(caseItem, locale)}</td>
+                        <td className={dataTableCellClassName} data-column-label={columnLabels.lastChange}>{formatCaseLastChange(caseItem, locale)}</td>
                       </tr>
                     );
                   })()
@@ -204,36 +220,36 @@ export default async function LeadsPage(props: PageProps) {
             </table>
           </div>
         ) : (
-          <div className="lead-table-wrapper" data-testid="lead-table-wrapper">
-            <table className="lead-table">
+          <div className={dataTableWrapperClassName} data-testid="lead-table-wrapper">
+            <table className={dataTableClassName}>
               <thead>
                 <tr>
-                  <th>{columnLabels.lead}</th>
-                  <th>{columnLabels.stage}</th>
-                  <th>{columnLabels.handover}</th>
-                  <th>{columnLabels.currentOwner}</th>
-                  <th>{columnLabels.nextAction}</th>
-                  <th>{columnLabels.lastChange}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.lead}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.stage}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.handover}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.currentOwner}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.nextAction}</th>
+                  <th className={dataTableHeaderCellClassName}>{columnLabels.lastChange}</th>
                 </tr>
               </thead>
               <tbody>
                 {demoDataset.cases.map((caseItem) => (
                   <tr key={caseItem.id}>
-                    <td data-column-label={columnLabels.lead}>
-                      <Link className="table-link" href={`/${locale}/leads/${caseItem.id}`}>
-                        <strong>{caseItem.customerName}</strong>
-                        <span>{getLocalizedText(caseItem.projectName, locale)}</span>
+                    <td className={dataTableCellClassName} data-column-label={columnLabels.lead}>
+                      <Link className={tableLinkClassName} href={`/${locale}/leads/${caseItem.id}`}>
+                        <strong className={tableLinkTitleClassName}>{caseItem.customerName}</strong>
+                        <span className={tableLinkMetaClassName}>{getLocalizedText(caseItem.projectName, locale)}</span>
                       </Link>
                     </td>
-                    <td data-column-label={columnLabels.stage}>
+                    <td className={dataTableCellClassName} data-column-label={columnLabels.stage}>
                       <StatusBadge>{getLocalizedText(caseItem.stage, locale)}</StatusBadge>
                     </td>
-                    <td data-column-label={columnLabels.handover}>
-                      <span className="case-link-meta">{messages.common.notActive}</span>
+                    <td className={dataTableCellClassName} data-column-label={columnLabels.handover}>
+                      <span className={caseMetaClassName}>{messages.common.notActive}</span>
                     </td>
-                    <td data-column-label={columnLabels.currentOwner}>{caseItem.owner}</td>
-                    <td data-column-label={columnLabels.nextAction}>{getLocalizedText(caseItem.nextAction, locale)}</td>
-                    <td data-column-label={columnLabels.lastChange}>{formatDateTime(caseItem.lastMeaningfulChange, locale)}</td>
+                    <td className={dataTableCellClassName} data-column-label={columnLabels.currentOwner}>{caseItem.owner}</td>
+                    <td className={dataTableCellClassName} data-column-label={columnLabels.nextAction}>{getLocalizedText(caseItem.nextAction, locale)}</td>
+                    <td className={dataTableCellClassName} data-column-label={columnLabels.lastChange}>{formatDateTime(caseItem.lastMeaningfulChange, locale)}</td>
                   </tr>
                 ))}
               </tbody>

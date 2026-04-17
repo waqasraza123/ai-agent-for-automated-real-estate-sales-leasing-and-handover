@@ -3,7 +3,18 @@
 import { useActionState } from "react";
 
 import type { SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import {
+  cx,
+  fieldGridClassName,
+  fieldLabelClassName,
+  fieldSpanFullClassName,
+  fieldStackClassName,
+  formActionsRowClassName,
+  formFeedbackClassName,
+  formStackClassName,
+  TextArea,
+  TextInput
+} from "@real-estate-ai/ui";
 
 import { initialFormActionState, prepareCaseReplyDraftQaReviewAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -22,26 +33,24 @@ export function CaseReplyDraftQaRequestForm(props: {
   const [state, action] = useActionState(prepareCaseReplyDraftQaReviewAction, initialFormActionState);
 
   return (
-    <form action={action} className="form-stack">
+    <form action={action} className={formStackClassName}>
       <input name="caseId" type="hidden" value={props.caseId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
 
-      <div className="field-grid">
-        <label className="field-stack">
-          <span>{copy.requestedByName}</span>
-          <input
-            className="input-shell"
+      <div className={fieldGridClassName}>
+        <label className={fieldStackClassName}>
+          <span className={fieldLabelClassName}>{copy.requestedByName}</span>
+          <TextInput
             defaultValue={props.defaultRequestedByName}
             disabled={!props.canManage}
             name="requestedByName"
             type="text"
           />
         </label>
-        <label className="field-stack field-span-full">
-          <span>{copy.draftMessage}</span>
-          <textarea
-            className="textarea-shell"
+        <label className={cx(fieldStackClassName, fieldSpanFullClassName)}>
+          <span className={fieldLabelClassName}>{copy.draftMessage}</span>
+          <TextArea
             defaultValue={props.defaultDraftMessage ?? ""}
             disabled={!props.canManage}
             name="draftMessage"
@@ -51,14 +60,14 @@ export function CaseReplyDraftQaRequestForm(props: {
         </label>
       </div>
 
-      <div className="form-actions-row">
+      <div className={formActionsRowClassName}>
         <FormSubmitButton
           disabled={!props.canManage}
           disabledLabel={props.disabledLabel}
           idleLabel={copy.action}
           pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."}
         />
-        <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+        <p className={formFeedbackClassName(state.status)}>
           {state.message}
         </p>
       </div>

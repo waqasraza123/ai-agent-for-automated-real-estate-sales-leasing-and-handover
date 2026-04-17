@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 
 import type { HandoverTaskStatus, SupportedLocale } from "@real-estate-ai/contracts";
-import { cx } from "@real-estate-ai/ui";
+import { formFeedbackClassName, Select, statusRowWrapClassName } from "@real-estate-ai/ui";
 
 import { initialFormActionState, updateHandoverTaskStatusAction } from "@/app/actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
@@ -22,19 +22,19 @@ export function HandoverTaskStatusForm(props: {
   const statusOptions: HandoverTaskStatus[] = ["open", "blocked", "complete"];
 
   return (
-    <form action={action} className="document-update-form">
+    <form action={action} className={statusRowWrapClassName}>
       <input name="handoverCaseId" type="hidden" value={props.handoverCaseId} />
       <input name="handoverTaskId" type="hidden" value={props.handoverTaskId} />
       <input name="locale" type="hidden" value={props.locale} />
       <input name="returnPath" type="hidden" value={props.returnPath} />
 
-      <select className="select-shell" defaultValue={props.status} disabled={!props.canManage} name="status">
+      <Select defaultValue={props.status} disabled={!props.canManage} name="status">
         {statusOptions.map((statusOption) => (
           <option key={statusOption} value={statusOption}>
             {getHandoverTaskStatusLabel(props.locale, statusOption)}
           </option>
         ))}
-      </select>
+      </Select>
 
       <FormSubmitButton
         disabled={!props.canManage}
@@ -43,7 +43,7 @@ export function HandoverTaskStatusForm(props: {
         pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."}
       />
 
-      <p className={cx("form-feedback", state.status === "error" && "form-feedback-error", state.status === "success" && "form-feedback-success")}>
+      <p className={formFeedbackClassName(state.status)}>
         {state.message}
       </p>
     </form>

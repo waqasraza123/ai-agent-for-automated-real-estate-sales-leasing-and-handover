@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import type { OperatorRole, OperatorWorkspace, SupportedLocale } from "@real-estate-ai/contracts";
-import { Panel, StatusBadge } from "@real-estate-ai/ui";
+import { Panel, StatusBadge, inlineLinkClassName, pageStackClassName, panelSummaryClassName, statusRowWrapClassName } from "@real-estate-ai/ui";
 
 import { getOperatorRoleLabel, getOperatorWorkspaceLabel } from "@/lib/operator-role";
 
@@ -16,13 +16,13 @@ export function WorkspaceAccessPanel(props: {
 }) {
   return (
     <Panel title={props.title}>
-      <div className="page-stack">
-        <p className="panel-summary">{props.summary}</p>
-        <div className="status-row-wrap">
+      <div className={pageStackClassName}>
+        <p className={panelSummaryClassName}>{props.summary}</p>
+        <div className={statusRowWrapClassName}>
           <StatusBadge>{getOperatorRoleLabel(props.locale, props.operatorRole)}</StatusBadge>
           <StatusBadge tone="warning">{getOperatorWorkspaceLabel(props.locale, props.workspace)}</StatusBadge>
         </div>
-        <Link className="inline-link" href={props.actionHref}>
+        <Link className={inlineLinkClassName} href={props.actionHref}>
           {props.actionLabel}
         </Link>
       </div>
