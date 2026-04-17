@@ -528,12 +528,36 @@ function buildRevenueManagerBatchExportSummaryRows(
   const riskPosture = getRevenueManagerExportRiskPosture(locale, scope);
   const scopeLabel = getRevenueManagerExportScopeLabel(locale, options.filters);
   const shareSummary = getRevenueManagerExportShareSummary(locale, scope, options.filters);
+  const recommendationStatus = getRevenueManagerExportRecommendationStatus(locale, options.filters);
+  const recommendationRationale = getRevenueManagerExportRecommendationRationale(locale, scope, options.filters);
+  const comparisonSummary = getRevenueManagerExportComparisonSummary(locale, scope, options.filters);
+  const ownerHandoffContext = getRevenueManagerExportOwnerHandoffContext(locale, scope);
   const rows = [
     [locale === "ar" ? "القسم" : "section", locale === "ar" ? "الحقل" : "field", locale === "ar" ? "القيمة" : "value"],
     [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "أنشئ في" : "generated_at", generatedAt],
     [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "الجمهور المقصود" : "intended_audience", audience],
     [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "وضع المخاطر" : "risk_posture", riskPosture],
     [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "النطاق المختار" : "selected_scope", scopeLabel],
+    [
+      locale === "ar" ? "ملخص التصدير" : "export_summary",
+      locale === "ar" ? "حالة التوصية" : "recommendation_status",
+      recommendationStatus
+    ],
+    [
+      locale === "ar" ? "ملخص التصدير" : "export_summary",
+      locale === "ar" ? "سبب الاختيار" : "selection_rationale",
+      recommendationRationale
+    ],
+    [
+      locale === "ar" ? "ملخص التصدير" : "export_summary",
+      locale === "ar" ? "المقارنة مع النطاق الأوسع" : "scope_comparison",
+      comparisonSummary
+    ],
+    [
+      locale === "ar" ? "ملخص التصدير" : "export_summary",
+      locale === "ar" ? "سياق المالكين الحاليين" : "owner_handoff_context",
+      ownerHandoffContext
+    ],
     [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "خلاصة المشاركة" : "share_summary", shareSummary],
     [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "معرّف الدفعة" : "batch_id", scope.batchScope.batchId],
     [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "حُفظت الدفعة في" : "batch_saved_at", scope.batchScope.savedAt],
@@ -676,6 +700,105 @@ function getRevenueManagerExportShareSummary(
   }
 
   return `This export keeps the full live batch outcome across ${visibleCount} cases, including ${stillEscalatedCount} still escalated and ${clearedCount} now cleared for operational review.`;
+}
+
+function getRevenueManagerExportRecommendationStatus(locale: SupportedLocale, filters?: Partial<RevenueManagerFilters>) {
+  if (locale === "ar") {
+    return filters?.batchDrift || filters?.batchDriftReason ? "نطاق موصى به من تقرير الحوكمة" : "نطاق مراجعة شامل";
+  }
+
+  return filters?.batchDrift || filters?.batchDriftReason
+    ? "Recommended scope from governance report"
+    : "Broad review scope";
+}
+
+function getRevenueManagerExportRecommendationRationale(
+  locale: SupportedLocale,
+  scope: RevenueManagerScope,
+  filters?: Partial<RevenueManagerFilters>
+) {
+  const visibleCount = scope.focusedCases.length;
+
+  if (locale === "ar") {
+    if (filters?.batchDriftReason === "mixed") {
+      return `اختير هذا النطاق لأنه يعزل ${visibleCount} حالات تجمع بين تحديثات متابعة فردية ودفعات جماعية لاحقة، وهي أعلى فئة مخاطرة عند مشاركة أثر الانجراف.`;
+    }
+
+    if (filters?.batchDriftReason === "follow_up_only") {
+      return `اختير هذا النطاق لأنه يحصر الحالات التي انجرفت بسبب تحديثات متابعة فردية فقط، ما يجعله أوضح لتقييم انضباط الملاك الحاليين.`;
+    }
+
+    if (filters?.batchDriftReason === "later_bulk_reset_only") {
+      return `اختير هذا النطاق لأنه يركّز على الحالات التي تأثرت بإعادات ضبط جماعية لاحقة فقط، ما يوضح أثر التدخلات المجمعة بعد الدفعة الأصلية.`;
+    }
+
+    if (filters?.batchDrift === "changed_later") {
+      return `اختير هذا النطاق لأنه يرفع فقط الحالات التي تغيّرت بعد إعادة الضبط الأصلية بدلاً من كامل الدفعة، لتسريع المراجعة التشغيلية على الحالات التي ما زالت تحتاج تفسيراً.`;
+    }
+
+    return `اختير هذا النطاق لأنه يحافظ على الصورة الكاملة للدفعة الحية عندما تكون مراجعة كل الحالات المتأثرة أهم من تضييق سبب الانجراف.`;
+  }
+
+  if (filters?.batchDriftReason === "mixed") {
+    return `This scope was chosen because it isolates ${visibleCount} cases touched by both later follow-up saves and later bulk resets, which is the highest-risk drift pattern to forward outside the product.`;
+  }
+
+  if (filters?.batchDriftReason === "follow_up_only") {
+    return "This scope was chosen because it keeps the export focused on cases drifted only by later individual follow-up saves, making current-owner discipline easier to review.";
+  }
+
+  if (filters?.batchDriftReason === "later_bulk_reset_only") {
+    return "This scope was chosen because it isolates cases changed only by later bulk resets, making repeated batch intervention effects easier to explain.";
+  }
+
+  if (filters?.batchDrift === "changed_later") {
+    return "This scope was chosen because it keeps only the cases that moved after the original bulk reset, instead of forwarding the full batch outcome.";
+  }
+
+  return "This scope was chosen because the full live batch picture is more useful than narrowing to one drift reason.";
+}
+
+function getRevenueManagerExportComparisonSummary(
+  locale: SupportedLocale,
+  scope: RevenueManagerScope,
+  filters?: Partial<RevenueManagerFilters>
+) {
+  const visibleCount = scope.focusedCases.length;
+  const fullScopeCount = scope.batchScope?.caseCount ?? visibleCount;
+  const excludedCount = Math.max(fullScopeCount - visibleCount, 0);
+
+  if (locale === "ar") {
+    if (filters?.batchDriftReason || filters?.batchDrift === "changed_later") {
+      return excludedCount > 0
+        ? `يستبعد هذا النطاق ${excludedCount} حالات من العرض الأوسع حتى يركّز فقط على الحالات التي تفسر سبب التوصية الحالية.`
+        : "لا يستبعد هذا النطاق حالات إضافية من العرض الأوسع، لكنه يحافظ على سبب التوصية الحالي واضحاً داخل الملف.";
+    }
+
+    return "يمثل هذا التصدير النطاق الأوسع نفسه، لذا لا توجد مقارنة أضيق محفوظة داخل الملف الحالي.";
+  }
+
+  if (filters?.batchDriftReason || filters?.batchDrift === "changed_later") {
+    return excludedCount > 0
+      ? `This scope excludes ${excludedCount} cases from the broader batch view so the forwarded file stays focused on the reason it was recommended.`
+      : "This scope does not exclude additional cases from the broader view, but it still preserves the recommendation context for the forwarded file.";
+  }
+
+  return "This export already represents the broadest live batch scope, so no narrower recommendation comparison is embedded here.";
+}
+
+function getRevenueManagerExportOwnerHandoffContext(locale: SupportedLocale, scope: RevenueManagerScope) {
+  const ownerCount = scope.batchOwnerGroups.length;
+  const ownerNames = scope.batchOwnerGroups.map((group) => group.ownerName);
+
+  if (locale === "ar") {
+    return ownerCount <= 1
+      ? `يبقى هذا النطاق تحت مالك حالي واحد: ${ownerNames[0] ?? scope.batchScope?.scopedOwnerName ?? "غير محدد"}.`
+      : `يتوزع هذا النطاق حالياً على ${ownerCount} ملاك: ${ownerNames.join(" | ")}.`;
+  }
+
+  return ownerCount <= 1
+    ? `This scope remains under one current owner: ${ownerNames[0] ?? scope.batchScope?.scopedOwnerName ?? "Unassigned"}.`
+    : `This scope is currently split across ${ownerCount} owners: ${ownerNames.join(" | ")}.`;
 }
 
 function sanitizeOwnerName(ownerName: string | undefined) {

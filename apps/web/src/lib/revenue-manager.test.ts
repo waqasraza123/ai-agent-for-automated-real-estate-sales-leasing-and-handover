@@ -267,6 +267,10 @@ export_summary,generated_at,2026-04-11T12:00:00.000Z
 export_summary,intended_audience,Revenue and operations leadership
 export_summary,risk_posture,Mixed live pressure with cleared cases
 export_summary,selected_scope,Full affected cases
+export_summary,recommendation_status,Broad review scope
+export_summary,selection_rationale,This scope was chosen because the full live batch picture is more useful than narrowing to one drift reason.
+export_summary,scope_comparison,"This export already represents the broadest live batch scope, so no narrower recommendation comparison is embedded here."
+export_summary,owner_handoff_context,This scope is currently split across 2 owners: Manager Desk North | Manager Desk South.
 export_summary,share_summary,"This export keeps the full live batch outcome across 2 cases, including 1 still escalated and 1 now cleared for operational review."
 export_summary,batch_id,33333333-3333-4333-8333-333333333333
 export_summary,batch_saved_at,2026-04-11T11:30:00.000Z
@@ -343,6 +347,32 @@ batchId,batchSavedAt,batchScopedOwnerName,batchVisibleCaseCount,batchStillEscala
       scopedOwnerName: "Revenue Ops Queue",
       stillEscalatedCaseCount: 1
     });
+    expect(
+      buildRevenueManagerBatchExportCsv(scope, {
+        filters: {
+          batchDrift: "changed_later",
+          batchDriftReason: "mixed",
+          bulkBatchId: batchId
+        },
+        generatedAt: "2026-04-11T12:05:00.000Z",
+        locale: "en"
+      })
+    ).toContain(
+      `export_summary,selection_rationale,"This scope was chosen because it isolates 1 cases touched by both later follow-up saves and later bulk resets, which is the highest-risk drift pattern to forward outside the product."`
+    );
+    expect(
+      buildRevenueManagerBatchExportCsv(scope, {
+        filters: {
+          batchDrift: "changed_later",
+          batchDriftReason: "mixed",
+          bulkBatchId: batchId
+        },
+        generatedAt: "2026-04-11T12:05:00.000Z",
+        locale: "en"
+      })
+    ).toContain(
+      "export_summary,scope_comparison,This scope excludes 2 cases from the broader batch view so the forwarded file stays focused on the reason it was recommended."
+    );
   });
 
   it("derives in-product batch history from case detail audit events", () => {
