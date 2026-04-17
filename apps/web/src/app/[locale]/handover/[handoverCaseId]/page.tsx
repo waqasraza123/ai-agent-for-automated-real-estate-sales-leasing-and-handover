@@ -3,7 +3,21 @@ import { notFound } from "next/navigation";
 import { canOperatorRoleAccessWorkspace, canOperatorRolePerform, type SupportedLocale } from "@real-estate-ai/contracts";
 import { getDemoHandoverCaseById, getLocalizedText } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { Panel, StatusBadge } from "@real-estate-ai/ui";
+import {
+  caseMetaClassName,
+  detailGridClassName,
+  detailLabelClassName,
+  documentRowActionsClassName,
+  documentRowClassName,
+  fieldNoteClassName,
+  pageStackClassName,
+  panelSummaryClassName,
+  Panel,
+  rowBetweenClassName,
+  StatusBadge,
+  statusRowWrapClassName,
+  twoColumnGridClassName,
+} from "@real-estate-ai/ui";
 
 import { HandoverAppointmentConfirmationForm } from "@/components/handover-appointment-confirmation-form";
 import { HandoverAppointmentForm } from "@/components/handover-appointment-form";
@@ -60,7 +74,7 @@ export default async function HandoverPage(props: PageProps) {
 
   if (!canOperatorRoleAccessWorkspace("handover", currentOperatorRole)) {
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={messages.handover.title} summary={messages.handover.summary} title={messages.handover.title} />
         <WorkspaceAccessPanel
           actionHref={getPreferredOperatorSurfacePath(locale, currentOperatorRole)}
@@ -128,22 +142,22 @@ export default async function HandoverPage(props: PageProps) {
     const customerUpdateGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_customer_updates");
 
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro
           badge={buildCaseReferenceCode(persistedHandoverCase.handoverCaseId)}
           summary={persistedHandoverCase.readinessSummary}
           title={messages.handover.title}
         />
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={persistedHandoverCase.customerName}>
-            <div className="detail-grid">
+            <div className={detailGridClassName}>
               <div>
-                <p className="detail-label">{messages.common.currentOwner}</p>
+                <p className={detailLabelClassName}>{messages.common.currentOwner}</p>
                 <p>{persistedHandoverCase.ownerName}</p>
               </div>
               <div>
-                <p className="detail-label">{messages.common.stage}</p>
+                <p className={detailLabelClassName}>{messages.common.stage}</p>
                 <StatusBadge
                   tone={
                     persistedHandoverCase.status === "customer_scheduling_ready" ||
@@ -159,36 +173,36 @@ export default async function HandoverPage(props: PageProps) {
                 </StatusBadge>
               </div>
               <div>
-                <p className="detail-label">{locale === "ar" ? "المشروع" : "Project"}</p>
+                <p className={detailLabelClassName}>{locale === "ar" ? "المشروع" : "Project"}</p>
                 <p>{persistedHandoverCase.projectInterest}</p>
               </div>
               <div>
-                <p className="detail-label">{locale === "ar" ? "لغة العميل" : "Customer language"}</p>
+                <p className={detailLabelClassName}>{locale === "ar" ? "لغة العميل" : "Customer language"}</p>
                 <p>{persistedHandoverCase.preferredLocale === "ar" ? "العربية" : "English"}</p>
               </div>
             </div>
           </Panel>
 
           <Panel title={locale === "ar" ? "ملخص الجاهزية" : "Readiness summary"}>
-            <p className="panel-summary">{persistedHandoverCase.readinessSummary}</p>
+            <p className={panelSummaryClassName}>{persistedHandoverCase.readinessSummary}</p>
           </Panel>
         </div>
 
         <Panel title={messages.common.handoverReadiness}>
-          <p className="field-note">{taskGuardNote}</p>
+          <p className={fieldNoteClassName}>{taskGuardNote}</p>
           <StatefulStack
             emptySummary={messages.states.emptyMilestonesSummary}
             emptyTitle={messages.states.emptyMilestonesTitle}
             items={taskItems}
             renderItem={(task) => (
-              <article key={task.taskId} className="document-row document-row-live">
+              <article key={task.taskId} className={documentRowClassName}>
                 <div>
                   <h3>{task.title}</h3>
                   <p>{task.summary}</p>
-                  <p className="case-link-meta">{task.ownerName}</p>
-                  <p className="case-link-meta">{task.dueAt}</p>
+                  <p className={caseMetaClassName}>{task.ownerName}</p>
+                  <p className={caseMetaClassName}>{task.dueAt}</p>
                 </div>
-                <div className="document-row-actions">
+                <div className={documentRowActionsClassName}>
                   <StatusBadge tone={task.statusTone}>{task.statusLabel}</StatusBadge>
                   <HandoverTaskStatusForm
                     canManage={canManageHandoverTasks}
@@ -205,18 +219,18 @@ export default async function HandoverPage(props: PageProps) {
           />
         </Panel>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "تنفيذ يوم التسليم" : "Handover-day execution"}>
-            <div className="page-stack">
-              <p className="panel-summary">
+            <div className={pageStackClassName}>
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "ابدأ حالة التنفيذ الحي بعد اكتمال الجدولة الداخلية وتصفية العوائق المفتوحة، من دون تشغيل أي تكامل خارجي."
                   : "Start the live execution state after internal scheduling is complete and open blockers are cleared, without triggering any external integration."}
               </p>
-              <p className="field-note">{executionGuardNote}</p>
-              <div className="detail-grid">
+              <p className={fieldNoteClassName}>{executionGuardNote}</p>
+              <div className={detailGridClassName}>
                 <div>
-                  <p className="detail-label">{locale === "ar" ? "بدأ التنفيذ" : "Execution started"}</p>
+                  <p className={detailLabelClassName}>{locale === "ar" ? "بدأ التنفيذ" : "Execution started"}</p>
                   <p>
                     {persistedHandoverCase.executionStartedAt
                       ? formatDateTime(persistedHandoverCase.executionStartedAt, locale)
@@ -226,7 +240,7 @@ export default async function HandoverPage(props: PageProps) {
                   </p>
                 </div>
                 <div>
-                  <p className="detail-label">{locale === "ar" ? "العوائق المفتوحة" : "Open blockers"}</p>
+                  <p className={detailLabelClassName}>{locale === "ar" ? "العوائق المفتوحة" : "Open blockers"}</p>
                   <p>{openBlockerItems.length}</p>
                 </div>
               </div>
@@ -242,16 +256,16 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
 
           <Panel title={locale === "ar" ? "الإتمام المضبوط" : "Controlled completion"}>
-            <div className="page-stack">
-              <p className="panel-summary">
+            <div className={pageStackClassName}>
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "أغلق يوم التسليم بملخص إتمام واضح بعد انتهاء التنفيذ ومعالجة العوائق المفتوحة."
                   : "Close the handover day with a clear completion summary after execution finishes and open blockers are resolved."}
               </p>
-              <p className="field-note">{executionGuardNote}</p>
-              <div className="detail-grid">
+              <p className={fieldNoteClassName}>{executionGuardNote}</p>
+              <div className={detailGridClassName}>
                 <div>
-                  <p className="detail-label">{locale === "ar" ? "اكتمل في" : "Completed at"}</p>
+                  <p className={detailLabelClassName}>{locale === "ar" ? "اكتمل في" : "Completed at"}</p>
                   <p>
                     {persistedHandoverCase.completedAt
                       ? formatDateTime(persistedHandoverCase.completedAt, locale)
@@ -261,7 +275,7 @@ export default async function HandoverPage(props: PageProps) {
                   </p>
                 </div>
                 <div>
-                  <p className="detail-label">{locale === "ar" ? "ملخص الإتمام الحالي" : "Current completion summary"}</p>
+                  <p className={detailLabelClassName}>{locale === "ar" ? "ملخص الإتمام الحالي" : "Current completion summary"}</p>
                   <p>
                     {persistedHandoverCase.completionSummary ??
                       (locale === "ar" ? "لم يتم حفظ ملخص الإتمام بعد." : "No completion summary has been saved yet.")}
@@ -281,22 +295,22 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "مراجعة ما بعد التسليم" : "Post-handover review"}>
-            <div className="page-stack">
-              <p className="panel-summary">
+            <div className={pageStackClassName}>
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "بعد اكتمال يوم التسليم، احفظ مراجعة المدير وحدد ما إذا كانت الحالة تحتاج إلى متابعة ما بعد التسليم."
                   : "After the handover day is complete, save the manager review and decide whether the case needs post-handover follow-up."}
               </p>
               {reviewItem ? (
-                <div className="detail-grid">
+                <div className={detailGridClassName}>
                   <div>
-                    <p className="detail-label">{locale === "ar" ? "النتيجة الحالية" : "Current outcome"}</p>
+                    <p className={detailLabelClassName}>{locale === "ar" ? "النتيجة الحالية" : "Current outcome"}</p>
                     <p>{reviewItem.outcomeLabel}</p>
                   </div>
                   <div>
-                    <p className="detail-label">{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
+                    <p className={detailLabelClassName}>{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
                     <p>{reviewItem.updatedAt}</p>
                   </div>
                 </div>
@@ -312,41 +326,41 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
 
           <Panel title={locale === "ar" ? "متابعة ما بعد التسليم" : "Post-handover follow-up"}>
-            <div className="page-stack">
-              <p className="panel-summary">
+            <div className={pageStackClassName}>
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "استخدم هذا الحد إذا كشفت المراجعة المكتملة عن عنصر متابعة لاحق بعد إغلاق يوم التسليم."
                   : "Use this boundary when the completed review reveals an aftercare item that must stay visible after handover closure."}
               </p>
               {postCompletionFollowUpItem ? (
-                <div className="page-stack">
-                  <div className="detail-grid">
+                <div className={pageStackClassName}>
+                  <div className={detailGridClassName}>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "الحالة" : "Status"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "الحالة" : "Status"}</p>
                       <StatusBadge tone={postCompletionFollowUpItem.statusTone}>{postCompletionFollowUpItem.statusLabel}</StatusBadge>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "الموعد" : "Due time"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "الموعد" : "Due time"}</p>
                       <p>{postCompletionFollowUpItem.dueAt}</p>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "المالك" : "Owner"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "المالك" : "Owner"}</p>
                       <p>{postCompletionFollowUpItem.ownerName}</p>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
                       <p>{postCompletionFollowUpItem.updatedAt}</p>
                     </div>
                   </div>
                   <p>{postCompletionFollowUpItem.summary}</p>
                   {postCompletionFollowUpItem.resolutionSummary ? (
-                    <div className="detail-grid">
+                    <div className={detailGridClassName}>
                       <div>
-                        <p className="detail-label">{locale === "ar" ? "ملخص الحل" : "Resolution summary"}</p>
+                        <p className={detailLabelClassName}>{locale === "ar" ? "ملخص الحل" : "Resolution summary"}</p>
                         <p>{postCompletionFollowUpItem.resolutionSummary}</p>
                       </div>
                       <div>
-                        <p className="detail-label">{locale === "ar" ? "أُغلقت في" : "Resolved at"}</p>
+                        <p className={detailLabelClassName}>{locale === "ar" ? "أُغلقت في" : "Resolved at"}</p>
                         <p>{postCompletionFollowUpItem.resolvedAt}</p>
                       </div>
                     </div>
@@ -376,7 +390,7 @@ export default async function HandoverPage(props: PageProps) {
                   ) : null}
                 </>
               ) : (
-                <p className="panel-summary">
+                <p className={panelSummaryClassName}>
                   {locale === "ar"
                     ? "تظهر متابعة ما بعد التسليم بعد حفظ مراجعة تطلب المتابعة على سجل مكتمل."
                     : "Post-handover follow-up opens after a saved review that requires follow-up on a completed record."}
@@ -386,22 +400,22 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "مراجعة الإغلاق الإداري" : "Administrative closure review"}>
-            <div className="page-stack">
-              <p className="panel-summary">
+            <div className={pageStackClassName}>
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "بعد اكتمال السجل وإغلاق أي متابعة مطلوبة، احفظ قرار الإغلاق الإداري لتحديد ما إذا كان السجل جاهزاً للأرشفة أو يحتاج إلى تعليق يدوي."
                   : "Once the handover is complete and any required aftercare is resolved, save the administrative closure decision to mark whether the record is ready to archive or should remain on hold."}
               </p>
               {archiveReviewItem ? (
-                <div className="detail-grid">
+                <div className={detailGridClassName}>
                   <div>
-                    <p className="detail-label">{locale === "ar" ? "النتيجة الحالية" : "Current outcome"}</p>
+                    <p className={detailLabelClassName}>{locale === "ar" ? "النتيجة الحالية" : "Current outcome"}</p>
                     <p>{archiveReviewItem.outcomeLabel}</p>
                   </div>
                   <div>
-                    <p className="detail-label">{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
+                    <p className={detailLabelClassName}>{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
                     <p>{archiveReviewItem.updatedAt}</p>
                   </div>
                 </div>
@@ -415,7 +429,7 @@ export default async function HandoverPage(props: PageProps) {
                   summary={archiveReviewItem?.summary ?? ""}
                 />
               ) : (
-                <p className="panel-summary">
+                <p className={panelSummaryClassName}>
                   {locale === "ar"
                     ? "تظهر مراجعة الأرشفة بعد اكتمال السجل الأساسي وحفظ مراجعة المدير وإغلاق أي متابعة مطلوبة."
                     : "The archive review opens after completion, a saved manager review, and any required post-handover follow-up resolution."}
@@ -425,24 +439,24 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
 
           <Panel title={locale === "ar" ? "حالة الأرشفة الإدارية" : "Administrative archive status"}>
-            <div className="page-stack">
-              <p className="panel-summary">
+            <div className={pageStackClassName}>
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "هذه الحدود لا تشغل أي نظام أرشفة خارجي، لكنها تجعل قرار الإغلاق الإداري مرئياً: تعليق، جاهز للأرشفة، ثم مؤرشف."
                   : "This boundary does not trigger any external archiving system. It simply makes administrative closure visible as held, ready to archive, and then archived."}
               </p>
               {archiveStatusItem ? (
-                <div className="detail-grid">
+                <div className={detailGridClassName}>
                   <div>
-                    <p className="detail-label">{locale === "ar" ? "الحالة الحالية" : "Current status"}</p>
+                    <p className={detailLabelClassName}>{locale === "ar" ? "الحالة الحالية" : "Current status"}</p>
                     <StatusBadge tone={archiveStatusItem.statusTone}>{archiveStatusItem.statusLabel}</StatusBadge>
                   </div>
                   <div>
-                    <p className="detail-label">{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
+                    <p className={detailLabelClassName}>{locale === "ar" ? "آخر تحديث" : "Last updated"}</p>
                     <p>{archiveStatusItem.updatedAt}</p>
                   </div>
                   <div className="field-span-full">
-                    <p className="detail-label">{locale === "ar" ? "الملخص الحالي" : "Current summary"}</p>
+                    <p className={detailLabelClassName}>{locale === "ar" ? "الملخص الحالي" : "Current summary"}</p>
                     <p>{archiveStatusItem.summary}</p>
                   </div>
                 </div>
@@ -457,7 +471,7 @@ export default async function HandoverPage(props: PageProps) {
                   summary={archiveStatusItem?.summary ?? archiveReviewItem.summary}
                 />
               ) : (
-                <p className="panel-summary">
+                <p className={panelSummaryClassName}>
                   {locale === "ar"
                     ? "تظهر حالة الأرشفة بعد حفظ مراجعة الإغلاق الإداري على السجل المكتمل."
                     : "Archive status becomes available after the administrative closure review is saved on the completed record."}
@@ -467,27 +481,27 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "الموعد الداخلي" : "Internal appointment"}>
-            <div className="page-stack">
-              <p className="field-note">{appointmentGuardNote}</p>
+            <div className={pageStackClassName}>
+              <p className={fieldNoteClassName}>{appointmentGuardNote}</p>
               {appointmentItem ? (
-                <div className="page-stack">
-                  <div className="detail-grid">
+                <div className={pageStackClassName}>
+                  <div className={detailGridClassName}>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "الموقع" : "Location"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "الموقع" : "Location"}</p>
                       <p>{appointmentItem.location}</p>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "الحالة" : "Status"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "الحالة" : "Status"}</p>
                       <StatusBadge tone={appointmentItem.statusTone}>{appointmentItem.statusLabel}</StatusBadge>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "منسق التسليم" : "Coordinator"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "منسق التسليم" : "Coordinator"}</p>
                       <p>{appointmentItem.coordinatorName}</p>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "الموعد" : "Scheduled time"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "الموعد" : "Scheduled time"}</p>
                       <p>{appointmentItem.scheduledAt}</p>
                     </div>
                   </div>
@@ -503,8 +517,8 @@ export default async function HandoverPage(props: PageProps) {
                   />
                 </div>
               ) : (
-                <div className="page-stack">
-                  <p className="panel-summary">
+                <div className={pageStackClassName}>
+                  <p className={panelSummaryClassName}>
                     {locale === "ar"
                       ? "لن يتم حفظ الموعد الداخلي حتى تصبح حدود الجدولة معتمدة ويصبح السجل جاهزاً للجدولة."
                       : "The internal appointment stays unavailable until the scheduling boundary is approved and the record is ready for scheduling."}
@@ -526,13 +540,13 @@ export default async function HandoverPage(props: PageProps) {
 
           <Panel title={locale === "ar" ? "تأكيد الموعد" : "Appointment confirmation"}>
             {appointmentItem ? (
-              <div className="page-stack">
-                <p className="panel-summary">
+              <div className={pageStackClassName}>
+                <p className={panelSummaryClassName}>
                   {locale === "ar"
                     ? "يتطلب هذا التأكيد اعتماد حد تأكيد الموعد أولاً، لكنه لا يطلق أي رسالة حقيقية إلى العميل."
                     : "This confirmation requires the appointment-confirmation boundary first, and still does not trigger any real outbound message."}
                 </p>
-                <p className="field-note">{appointmentGuardNote}</p>
+                <p className={fieldNoteClassName}>{appointmentGuardNote}</p>
                 <HandoverAppointmentConfirmationForm
                   appointmentId={appointmentItem.appointmentId}
                   canManage={canManageAppointments}
@@ -544,7 +558,7 @@ export default async function HandoverPage(props: PageProps) {
                 />
               </div>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "سيظهر تأكيد الموعد بعد حفظ موعد داخلي فعلي."
                   : "Appointment confirmation appears after a real internal appointment has been planned."}
@@ -553,31 +567,31 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "تجهيز الإرسال" : "Delivery preparation"}>
             {appointmentConfirmationUpdate ? (
-              <div className="page-stack">
-                <p className="panel-summary">
+              <div className={pageStackClassName}>
+                <p className={panelSummaryClassName}>
                   {locale === "ar"
                     ? "هذه الخطوة تحفظ صياغة التأكيد المعتمدة كرسالة جاهزة للإرسال لاحقاً من دون تشغيل أي قناة فعلية."
                     : "This stores the approved confirmation as outbound-ready content for later dispatch without triggering any live channel."}
                 </p>
-                <p className="field-note">{customerUpdateGuardNote}</p>
+                <p className={fieldNoteClassName}>{customerUpdateGuardNote}</p>
                 {appointmentConfirmationUpdate.deliverySummary ? (
-                  <div className="detail-grid">
+                  <div className={detailGridClassName}>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "ملخص التجهيز" : "Delivery summary"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "ملخص التجهيز" : "Delivery summary"}</p>
                       <p>{appointmentConfirmationUpdate.deliverySummary}</p>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "تم التجهيز في" : "Prepared at"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "تم التجهيز في" : "Prepared at"}</p>
                       <p>{appointmentConfirmationUpdate.deliveryPreparedAt}</p>
                     </div>
                   </div>
                 ) : null}
                 {appointmentConfirmationQaReview ? (
-                  <div className="page-stack">
-                    <div className="status-row-wrap">
+                  <div className={pageStackClassName}>
+                    <div className={statusRowWrapClassName}>
                       <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
                         {appointmentConfirmationQaReview.reviewStatusLabel}
                       </StatusBadge>
@@ -601,7 +615,7 @@ export default async function HandoverPage(props: PageProps) {
                 />
               </div>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "سيظهر تجهيز الإرسال بعد إنشاء حد تأكيد الموعد في هذا السجل."
                   : "Delivery preparation appears after the appointment-confirmation boundary exists on this record."}
@@ -611,28 +625,28 @@ export default async function HandoverPage(props: PageProps) {
 
           <Panel title={locale === "ar" ? "جاهزية الإرسال" : "Dispatch readiness"}>
             {appointmentConfirmationUpdate ? (
-              <div className="page-stack">
-                <p className="panel-summary">
+              <div className={pageStackClassName}>
+                <p className={panelSummaryClassName}>
                   {locale === "ar"
                     ? "هذه الخطوة لا ترسل أي رسالة، لكنها ترفع سجل التسليم إلى حالة مجدولة داخلياً بمجرد اكتمال التجهيز."
                     : "This still does not send anything, but it promotes the handover record into an internally scheduled state once preparation is complete."}
                 </p>
-                <p className="field-note">{customerUpdateGuardNote}</p>
+                <p className={fieldNoteClassName}>{customerUpdateGuardNote}</p>
                 {appointmentConfirmationUpdate.dispatchReadyAt ? (
-                  <div className="detail-grid">
+                  <div className={detailGridClassName}>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "جاهز للإرسال منذ" : "Ready since"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "جاهز للإرسال منذ" : "Ready since"}</p>
                       <p>{appointmentConfirmationUpdate.dispatchReadyAt}</p>
                     </div>
                     <div>
-                      <p className="detail-label">{locale === "ar" ? "حالة الحد" : "Boundary status"}</p>
+                      <p className={detailLabelClassName}>{locale === "ar" ? "حالة الحد" : "Boundary status"}</p>
                       <StatusBadge tone={appointmentConfirmationUpdate.statusTone}>{appointmentConfirmationUpdate.statusLabel}</StatusBadge>
                     </div>
                   </div>
                 ) : null}
                 {appointmentConfirmationQaReview ? (
-                  <div className="page-stack">
-                    <div className="status-row-wrap">
+                  <div className={pageStackClassName}>
+                    <div className={statusRowWrapClassName}>
                       <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
                         {appointmentConfirmationQaReview.reviewStatusLabel}
                       </StatusBadge>
@@ -653,7 +667,7 @@ export default async function HandoverPage(props: PageProps) {
                 />
               </div>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "ستظهر جاهزية الإرسال بعد تجهيز حد تأكيد الموعد."
                   : "Dispatch readiness appears after the appointment-confirmation update is prepared."}
@@ -662,15 +676,15 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "عوائق التنفيذ" : "Execution blockers"}>
-            <div className="page-stack">
-              <p className="panel-summary">
+            <div className={pageStackClassName}>
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "بعد وصول السجل إلى حالة مجدولة، استخدم هذا القسم لإبقاء الـ snag والعوائق الميدانية مرئية قبل التنفيذ الفعلي."
                   : "Once the record reaches the scheduled boundary, use this section to keep snags and field blockers visible before live execution."}
               </p>
-              <p className="field-note">{blockerGuardNote}</p>
+              <p className={fieldNoteClassName}>{blockerGuardNote}</p>
               <StatefulStack
                 emptySummary={
                   locale === "ar"
@@ -680,21 +694,21 @@ export default async function HandoverPage(props: PageProps) {
                 emptyTitle={locale === "ar" ? "لا توجد عوائق" : "No blockers"}
                 items={blockerItems}
                 renderItem={(blocker) => (
-                  <article key={blocker.blockerId} className="document-row document-row-live">
+                  <article key={blocker.blockerId} className={documentRowClassName}>
                     <div>
-                      <div className="row-between">
+                      <div className={rowBetweenClassName}>
                         <h3>{blocker.title}</h3>
-                        <div className="row-between">
+                        <div className={rowBetweenClassName}>
                           <StatusBadge tone={blocker.severityTone}>{blocker.severityLabel}</StatusBadge>
                           <StatusBadge tone={blocker.statusTone}>{blocker.statusLabel}</StatusBadge>
                         </div>
                       </div>
                       <p>{blocker.typeDetail}</p>
                       <p>{blocker.summary}</p>
-                      <p className="case-link-meta">{blocker.ownerName}</p>
-                      <p className="case-link-meta">{blocker.dueAt}</p>
+                      <p className={caseMetaClassName}>{blocker.ownerName}</p>
+                      <p className={caseMetaClassName}>{blocker.dueAt}</p>
                     </div>
-                    <div className="document-row-actions">
+                    <div className={documentRowActionsClassName}>
                       <HandoverBlockerStatusForm
                         blockerId={blocker.blockerId}
                         canManage={canManageBlockers}
@@ -723,7 +737,7 @@ export default async function HandoverPage(props: PageProps) {
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                 />
               ) : (
-                <p className="panel-summary">
+                <p className={panelSummaryClassName}>
                   {locale === "ar"
                     ? "سيفتح تسجيل عوائق التنفيذ بعد انتقال السجل إلى حالة التسليم المجدولة."
                     : "Execution blocker logging opens after the handover record reaches the scheduled boundary."}
@@ -733,24 +747,24 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
 
           <Panel title={locale === "ar" ? "خطة المحطات" : "Milestone plan"}>
-            <div className="page-stack">
-              <p className="field-note">{milestoneGuardNote}</p>
+            <div className={pageStackClassName}>
+              <p className={fieldNoteClassName}>{milestoneGuardNote}</p>
               <StatefulStack
                 emptySummary={locale === "ar" ? "لم يتم إنشاء أي محطات بعد." : "No handover milestones have been planned yet."}
                 emptyTitle={locale === "ar" ? "لا توجد محطات" : "No milestones"}
                 items={milestoneItems}
                 renderItem={(milestone) => (
-                  <article key={milestone.milestoneId} className="document-row document-row-live">
+                  <article key={milestone.milestoneId} className={documentRowClassName}>
                     <div>
-                      <div className="row-between">
+                      <div className={rowBetweenClassName}>
                         <h3>{milestone.title}</h3>
                         <StatusBadge tone={milestone.statusTone}>{milestone.statusLabel}</StatusBadge>
                       </div>
                       <p>{milestone.summary}</p>
-                      <p className="case-link-meta">{milestone.ownerName}</p>
-                      <p className="case-link-meta">{milestone.targetAt}</p>
+                      <p className={caseMetaClassName}>{milestone.ownerName}</p>
+                      <p className={caseMetaClassName}>{milestone.targetAt}</p>
                     </div>
-                    <div className="document-row-actions">
+                    <div className={documentRowActionsClassName}>
                       <HandoverMilestoneForm
                         canManage={canManageMilestones}
                         disabledLabel={locale === "ar" ? "يتطلب دور تنسيق التسليم" : "Handover coordination role required"}
@@ -770,8 +784,8 @@ export default async function HandoverPage(props: PageProps) {
           </Panel>
 
           <Panel title={locale === "ar" ? "حدود تواصل العميل" : "Customer-update boundaries"}>
-            <div className="page-stack">
-              <p className="field-note">{customerUpdateGuardNote}</p>
+            <div className={pageStackClassName}>
+              <p className={fieldNoteClassName}>{customerUpdateGuardNote}</p>
               <StatefulStack
                 emptySummary={
                   locale === "ar"
@@ -781,24 +795,24 @@ export default async function HandoverPage(props: PageProps) {
                 emptyTitle={locale === "ar" ? "لا توجد حدود" : "No update boundaries"}
                 items={customerUpdateItems}
                 renderItem={(customerUpdate) => (
-                  <article key={customerUpdate.customerUpdateId} className="document-row document-row-live">
+                  <article key={customerUpdate.customerUpdateId} className={documentRowClassName}>
                     <div>
-                      <div className="row-between">
+                      <div className={rowBetweenClassName}>
                         <h3>{customerUpdate.title}</h3>
                         <StatusBadge tone={customerUpdate.statusTone}>{customerUpdate.statusLabel}</StatusBadge>
                       </div>
                       <p>{customerUpdate.summary}</p>
                       {customerUpdate.qaReviewStatus !== "not_required" ? (
-                        <div className="status-row-wrap">
+                        <div className={statusRowWrapClassName}>
                           <StatusBadge tone={customerUpdate.qaReviewStatusTone}>{customerUpdate.qaReviewStatusLabel}</StatusBadge>
                           {customerUpdate.qaPolicySignalLabels.map((label) => (
                             <StatusBadge key={label}>{label}</StatusBadge>
                           ))}
                         </div>
                       ) : null}
-                      <p className="case-link-meta">{customerUpdate.updatedAt}</p>
+                      <p className={caseMetaClassName}>{customerUpdate.updatedAt}</p>
                     </div>
-                    <div className="document-row-actions">
+                    <div className={documentRowActionsClassName}>
                       <HandoverCustomerUpdateApprovalForm
                         canManage={canManageCustomerUpdates}
                         customerUpdateId={customerUpdate.customerUpdateId}
@@ -828,7 +842,7 @@ export default async function HandoverPage(props: PageProps) {
   }
 
   return (
-    <div className="page-stack">
+    <div className={pageStackClassName}>
       <ScreenIntro
         badge={messages.common.handoverReadiness}
         summary={getLocalizedText(handoverCase.readinessLabel, locale)}
@@ -842,7 +856,7 @@ export default async function HandoverPage(props: PageProps) {
           items={handoverCase.milestones}
           renderItem={(milestone) => (
             <article key={milestone.id} className="milestone-card">
-              <div className="row-between">
+              <div className={rowBetweenClassName}>
                 <div>
                   <h3>{getLocalizedText(milestone.title, locale)}</h3>
                   <p>{getLocalizedText(milestone.detail, locale)}</p>

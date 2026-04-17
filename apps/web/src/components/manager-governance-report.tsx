@@ -9,7 +9,27 @@ import {
   type PersistedGovernanceSummary,
   type SupportedLocale
 } from "@real-estate-ai/contracts";
-import { EmptyState, Panel, StatusBadge } from "@real-estate-ai/ui";
+import {
+  cx,
+  dataTableCellClassName,
+  dataTableClassName,
+  dataTableHeaderCellClassName,
+  dataTableWrapperClassName,
+  EmptyState,
+  fieldNoteClassName,
+  inlineLinkClassName,
+  MetricTile,
+  pageStackClassName,
+  panelSummaryClassName,
+  Panel,
+  stackTightClassName,
+  StatusBadge,
+  statusRowWrapClassName,
+  tableLinkClassName,
+  tableLinkMetaClassName,
+  tableLinkTitleClassName,
+  twoColumnGridClassName
+} from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
 import type { ExportRecipient } from "@/lib/export-summary";
@@ -50,7 +70,7 @@ export function ManagerGovernanceReport(props: {
     : [];
 
   return (
-    <div className="page-stack">
+    <div className={pageStackClassName}>
       <ScreenIntro
         badge={props.locale === "ar" ? "تقرير الحوكمة" : "Governance report"}
         summary={
@@ -62,13 +82,13 @@ export function ManagerGovernanceReport(props: {
       />
 
       <Panel title={props.locale === "ar" ? "نطاق التقرير الحالي" : "Current report scope"}>
-        <div className="page-stack">
-          <p className="panel-summary">
+        <div className={pageStackClassName}>
+          <p className={panelSummaryClassName}>
             {props.locale === "ar"
               ? `يعمل التقرير بدور ${activeRoleLabel} مع نافذة ${props.filters.windowDays} يوماً وحد أقصى ${props.filters.limit} حدثاً مفصلاً.`
               : `The report is running as ${activeRoleLabel}, scoped to the last ${props.filters.windowDays} days with up to ${props.filters.limit} detailed events.`}
           </p>
-          <div className="status-row-wrap">
+          <div className={statusRowWrapClassName}>
             <StatusBadge>{activeRoleLabel}</StatusBadge>
             <StatusBadge>{props.locale === "ar" ? `${props.filters.windowDays} أيام` : `${props.filters.windowDays} days`}</StatusBadge>
             <StatusBadge>{props.locale === "ar" ? `${props.filters.limit} حدثاً` : `${props.filters.limit} events`}</StatusBadge>
@@ -80,94 +100,109 @@ export function ManagerGovernanceReport(props: {
         </div>
       </Panel>
 
-      <div className="metric-grid">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {showQaHistory ? (
-          <article className="metric-tile metric-tile-rose">
-            <p className="metric-label">{props.locale === "ar" ? "حدود مفتوحة الآن" : "Open governance holds"}</p>
-            <p className="metric-value">{currentOpenCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "عدد العناصر التي ما زالت عالقة في حدود الجودة الحية."
-                : "Items that are still sitting inside a live governance boundary."}
-            </p>
-          </article>
+                : "Items that are still sitting inside a live governance boundary."
+            }
+            label={props.locale === "ar" ? "حدود مفتوحة الآن" : "Open governance holds"}
+            tone="rose"
+            value={String(currentOpenCount)}
+          />
         ) : null}
         {showQaHistory ? (
-          <article className="metric-tile metric-tile-sand">
-            <p className="metric-label">{props.locale === "ar" ? "فتحات النافذة الحالية" : "Opened in window"}</p>
-            <p className="metric-value">{openedCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "كل فتحات الجودة المسجلة داخل نافذة التقرير الحالية."
-                : "All governance openings captured inside the active reporting window."}
-            </p>
-          </article>
+                : "All governance openings captured inside the active reporting window."
+            }
+            label={props.locale === "ar" ? "فتحات النافذة الحالية" : "Opened in window"}
+            tone="sand"
+            value={String(openedCount)}
+          />
         ) : null}
         {showQaHistory ? (
-          <article className="metric-tile metric-tile-mint">
-            <p className="metric-label">{props.locale === "ar" ? "حسم النافذة الحالية" : "Resolved in window"}</p>
-            <p className="metric-value">{resolvedCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "القرارات التي أغلقت حدود الجودة خلال نفس النافذة."
-                : "Decisions that resolved governance boundaries during the same window."}
-            </p>
-          </article>
+                : "Decisions that resolved governance boundaries during the same window."
+            }
+            label={props.locale === "ar" ? "حسم النافذة الحالية" : "Resolved in window"}
+            tone="mint"
+            value={String(resolvedCount)}
+          />
         ) : null}
         {showQaHistory ? (
-          <article className="metric-tile">
-            <p className="metric-label">{props.locale === "ar" ? "الأحداث المطابقة للفلاتر" : "Events matching filters"}</p>
-            <p className="metric-value">{filteredCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "إجمالي السجل المطابق بعد تطبيق الفلاتر الحالية قبل التصدير."
-                : "Filtered event count after the current scope is applied, before export."}
-            </p>
-          </article>
+                : "Filtered event count after the current scope is applied, before export."
+            }
+            label={props.locale === "ar" ? "الأحداث المطابقة للفلاتر" : "Events matching filters"}
+            tone="ocean"
+            value={String(filteredCount)}
+          />
         ) : null}
         {showOperationalRisk ? (
-          <article className="metric-tile metric-tile-ocean">
-            <p className="metric-label">{props.locale === "ar" ? "تسليمات متصاعدة بعد الرد" : "Escalated reply handoffs"}</p>
-            <p className="metric-value">{props.operationalRiskSummary.totalEscalatedReplyHandoffCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "حالات حيّة انتقل فيها الرد البشري إلى مالك جديد ثم أصبحت متأخرة أو محملة بتدخلات مفتوحة."
-                : "Live cases where a human reply was handed to a new owner and that handoff is now overdue or intervention-backed."}
-            </p>
-          </article>
+                : "Live cases where a human reply was handed to a new owner and that handoff is now overdue or intervention-backed."
+            }
+            label={props.locale === "ar" ? "تسليمات متصاعدة بعد الرد" : "Escalated reply handoffs"}
+            tone="ocean"
+            value={String(props.operationalRiskSummary.totalEscalatedReplyHandoffCount)}
+          />
         ) : null}
         {showOperationalRisk ? (
-          <article className="metric-tile metric-tile-sand">
-            <p className="metric-label">{props.locale === "ar" ? "دفعات المتابعة مع انجراف" : "Bulk batches with drift"}</p>
-            <p className="metric-value">{props.operationalRiskSummary.batchesWithDriftCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "الدفعات الحديثة التي تغيّرت فيها الحالات لاحقاً بعد إعادة الضبط الجماعية الأصلية."
-                : "Recent bulk batches where affected cases picked up later follow-up changes after the original reset."}
-            </p>
-          </article>
+                : "Recent bulk batches where affected cases picked up later follow-up changes after the original reset."
+            }
+            label={props.locale === "ar" ? "دفعات المتابعة مع انجراف" : "Bulk batches with drift"}
+            tone="sand"
+            value={String(props.operationalRiskSummary.batchesWithDriftCount)}
+          />
         ) : null}
         {showOperationalRisk ? (
-          <article className="metric-tile">
-            <p className="metric-label">{props.locale === "ar" ? "تغيّرات لاحقة مرئية" : "Visible later changes"}</p>
-            <p className="metric-value">{props.operationalRiskSummary.driftedCaseCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "عدد الحالات داخل أحدث الدفعات التي حملت تحديث متابعة أو إعادة ضبط جماعية لاحقة."
-                : "Affected cases across the recent visible batches that later received another follow-up update or bulk reset."}
-            </p>
-          </article>
+                : "Affected cases across the recent visible batches that later received another follow-up update or bulk reset."
+            }
+            label={props.locale === "ar" ? "تغيّرات لاحقة مرئية" : "Visible later changes"}
+            tone="ocean"
+            value={String(props.operationalRiskSummary.driftedCaseCount)}
+          />
         ) : null}
         {showOperationalRisk ? (
-          <article className="metric-tile metric-tile-mint">
-            <p className="metric-label">{props.locale === "ar" ? "مزيج أسباب الانجراف" : "Drift reason mix"}</p>
-            <p className="metric-value">{props.operationalRiskSummary.mixedReasonDriftCaseCount}</p>
-            <p className="metric-detail">
-              {props.locale === "ar"
-                ? "حالات انجرفت بسبب تحديث متابعة فردي وإعادة ضبط جماعية لاحقة معاً داخل الدفعات الحديثة المرئية."
-                : "Drifted cases in the recent visible batches that were changed by both later individual follow-up saves and later bulk resets."}
-            </p>
-            <div className="status-row-wrap">
+          <div className="flex min-h-44 flex-col justify-between rounded-4xl border border-brand-100/90 bg-gradient-to-b from-brand-50 to-white p-5 shadow-panel transition duration-300 hover:-translate-y-0.5 hover:shadow-panel-lg">
+            <div className={pageStackClassName}>
+              <div>
+                <p className="text-xs font-semibold tracking-[0.18em] text-ink-soft">
+                  {props.locale === "ar" ? "مزيج أسباب الانجراف" : "Drift reason mix"}
+                </p>
+                <p className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-ink">
+                  {props.operationalRiskSummary.mixedReasonDriftCaseCount}
+                </p>
+              </div>
+              <p className="text-sm leading-7 text-ink-soft">
+                {props.locale === "ar"
+                  ? "حالات انجرفت بسبب تحديث متابعة فردي وإعادة ضبط جماعية لاحقة معاً داخل الدفعات الحديثة المرئية."
+                  : "Drifted cases in the recent visible batches that were changed by both later individual follow-up saves and later bulk resets."}
+              </p>
+            </div>
+            <div className={statusRowWrapClassName}>
               {props.operationalRiskSummary.followUpUpdateOnlyDriftCaseCount > 0 ? (
                 <StatusBadge>
                   {props.locale === "ar"
@@ -190,13 +225,13 @@ export function ManagerGovernanceReport(props: {
                 </StatusBadge>
               ) : null}
             </div>
-          </article>
+          </div>
         ) : null}
       </div>
 
-      <div className="two-column-grid">
+      <div className={twoColumnGridClassName}>
         <Panel title={props.locale === "ar" ? "فلاتر سريعة" : "Quick filters"}>
-          <div className="page-stack">
+          <div className={pageStackClassName}>
             <FilterTabs
               activeValue={props.view}
               locale={props.locale}
@@ -393,8 +428,8 @@ export function ManagerGovernanceReport(props: {
         </Panel>
 
         <Panel title={props.locale === "ar" ? "التصدير والاستخدام" : "Export and usage"}>
-          <div className="page-stack">
-            <p className="panel-summary">
+          <div className={pageStackClassName}>
+            <p className={panelSummaryClassName}>
               {props.view === "operational_risk"
                 ? props.locale === "ar"
                   ? "وضع مخاطر التشغيل يعرض ضغط التسليمات الحية فقط. تصدير CSV على مستوى التقرير يبقى مخصصاً لسجل أحداث الجودة التاريخي، بينما توفّر صفوف الدفعات أدناه تصدير الحالات الحية الدقيقة لكل نطاق دفعة."
@@ -403,7 +438,7 @@ export function ManagerGovernanceReport(props: {
                   ? "نزّل نفس النطاق الحالي كملف CSV لمشاركته مع التشغيل أو المراجعة اليومية دون فقدان سياق الإشارات أو الأدلة."
                   : "Download the current filtered scope as CSV for operations review without losing policy signals, evidence, or reviewer context."}
             </p>
-            <div className="status-row-wrap">
+            <div className={statusRowWrapClassName}>
               <StatusBadge>{props.view === "operational_risk" ? (props.locale === "ar" ? "عرض حي" : "Live view") : props.locale === "ar" ? "CSV جاهز" : "CSV export ready"}</StatusBadge>
               <StatusBadge>
                 {props.view === "operational_risk"
@@ -446,18 +481,18 @@ export function ManagerGovernanceReport(props: {
               title={props.locale === "ar" ? "المستلم الافتراضي للتصدير" : "Default export recipient"}
             />
             {showQaHistory ? (
-              <div className="page-stack">
+              <div className={pageStackClassName}>
                 {exportOptions.map((option) => (
-                  <div key={`report-export:${option.recipient}`} className="stack-tight">
-                    <Link className="inline-link" href={option.href}>
+                  <div key={`report-export:${option.recipient}`} className={stackTightClassName}>
+                    <Link className={inlineLinkClassName} href={option.href}>
                       {getGovernanceExportOptionLabel(props.locale, option.recipient)}
                     </Link>
-                    <span className="field-note">{getGovernanceExportOptionSummary(props.locale, option.recipient)}</span>
+                    <span className={fieldNoteClassName}>{getGovernanceExportOptionSummary(props.locale, option.recipient)}</span>
                   </div>
                 ))}
               </div>
             ) : null}
-            <Link className="inline-link" href={`/${props.locale}/manager`}>
+            <Link className={inlineLinkClassName} href={`/${props.locale}/manager`}>
               {props.locale === "ar" ? "العودة إلى بوابة الإدارة" : "Return to the manager gateway"}
             </Link>
           </div>
@@ -467,49 +502,49 @@ export function ManagerGovernanceReport(props: {
       {showOperationalRisk ? (
       <Panel title={props.locale === "ar" ? "أولويات التصدير المقترحة" : "Recommended export priorities"}>
         {props.operationalRiskSummary.exportCandidates.length > 0 ? (
-          <div className="page-stack">
-            <p className="panel-summary">
+          <div className={pageStackClassName}>
+            <p className={panelSummaryClassName}>
               {props.locale === "ar"
                 ? "يعرض هذا الملخص أي نطاقات CSV الحية تستحق السحب أولاً قبل فتح صفوف الدفعات، اعتماداً على حجم الانجراف وتعقيد سببه والحالات التي ما زالت متصاعدة."
                 : "This summary ranks which live CSV scopes are worth pulling first before opening batch rows, based on visible drift volume, drift complexity, and cases that are still escalated."}
             </p>
-            <div className="lead-table-wrapper">
-              <table className="lead-table">
+            <div className={dataTableWrapperClassName}>
+              <table className={dataTableClassName}>
                 <thead>
                   <tr>
-                    <th>{props.locale === "ar" ? "الأولوية" : "Priority"}</th>
-                    <th>{props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}</th>
-                    <th>{props.locale === "ar" ? "الحجم" : "Volume"}</th>
-                    <th>{props.locale === "ar" ? "الإجراء" : "Action"}</th>
+                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الأولوية" : "Priority"}</th>
+                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}</th>
+                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الحجم" : "Volume"}</th>
+                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الإجراء" : "Action"}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {props.operationalRiskSummary.exportCandidates.map((candidate) => (
                     <tr key={`${candidate.batchId}:${candidate.scope}`}>
-                      <td data-column-label={props.locale === "ar" ? "الأولوية" : "Priority"}>
-                        <div className="stack-tight">
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الأولوية" : "Priority"}>
+                        <div className={stackTightClassName}>
                           <StatusBadge tone={getExportCandidateTone(candidate.priority)}>
                             {getExportCandidatePriorityLabel(props.locale, candidate.priority)}
                           </StatusBadge>
                           <span>{formatDateTime(candidate.savedAt, props.locale)}</span>
                         </div>
                       </td>
-                      <td data-column-label={props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}>
-                        <div className="table-link">
-                          <strong>{getOperationalRiskExportScopeLabel(props.locale, candidate.scope)}</strong>
-                          <span>
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}>
+                        <div className={tableLinkClassName}>
+                          <strong className={tableLinkTitleClassName}>{getOperationalRiskExportScopeLabel(props.locale, candidate.scope)}</strong>
+                          <span className={tableLinkMetaClassName}>
                             {props.locale === "ar"
                               ? `دفعة ${candidate.scopedOwnerName}`
                               : `${candidate.scopedOwnerName} batch`}
                           </span>
-                          <span>{getExportCandidateJustification(props.locale, candidate)}</span>
+                          <span className={tableLinkMetaClassName}>{getExportCandidateJustification(props.locale, candidate)}</span>
                           {candidate.comparisonToNext ? (
-                            <span>{getExportCandidateComparisonLabel(props.locale, candidate)}</span>
+                            <span className={tableLinkMetaClassName}>{getExportCandidateComparisonLabel(props.locale, candidate)}</span>
                           ) : null}
                         </div>
                       </td>
-                      <td data-column-label={props.locale === "ar" ? "الحجم" : "Volume"}>
-                        <div className="stack-tight">
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الحجم" : "Volume"}>
+                        <div className={stackTightClassName}>
                           <StatusBadge tone={candidate.caseCount > 0 ? "warning" : "neutral"}>
                             {props.locale === "ar"
                               ? `${candidate.caseCount} حالات`
@@ -522,19 +557,19 @@ export function ManagerGovernanceReport(props: {
                           </StatusBadge>
                         </div>
                       </td>
-                      <td data-column-label={props.locale === "ar" ? "الإجراء" : "Action"}>
-                        <div className="stack-tight">
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الإجراء" : "Action"}>
+                        <div className={stackTightClassName}>
                           {(["manager", "operations", "qa"] as const).map((recipient) => (
                             <Link
                               key={`${candidate.batchId}:${candidate.scope}:${recipient}`}
-                              className="inline-link"
+                              className={inlineLinkClassName}
                               href={buildOperationalRiskExportHref(props.locale, candidate, recipient)}
                             >
                               {getOperationalRiskExportLinkLabel(props.locale, recipient)}
                             </Link>
                           ))}
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildOperationalRiskDrillDownHref(props.locale, candidate)}
                           >
                             {props.locale === "ar" ? "فتح نفس النطاق" : "Open same scope"}
@@ -563,29 +598,29 @@ export function ManagerGovernanceReport(props: {
       {showOperationalRisk ? (
       <Panel title={props.locale === "ar" ? "ضغط تسليمات الردود" : "Reply handoff pressure"}>
         {props.operationalRiskSummary.owners.length > 0 ? (
-          <div className="lead-table-wrapper">
-            <table className="lead-table">
+          <div className={dataTableWrapperClassName}>
+            <table className={dataTableClassName}>
               <thead>
                 <tr>
-                  <th>{props.locale === "ar" ? "المالك الحالي" : "Current owner"}</th>
-                  <th>{props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}</th>
-                  <th>{props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}</th>
-                  <th>{props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "المالك الحالي" : "Current owner"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}</th>
                 </tr>
               </thead>
               <tbody>
                 {props.operationalRiskSummary.owners.map((owner) => (
                   <tr key={owner.ownerName}>
-                    <td data-column-label={props.locale === "ar" ? "المالك الحالي" : "Current owner"}>
-                      <div className="table-link">
-                        <strong>{owner.ownerName}</strong>
-                        <span>
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "المالك الحالي" : "Current owner"}>
+                      <div className={tableLinkClassName}>
+                        <strong className={tableLinkTitleClassName}>{owner.ownerName}</strong>
+                        <span className={tableLinkMetaClassName}>
                           {props.locale === "ar"
                             ? `${owner.overdueHandoffCount} تسليمات متأخرة`
                             : `${owner.overdueHandoffCount} overdue handoffs`}
                         </span>
                         <Link
-                          className="inline-link"
+                          className={inlineLinkClassName}
                           href={buildRevenueManagerHref(
                             props.locale,
                             {
@@ -599,22 +634,22 @@ export function ManagerGovernanceReport(props: {
                         </Link>
                       </div>
                     </td>
-                    <td data-column-label={props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}>
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}>
                       <StatusBadge tone="warning">
                         {props.locale === "ar"
                           ? `${owner.escalatedHandoffCount} حالات`
                           : `${owner.escalatedHandoffCount} cases`}
                       </StatusBadge>
                     </td>
-                    <td data-column-label={props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}>
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}>
                       <StatusBadge tone={owner.openInterventionsCount > 0 ? "warning" : "success"}>
                         {props.locale === "ar"
                           ? `${owner.openInterventionsCount} تدخلات`
                           : `${owner.openInterventionsCount} interventions`}
                       </StatusBadge>
                     </td>
-                    <td data-column-label={props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}>
-                      <div className="status-row-wrap">
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}>
+                      <div className={statusRowWrapClassName}>
                         {owner.latestSenderNames.map((senderName) => (
                           <StatusBadge key={`${owner.ownerName}:${senderName}`}>{senderName}</StatusBadge>
                         ))}
@@ -641,42 +676,42 @@ export function ManagerGovernanceReport(props: {
       {showOperationalRisk ? (
       <Panel title={props.locale === "ar" ? "نتائج المتابعة الجماعية الأخيرة" : "Recent bulk follow-up results"}>
         {props.operationalRiskSummary.bulkBatches.length > 0 ? (
-          <div className="lead-table-wrapper">
-            <table className="lead-table">
+          <div className={dataTableWrapperClassName}>
+            <table className={dataTableClassName}>
               <thead>
                 <tr>
-                  <th>{props.locale === "ar" ? "الدفعة" : "Batch"}</th>
-                  <th>{props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}</th>
-                  <th>{props.locale === "ar" ? "النتيجة الحالية" : "Current result"}</th>
-                  <th>{props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}</th>
-                  <th>{props.locale === "ar" ? "المسار" : "Route"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الدفعة" : "Batch"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "النتيجة الحالية" : "Current result"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "المسار" : "Route"}</th>
                 </tr>
               </thead>
               <tbody>
                 {props.operationalRiskSummary.bulkBatches.map((batch) => (
                   <tr key={batch.batchId}>
-                    <td data-column-label={props.locale === "ar" ? "الدفعة" : "Batch"}>
-                      <div className="table-link">
-                        <strong>{formatDateTime(batch.savedAt, props.locale)}</strong>
-                        <span>
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الدفعة" : "Batch"}>
+                      <div className={tableLinkClassName}>
+                        <strong className={tableLinkTitleClassName}>{formatDateTime(batch.savedAt, props.locale)}</strong>
+                        <span className={tableLinkMetaClassName}>
                           {props.locale === "ar"
                             ? `${batch.caseCount} حالات في الدفعة`
                             : `${batch.caseCount} cases in batch`}
                         </span>
                       </div>
                     </td>
-                    <td data-column-label={props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}>
-                      <div className="stack-tight">
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}>
+                      <div className={stackTightClassName}>
                         <StatusBadge>{batch.scopedOwnerName}</StatusBadge>
-                        <div className="status-row-wrap">
+                        <div className={statusRowWrapClassName}>
                           {batch.currentOwnerNames.map((ownerName) => (
                             <StatusBadge key={`${batch.batchId}:${ownerName}`}>{ownerName}</StatusBadge>
                           ))}
                         </div>
                       </div>
                     </td>
-                    <td data-column-label={props.locale === "ar" ? "النتيجة الحالية" : "Current result"}>
-                      <div className="stack-tight">
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "النتيجة الحالية" : "Current result"}>
+                      <div className={stackTightClassName}>
                         <StatusBadge tone={batch.stillEscalatedCaseCount > 0 ? "warning" : "success"}>
                           {props.locale === "ar"
                             ? `${batch.stillEscalatedCaseCount} ما زالت متصاعدة`
@@ -689,15 +724,15 @@ export function ManagerGovernanceReport(props: {
                         </StatusBadge>
                       </div>
                     </td>
-                    <td data-column-label={props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}>
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}>
                       {batch.drift ? (
-                        <div className="stack-tight">
+                        <div className={stackTightClassName}>
                           <StatusBadge tone={batch.drift.casesWithLaterChangesCount > 0 ? "warning" : "success"}>
                             {props.locale === "ar"
                               ? `${batch.drift.casesWithLaterChangesCount} تغيّرت لاحقاً`
                               : `${batch.drift.casesWithLaterChangesCount} changed later`}
                           </StatusBadge>
-                          <div className="status-row-wrap">
+                          <div className={statusRowWrapClassName}>
                             <StatusBadge>{props.locale === "ar" ? `${batch.drift.casesWithHistoryCount} بسجل` : `${batch.drift.casesWithHistoryCount} with history`}</StatusBadge>
                             {batch.drift.postBatchFollowUpUpdateCount > 0 ? (
                               <StatusBadge>
@@ -740,11 +775,11 @@ export function ManagerGovernanceReport(props: {
                         <StatusBadge>{props.locale === "ar" ? "لا يوجد انجراف مرئي" : "No visible drift"}</StatusBadge>
                       )}
                     </td>
-                    <td data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
-                      <div className="stack-tight">
+                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
+                      <div className={stackTightClassName}>
                         {batch.drift && batch.drift.casesWithLaterChangesCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerHref(
                               props.locale,
                               {
@@ -759,7 +794,7 @@ export function ManagerGovernanceReport(props: {
                         ) : null}
                         {batch.drift && batch.drift.casesWithLaterChangesCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerExportHref(props.locale, {
                               batchDrift: "changed_later",
                               bulkBatchId: batch.batchId
@@ -770,7 +805,7 @@ export function ManagerGovernanceReport(props: {
                         ) : null}
                         {batch.drift && batch.drift.followUpUpdateOnlyCaseCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerHref(
                               props.locale,
                               {
@@ -786,7 +821,7 @@ export function ManagerGovernanceReport(props: {
                         ) : null}
                         {batch.drift && batch.drift.followUpUpdateOnlyCaseCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerExportHref(props.locale, {
                               batchDrift: "changed_later",
                               batchDriftReason: "follow_up_only",
@@ -798,7 +833,7 @@ export function ManagerGovernanceReport(props: {
                         ) : null}
                         {batch.drift && batch.drift.laterBulkResetOnlyCaseCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerHref(
                               props.locale,
                               {
@@ -814,7 +849,7 @@ export function ManagerGovernanceReport(props: {
                         ) : null}
                         {batch.drift && batch.drift.laterBulkResetOnlyCaseCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerExportHref(props.locale, {
                               batchDrift: "changed_later",
                               batchDriftReason: "later_bulk_reset_only",
@@ -826,7 +861,7 @@ export function ManagerGovernanceReport(props: {
                         ) : null}
                         {batch.drift && batch.drift.mixedReasonCaseCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerHref(
                               props.locale,
                               {
@@ -842,7 +877,7 @@ export function ManagerGovernanceReport(props: {
                         ) : null}
                         {batch.drift && batch.drift.mixedReasonCaseCount > 0 ? (
                           <Link
-                            className="inline-link"
+                            className={inlineLinkClassName}
                             href={buildRevenueManagerExportHref(props.locale, {
                               batchDrift: "changed_later",
                               batchDriftReason: "mixed",
@@ -853,7 +888,7 @@ export function ManagerGovernanceReport(props: {
                           </Link>
                         ) : null}
                         <Link
-                          className="inline-link"
+                          className={inlineLinkClassName}
                           href={buildRevenueManagerHref(
                             props.locale,
                             {
@@ -865,7 +900,7 @@ export function ManagerGovernanceReport(props: {
                           {props.locale === "ar" ? "فتح كامل الحالات المتأثرة" : "Open full affected cases"}
                         </Link>
                         <Link
-                          className="inline-link"
+                          className={inlineLinkClassName}
                           href={buildRevenueManagerExportHref(props.locale, {
                             bulkBatchId: batch.batchId
                           }, { recipient: props.exportRecipient })}
@@ -895,15 +930,15 @@ export function ManagerGovernanceReport(props: {
       {showQaHistory ? (
       <Panel title={props.locale === "ar" ? "سجل أحداث الحوكمة" : "Governance event log"}>
         {props.governanceEvents && props.governanceEvents.items.length > 0 ? (
-          <div className="lead-table-wrapper">
-            <table className="lead-table">
+          <div className={dataTableWrapperClassName}>
+            <table className={dataTableClassName}>
               <thead>
                 <tr>
-                  <th>{props.locale === "ar" ? "الحدث" : "Event"}</th>
-                  <th>{props.locale === "ar" ? "الحالة" : "Status"}</th>
-                  <th>{props.locale === "ar" ? "السياق" : "Context"}</th>
-                  <th>{props.locale === "ar" ? "الأثر" : "Impact"}</th>
-                  <th>{props.locale === "ar" ? "المسار" : "Route"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الحدث" : "Event"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الحالة" : "Status"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "السياق" : "Context"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الأثر" : "Impact"}</th>
+                  <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "المسار" : "Route"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -912,18 +947,18 @@ export function ManagerGovernanceReport(props: {
 
                   return (
                     <tr key={`${event.caseId}:${event.createdAt}:${event.action}:${event.subjectType ?? "unknown"}`}>
-                      <td data-column-label={props.locale === "ar" ? "الحدث" : "Event"}>
-                        <div className="table-link">
-                          <strong>{event.customerName}</strong>
-                          <span>{buildCaseReferenceCode(event.caseId)}</span>
-                          <span>{formatDateTime(event.createdAt, props.locale)}</span>
-                          <span>
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الحدث" : "Event"}>
+                        <div className={tableLinkClassName}>
+                          <strong className={tableLinkTitleClassName}>{event.customerName}</strong>
+                          <span className={tableLinkMetaClassName}>{buildCaseReferenceCode(event.caseId)}</span>
+                          <span className={tableLinkMetaClassName}>{formatDateTime(event.createdAt, props.locale)}</span>
+                          <span className={tableLinkMetaClassName}>
                             {getActionLabel(props.locale, event.action)} · {getKindLabel(props.locale, event.kind)}
                           </span>
                         </div>
                       </td>
-                      <td data-column-label={props.locale === "ar" ? "الحالة" : "Status"}>
-                        <div className="stack-tight">
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الحالة" : "Status"}>
+                        <div className={stackTightClassName}>
                           <StatusBadge tone={getStatusTone(event.status)}>{getStatusLabel(props.locale, event.status)}</StatusBadge>
                           <StatusBadge>{getSubjectLabel(props.locale, event.subjectType)}</StatusBadge>
                           {event.triggerSource ? (
@@ -931,16 +966,16 @@ export function ManagerGovernanceReport(props: {
                           ) : null}
                         </div>
                       </td>
-                      <td data-column-label={props.locale === "ar" ? "السياق" : "Context"}>
-                        <div className="stack-tight">
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "السياق" : "Context"}>
+                        <div className={stackTightClassName}>
                           <p>{event.reviewSummary ?? event.sampleSummary ?? (props.locale === "ar" ? "لا يوجد ملخص إضافي." : "No additional summary.")}</p>
                           {event.draftMessage ? <span>{event.draftMessage}</span> : null}
                         </div>
                       </td>
-                      <td data-column-label={props.locale === "ar" ? "الأثر" : "Impact"}>
-                        <div className="stack-tight">
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الأثر" : "Impact"}>
+                        <div className={stackTightClassName}>
                           {event.policySignals.length > 0 ? (
-                            <div className="status-row-wrap">
+                            <div className={statusRowWrapClassName}>
                               {event.policySignals.slice(0, 2).map((signal) => (
                                 <StatusBadge key={`${event.caseId}:${event.createdAt}:${signal}`}>{signal}</StatusBadge>
                               ))}
@@ -955,9 +990,9 @@ export function ManagerGovernanceReport(props: {
                           )}
                         </div>
                       </td>
-                      <td data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
-                        <div className="stack-tight">
-                          <Link className="inline-link" href={routeLink.href}>
+                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
+                        <div className={stackTightClassName}>
+                          <Link className={inlineLinkClassName} href={routeLink.href}>
                             {routeLink.label}
                           </Link>
                           {event.handoverCaseId ? <span>{event.handoverCaseId}</span> : null}
@@ -996,13 +1031,18 @@ function FilterTabs(props: {
   title: string;
 }) {
   return (
-    <div className="page-stack">
-      <p className="panel-summary">{props.title}</p>
-      <div className="case-route-tabs">
+    <div className={pageStackClassName}>
+      <p className={panelSummaryClassName}>{props.title}</p>
+      <div className="flex flex-wrap items-center gap-2 rounded-full border border-canvas-line/80 bg-white/80 p-1 shadow-panel">
         {props.options.map((option) => (
           <Link
             key={`${props.title}:${option.value}`}
-            className={option.value === props.activeValue ? "case-route-tab case-route-tab-active" : "case-route-tab"}
+            className={cx(
+              "inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition",
+              option.value === props.activeValue
+                ? "bg-brand-600 text-white shadow-brand-glow"
+                : "text-ink-soft hover:bg-brand-50 hover:text-brand-700"
+            )}
             href={option.href}
           >
             {option.label}
