@@ -5,7 +5,17 @@ import Link from "next/link";
 import { canOperatorRoleAccessWorkspace, canOperatorRolePerform } from "@real-estate-ai/contracts";
 import { getDemoCaseById, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { Panel, StatusBadge } from "@real-estate-ai/ui";
+import {
+  caseMetaClassName,
+  inlineLinkClassName,
+  pageStackClassName,
+  Panel,
+  panelSummaryClassName,
+  rowBetweenClassName,
+  StatusBadge,
+  statusRowWrapClassName,
+  twoColumnGridClassName
+} from "@real-estate-ai/ui";
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
 import { CaseManualReplyForm } from "@/components/case-manual-reply-form";
@@ -34,7 +44,7 @@ export default async function ConversationPage(props: PageProps) {
 
   if (!canOperatorRoleAccessWorkspace("sales", currentOperatorRole)) {
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={messages.conversation.title} summary={messages.conversation.summary} title={messages.conversation.title} />
         <WorkspaceAccessPanel
           actionHref={getPreferredOperatorSurfacePath(locale, currentOperatorRole)}
@@ -97,14 +107,14 @@ export default async function ConversationPage(props: PageProps) {
         : "A human reply cannot be saved while the current QA review is still open or requires follow-up.";
 
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.conversation.summary} title={messages.conversation.title} />
         <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
 
         {qaReviewDisplay ? (
           <Panel title={locale === "ar" ? "حالة التحكم البشري" : "Human takeover state"}>
-            <div className="page-stack">
-              <div className="status-row-wrap">
+            <div className="mt-4 space-y-4">
+              <div className={statusRowWrapClassName}>
                 <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge>
                 <StatusBadge>{qaReviewDisplay.subjectTypeLabel}</StatusBadge>
                 <StatusBadge>{qaReviewDisplay.triggerSourceLabel}</StatusBadge>
@@ -112,69 +122,73 @@ export default async function ConversationPage(props: PageProps) {
                   <StatusBadge key={label}>{label}</StatusBadge>
                 ))}
               </div>
-              <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
-              {qaReviewDisplay.draftMessage ? <p className="case-link-meta">{qaReviewDisplay.draftMessage}</p> : null}
+              <p className="text-sm leading-7 text-ink-soft">{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
+              {qaReviewDisplay.draftMessage ? <p className={caseMetaClassName}>{qaReviewDisplay.draftMessage}</p> : null}
             </div>
           </Panel>
         ) : null}
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={manualReplyCopy.title}>
-            <p className="panel-summary">{manualReplyCopy.summary}</p>
-            {!canSendReplies ? <p className="field-note">{sendReplyGuardNote}</p> : null}
-            <CaseManualReplyForm
-              canSend={canSendHumanReply}
-              caseId={persistedCase.caseId}
-              defaultMessage={hasApprovedReplyDraft ? currentReplyDraft?.draftMessage : null}
-              defaultNextAction={persistedCase.nextAction}
-              defaultNextActionDueAt={persistedCase.nextActionDueAt}
-              defaultSentByName={persistedCase.ownerName}
-              disabledLabel={replySendDisabledLabel}
-              locale={locale}
-              returnPath={`/${locale}/leads/${persistedCase.caseId}/conversation`}
-              showApprovedDraftNote={hasApprovedReplyDraft}
-            />
+            <div className="mt-4 space-y-4">
+              <p className={panelSummaryClassName}>{manualReplyCopy.summary}</p>
+              {!canSendReplies ? <p className="text-sm leading-7 text-ink-soft">{sendReplyGuardNote}</p> : null}
+              <CaseManualReplyForm
+                canSend={canSendHumanReply}
+                caseId={persistedCase.caseId}
+                defaultMessage={hasApprovedReplyDraft ? currentReplyDraft?.draftMessage : null}
+                defaultNextAction={persistedCase.nextAction}
+                defaultNextActionDueAt={persistedCase.nextActionDueAt}
+                defaultSentByName={persistedCase.ownerName}
+                disabledLabel={replySendDisabledLabel}
+                locale={locale}
+                returnPath={`/${locale}/leads/${persistedCase.caseId}/conversation`}
+                showApprovedDraftNote={hasApprovedReplyDraft}
+              />
+            </div>
           </Panel>
 
           <Panel title={replyDraftCopy.title}>
-            <p className="panel-summary">{replyDraftCopy.summary}</p>
-            <p className="field-note">{qaSamplingGuardNote}</p>
-            <CaseReplyDraftQaRequestForm
-              canManage={canManageQaSampling && qaReviewDisplay?.status !== "pending_review"}
-              caseId={persistedCase.caseId}
-              defaultDraftMessage={currentReplyDraft?.draftMessage ?? null}
-              defaultRequestedByName={persistedCase.ownerName}
-              disabledLabel={locale === "ar" ? "يتطلب دوراً مخولاً للجودة" : "QA sampling role required"}
-              locale={locale}
-              returnPath={`/${locale}/leads/${persistedCase.caseId}/conversation`}
-            />
+            <div className="mt-4 space-y-4">
+              <p className={panelSummaryClassName}>{replyDraftCopy.summary}</p>
+              <p className="text-sm leading-7 text-ink-soft">{qaSamplingGuardNote}</p>
+              <CaseReplyDraftQaRequestForm
+                canManage={canManageQaSampling && qaReviewDisplay?.status !== "pending_review"}
+                caseId={persistedCase.caseId}
+                defaultDraftMessage={currentReplyDraft?.draftMessage ?? null}
+                defaultRequestedByName={persistedCase.ownerName}
+                disabledLabel={locale === "ar" ? "يتطلب دوراً مخولاً للجودة" : "QA sampling role required"}
+                locale={locale}
+                returnPath={`/${locale}/leads/${persistedCase.caseId}/conversation`}
+              />
+            </div>
           </Panel>
 
           <Panel title={locale === "ar" ? "حالة مسودة الرد" : "Reply-draft state"}>
             {currentReplyDraft ? (
-              <div className="page-stack">
-                <div className="row-between">
-                  <h3>{currentReplyDraft.subjectTypeLabel}</h3>
+              <div className="mt-4 space-y-4">
+                <div className={rowBetweenClassName}>
+                  <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{currentReplyDraft.subjectTypeLabel}</h3>
                   <StatusBadge tone={currentReplyDraft.statusTone}>{currentReplyDraft.statusLabel}</StatusBadge>
                 </div>
-                <div className="status-row-wrap">
+                <div className={statusRowWrapClassName}>
                   <StatusBadge>{currentReplyDraft.triggerSourceLabel}</StatusBadge>
                   {qaReviewDisplay?.policySignalLabels.map((label) => (
                     <StatusBadge key={label}>{label}</StatusBadge>
                   ))}
                 </div>
-                <p>{currentReplyDraft.draftMessage}</p>
-                <p>{currentReplyDraft.reviewSummary ?? currentReplyDraft.sampleSummary}</p>
-                {currentReplyDraft.triggerEvidence.length > 0 ? <p className="case-link-meta">{currentReplyDraft.triggerEvidence.join(", ")}</p> : null}
-                <p className="case-link-meta">{currentReplyDraft.updatedAt}</p>
+                <p className="text-sm leading-7 text-ink-soft">{currentReplyDraft.draftMessage}</p>
+                <p className="text-sm leading-7 text-ink-soft">{currentReplyDraft.reviewSummary ?? currentReplyDraft.sampleSummary}</p>
+                {currentReplyDraft.triggerEvidence.length > 0 ? <p className={caseMetaClassName}>{currentReplyDraft.triggerEvidence.join(", ")}</p> : null}
+                <p className={caseMetaClassName}>{currentReplyDraft.updatedAt}</p>
                 {canAccessQaWorkspace ? (
-                  <Link className="inline-link" href={`/${locale}/qa/cases/${persistedCase.caseId}`}>
+                  <Link className={inlineLinkClassName} href={`/${locale}/qa/cases/${persistedCase.caseId}`}>
                     {locale === "ar" ? "فتح سجل الجودة" : "Open QA record"}
                   </Link>
                 ) : null}
               </div>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "لا توجد حالياً مسودة رد محفوظة داخل حدود اعتماد الجودة."
                   : "No prepared reply draft is currently sitting inside the QA approval boundary."}
@@ -197,7 +211,7 @@ export default async function ConversationPage(props: PageProps) {
   }
 
   return (
-    <div className="page-stack">
+    <div className={pageStackClassName}>
       <ScreenIntro badge={caseItem.referenceCode} summary={messages.conversation.summary} title={messages.conversation.title} />
       <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
 

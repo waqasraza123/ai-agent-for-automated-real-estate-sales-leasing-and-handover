@@ -3,7 +3,17 @@ import { notFound } from "next/navigation";
 import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 import { getDemoCaseById, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { Panel, StatusBadge } from "@real-estate-ai/ui";
+import {
+  caseStackCardClassName,
+  detailLabelClassName,
+  pageStackClassName,
+  Panel,
+  panelSummaryClassName,
+  slotCardClassName,
+  slotGridClassName,
+  StatusBadge,
+  twoColumnGridClassName
+} from "@real-estate-ai/ui";
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
@@ -29,7 +39,7 @@ export default async function SchedulePage(props: PageProps) {
 
   if (!canOperatorRoleAccessWorkspace("sales", currentOperatorRole)) {
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={messages.schedule.title} summary={messages.schedule.summary} title={messages.schedule.title} />
         <WorkspaceAccessPanel
           actionHref={getPreferredOperatorSurfacePath(locale, currentOperatorRole)}
@@ -52,18 +62,18 @@ export default async function SchedulePage(props: PageProps) {
 
   if (persistedCase) {
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.schedule.summary} title={messages.schedule.title} />
         <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={messages.common.visitReadiness}>
             {persistedCase.currentVisit ? (
-              <div className="stack-list">
-                <div className="case-stack-card">
-                  <p className="detail-label">{formatDateTime(persistedCase.currentVisit.scheduledAt, locale)}</p>
-                  <h3>{persistedCase.currentVisit.location}</h3>
-                  <p>
+              <div className="mt-4">
+                <div className={caseStackCardClassName}>
+                  <p className={detailLabelClassName}>{formatDateTime(persistedCase.currentVisit.scheduledAt, locale)}</p>
+                  <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{persistedCase.currentVisit.location}</h3>
+                  <p className="text-sm leading-7 text-ink-soft">
                     {locale === "ar"
                       ? "تم ربط الحالة بزيارة محفوظة داخل المسار الحي ويمكن للإدارة متابعتها من شاشة الحالة."
                       : "The case now has a persisted visit that managers can inspect directly from the live alpha workflow."}
@@ -71,7 +81,7 @@ export default async function SchedulePage(props: PageProps) {
                 </div>
               </div>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "لا توجد زيارة محفوظة بعد. استخدم النموذج المجاور لتحديد أول موعد فعلي."
                   : "No visit has been scheduled yet. Use the adjacent form to save the first live appointment."}
@@ -80,7 +90,9 @@ export default async function SchedulePage(props: PageProps) {
           </Panel>
 
           <Panel title={messages.schedule.title}>
-            <VisitSchedulingForm caseId={persistedCase.caseId} locale={locale} returnPath={`/${locale}/leads/${persistedCase.caseId}/schedule`} />
+            <div className="mt-4">
+              <VisitSchedulingForm caseId={persistedCase.caseId} locale={locale} returnPath={`/${locale}/leads/${persistedCase.caseId}/schedule`} />
+            </div>
           </Panel>
         </div>
       </div>
@@ -94,22 +106,24 @@ export default async function SchedulePage(props: PageProps) {
   }
 
   return (
-    <div className="page-stack">
+    <div className={pageStackClassName}>
       <ScreenIntro badge={caseItem.referenceCode} summary={messages.schedule.summary} title={messages.schedule.title} />
       <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
 
-      <div className="two-column-grid">
+      <div className={twoColumnGridClassName}>
         <Panel title={messages.common.visitReadiness}>
-          <p className="detail-label">{caseItem.visitPlan.scheduledAt}</p>
-          <h3>{caseItem.customerName}</h3>
-          <p>{caseItem.visitPlan.location[locale]}</p>
-          <p>{caseItem.visitPlan.readinessNote[locale]}</p>
+          <div className="mt-4 space-y-3">
+            <p className={detailLabelClassName}>{caseItem.visitPlan.scheduledAt}</p>
+            <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{caseItem.customerName}</h3>
+            <p className="text-sm leading-7 text-ink-soft">{caseItem.visitPlan.location[locale]}</p>
+            <p className="text-sm leading-7 text-ink-soft">{caseItem.visitPlan.readinessNote[locale]}</p>
+          </div>
         </Panel>
 
         <Panel title={messages.schedule.title}>
-          <div className="slot-grid">
+          <div className={slotGridClassName}>
             {caseItem.visitPlan.suggestedSlots.map((slot) => (
-              <div key={slot} className="slot-card">
+              <div key={slot} className={slotCardClassName}>
                 <span>{slot}</span>
                 <StatusBadge tone="success">{messages.common.demoState}</StatusBadge>
               </div>

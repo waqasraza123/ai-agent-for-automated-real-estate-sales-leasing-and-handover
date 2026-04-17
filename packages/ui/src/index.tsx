@@ -63,8 +63,13 @@ export const messageMetaClassName = "text-xs text-ink-muted [unicode-bidi:plaint
 export const timelineListClassName = "flex flex-col gap-4";
 export const timelineItemClassName = "rounded-4xl border border-canvas-line/80 bg-canvas-raised/95 p-5 shadow-panel";
 export const detailListClassName = "grid gap-4 rounded-4xl border border-canvas-line/80 bg-canvas-raised/95 p-5 shadow-panel sm:grid-cols-2";
+export const detailGridClassName = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";
 export const detailLabelClassName = "text-xs font-semibold tracking-[0.18em] text-ink-soft";
 export const detailValueClassName = "mt-1 text-sm leading-7 text-ink";
+export const documentRowClassName =
+  "rounded-4xl border border-canvas-line/80 bg-canvas-raised/95 p-5 shadow-panel transition duration-300 ease-out sm:flex sm:items-start sm:justify-between sm:gap-4";
+export const documentRowActionsClassName = "mt-4 flex flex-wrap items-center gap-2 sm:mt-0 sm:justify-end";
+export const slotGridClassName = "grid gap-3 sm:grid-cols-2";
 export const dataTableWrapperClassName = "overflow-x-auto";
 export const dataTableClassName = "min-w-[62rem] w-full border-separate border-spacing-0";
 export const dataTableHeadClassName = "border-b border-canvas-line/80";

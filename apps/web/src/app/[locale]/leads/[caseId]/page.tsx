@@ -4,7 +4,24 @@ import { notFound } from "next/navigation";
 import { canOperatorRoleAccessWorkspace, canOperatorRolePerform, type SupportedLocale } from "@real-estate-ai/contracts";
 import { getDemoCaseById, getLocalizedText } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
-import { Panel, StatusBadge } from "@real-estate-ai/ui";
+import {
+  caseMetaClassName,
+  caseStackCardClassName,
+  criticalAlertCardClassName,
+  detailGridClassName,
+  detailLabelClassName,
+  detailListClassName,
+  inlineLinkClassName,
+  pageStackClassName,
+  Panel,
+  panelSummaryClassName,
+  rowBetweenClassName,
+  stackTightClassName,
+  StatusBadge,
+  statusRowWrapClassName,
+  successCardClassName,
+  twoColumnGridClassName
+} from "@real-estate-ai/ui";
 
 import { AutomationStatusForm } from "@/components/automation-status-form";
 import { CaseRouteTabs } from "@/components/case-route-tabs";
@@ -59,7 +76,7 @@ export default async function LeadProfilePage(props: PageProps) {
 
   if (!canOperatorRoleAccessWorkspace("sales", currentOperatorRole)) {
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={messages.profile.title} summary={messages.profile.summary} title={messages.profile.title} />
         <WorkspaceAccessPanel
           actionHref={getPreferredOperatorSurfacePath(locale, currentOperatorRole)}
@@ -125,39 +142,39 @@ export default async function LeadProfilePage(props: PageProps) {
     );
 
     return (
-      <div className="page-stack">
+      <div className={pageStackClassName}>
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={persistedCase.message} title={messages.profile.title} />
         <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={persistedCase.customerName}>
-            <div className="detail-grid">
+            <div className={detailGridClassName}>
               <div>
-                <p className="detail-label">{messages.common.stage}</p>
+                <p className={detailLabelClassName}>{messages.common.stage}</p>
                 <StatusBadge>{getPersistedCaseStageLabel(locale, persistedCase.stage)}</StatusBadge>
               </div>
               <div>
-                <p className="detail-label">{messages.common.currentOwner}</p>
-                <p>{persistedCase.ownerName}</p>
+                <p className={detailLabelClassName}>{messages.common.currentOwner}</p>
+                <p className="text-sm leading-7 text-ink">{persistedCase.ownerName}</p>
               </div>
               <div>
-                <p className="detail-label">{messages.common.nextAction}</p>
-                <p>{persistedCase.nextAction}</p>
+                <p className={detailLabelClassName}>{messages.common.nextAction}</p>
+                <p className="text-sm leading-7 text-ink">{persistedCase.nextAction}</p>
               </div>
               <div>
-                <p className="detail-label">{locale === "ar" ? "موعد المتابعة" : "Follow-up due"}</p>
-                <p>{formatDueAt(persistedCase, locale)}</p>
+                <p className={detailLabelClassName}>{locale === "ar" ? "موعد المتابعة" : "Follow-up due"}</p>
+                <p className="text-sm leading-7 text-ink">{formatDueAt(persistedCase, locale)}</p>
               </div>
               <div>
-                <p className="detail-label">{messages.common.lastChange}</p>
-                <p>{formatCaseLastChange(persistedCase, locale)}</p>
+                <p className={detailLabelClassName}>{messages.common.lastChange}</p>
+                <p className="text-sm leading-7 text-ink">{formatCaseLastChange(persistedCase, locale)}</p>
               </div>
               <div>
-                <p className="detail-label">{locale === "ar" ? "مصدر الحالة" : "Lead source"}</p>
-                <p>{getPersistedSourceLabel(locale)}</p>
+                <p className={detailLabelClassName}>{locale === "ar" ? "مصدر الحالة" : "Lead source"}</p>
+                <p className="text-sm leading-7 text-ink">{getPersistedSourceLabel(locale)}</p>
               </div>
             </div>
-            <div className="status-row-wrap">
+            <div className={`mt-5 ${statusRowWrapClassName}`}>
               <StatusBadge tone={persistedCase.followUpStatus === "attention" ? "critical" : "success"}>
                 {getPersistedFollowUpLabel(locale, persistedCase)}
               </StatusBadge>
@@ -167,47 +184,48 @@ export default async function LeadProfilePage(props: PageProps) {
                 <StatusBadge tone="warning">{getInterventionCountLabel(locale, persistedCase.openInterventionsCount)}</StatusBadge>
               ) : null}
             </div>
-            <div className="case-callout">
+            <div className="mt-5 rounded-4xl border border-brand-100/80 bg-brand-50/70 p-4 text-sm leading-7 text-ink-soft">
               <p>{persistedCase.budget ?? persistedCase.projectInterest}</p>
               <p>{persistedCase.projectInterest}</p>
             </div>
           </Panel>
 
           <Panel title={locale === "ar" ? "التفاصيل الأساسية" : "Core intake details"}>
-            <dl className="detail-list">
+            <dl className={detailListClassName}>
               <div>
-                <dt>{locale === "ar" ? "البريد الإلكتروني" : "Email"}</dt>
-                <dd>{persistedCase.email}</dd>
+                <dt className={detailLabelClassName}>{locale === "ar" ? "البريد الإلكتروني" : "Email"}</dt>
+                <dd className="mt-1 text-sm leading-7 text-ink">{persistedCase.email}</dd>
               </div>
               <div>
-                <dt>{locale === "ar" ? "الهاتف" : "Phone"}</dt>
-                <dd>{persistedCase.phone ?? "—"}</dd>
+                <dt className={detailLabelClassName}>{locale === "ar" ? "الهاتف" : "Phone"}</dt>
+                <dd className="mt-1 text-sm leading-7 text-ink">{persistedCase.phone ?? "—"}</dd>
               </div>
               <div>
-                <dt>{locale === "ar" ? "المشروع المطلوب" : "Project interest"}</dt>
-                <dd>{persistedCase.projectInterest}</dd>
+                <dt className={detailLabelClassName}>{locale === "ar" ? "المشروع المطلوب" : "Project interest"}</dt>
+                <dd className="mt-1 text-sm leading-7 text-ink">{persistedCase.projectInterest}</dd>
               </div>
               <div>
-                <dt>{locale === "ar" ? "لغة العميل" : "Customer language"}</dt>
-                <dd>{persistedCase.preferredLocale === "ar" ? "العربية" : "English"}</dd>
+                <dt className={detailLabelClassName}>{locale === "ar" ? "لغة العميل" : "Customer language"}</dt>
+                <dd className="mt-1 text-sm leading-7 text-ink">{persistedCase.preferredLocale === "ar" ? "العربية" : "English"}</dd>
               </div>
             </dl>
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={followUpManagerCopy.title}>
-            <p className="panel-summary">{followUpManagerCopy.summary}</p>
-            <p className="field-note">{followUpGuardNote}</p>
+            <div className="mt-4 space-y-4">
+              <p className={panelSummaryClassName}>{followUpManagerCopy.summary}</p>
+              <p className="text-sm leading-7 text-ink-soft">{followUpGuardNote}</p>
             {persistedCase.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
-              <div className="page-stack">
+              <div className="space-y-3">
                 <StatusBadge>{latestManagerFollowUpLabel}</StatusBadge>
-                <p className="field-note">
+                <p className="text-sm leading-7 text-ink-soft">
                   {persistedCase.latestManagerFollowUp.ownerName}
                   {" · "}
                   {latestManagerFollowUpSavedAt}
                 </p>
-                {latestManagerFollowUpNote ? <p className="field-note">{latestManagerFollowUpNote}</p> : null}
+                {latestManagerFollowUpNote ? <p className="text-sm leading-7 text-ink-soft">{latestManagerFollowUpNote}</p> : null}
               </div>
             ) : null}
             <ManagerFollowUpForm
@@ -220,52 +238,57 @@ export default async function LeadProfilePage(props: PageProps) {
               ownerName={persistedCase.ownerName}
               returnPath={`/${locale}/leads/${persistedCase.caseId}`}
             />
+            </div>
           </Panel>
 
           <Panel title={automationCopy.title}>
-            <p className="panel-summary">{automationCopy.summary}</p>
-            <p className="field-note">{automationGuardNote}</p>
-            {automationHoldReasonNote ? <p className="field-note">{automationHoldReasonNote}</p> : null}
-            <AutomationStatusForm
-              canManage={canManageAutomation}
-              caseId={persistedCase.caseId}
-              disabledLabel={locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
-              locale={locale}
-              returnPath={`/${locale}/leads/${persistedCase.caseId}`}
-              status={persistedCase.automationStatus}
-            />
+            <div className="mt-4 space-y-4">
+              <p className={panelSummaryClassName}>{automationCopy.summary}</p>
+              <p className="text-sm leading-7 text-ink-soft">{automationGuardNote}</p>
+              {automationHoldReasonNote ? <p className="text-sm leading-7 text-ink-soft">{automationHoldReasonNote}</p> : null}
+              <AutomationStatusForm
+                canManage={canManageAutomation}
+                caseId={persistedCase.caseId}
+                disabledLabel={locale === "ar" ? "يتطلب دوراً إدارياً" : "Manager role required"}
+                locale={locale}
+                returnPath={`/${locale}/leads/${persistedCase.caseId}`}
+                status={persistedCase.automationStatus}
+              />
+            </div>
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "آخر رد بشري" : "Latest human reply"}>
             {persistedCase.latestHumanReply ? (
-              <div className="page-stack">
-                <div className="row-between">
-                  <h3>{persistedCase.latestHumanReply.sentByName}</h3>
+              <div className="mt-4 space-y-4">
+                <div className={rowBetweenClassName}>
+                  <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{persistedCase.latestHumanReply.sentByName}</h3>
                   {latestHumanReplyLabel ? <StatusBadge tone="success">{latestHumanReplyLabel}</StatusBadge> : null}
                 </div>
                 {latestHumanReplyOwnershipLabel ? <StatusBadge>{latestHumanReplyOwnershipLabel}</StatusBadge> : null}
                 {latestHumanReplyEscalationLabel ? <StatusBadge tone="warning">{latestHumanReplyEscalationLabel}</StatusBadge> : null}
-                <p>{persistedCase.latestHumanReply.message}</p>
-                <dl className="detail-list">
+                <p className="text-sm leading-7 text-ink-soft">{persistedCase.latestHumanReply.message}</p>
+                <dl className={detailListClassName}>
                   <div>
-                    <dt>{locale === "ar" ? "وقت الإرسال" : "Sent at"}</dt>
-                    <dd>{latestHumanReplySentAt}</dd>
+                    <dt className={detailLabelClassName}>{locale === "ar" ? "وقت الإرسال" : "Sent at"}</dt>
+                    <dd className="mt-1 text-sm leading-7 text-ink">{latestHumanReplySentAt}</dd>
                   </div>
                   <div>
-                    <dt>{locale === "ar" ? "الخطوة التالية المحفوظة" : "Saved next action"}</dt>
-                    <dd>{persistedCase.latestHumanReply.nextAction}</dd>
+                    <dt className={detailLabelClassName}>{locale === "ar" ? "الخطوة التالية المحفوظة" : "Saved next action"}</dt>
+                    <dd className="mt-1 text-sm leading-7 text-ink">{persistedCase.latestHumanReply.nextAction}</dd>
                   </div>
                   <div>
-                    <dt>{locale === "ar" ? "موعد الخطوة التالية" : "Next action due"}</dt>
-                    <dd>{formatDateTime(persistedCase.latestHumanReply.nextActionDueAt, locale)}</dd>
+                    <dt className={detailLabelClassName}>{locale === "ar" ? "موعد الخطوة التالية" : "Next action due"}</dt>
+                    <dd className="mt-1 text-sm leading-7 text-ink">
+                      {formatDateTime(persistedCase.latestHumanReply.nextActionDueAt, locale)}
+                    </dd>
                   </div>
                 </dl>
-                {latestHumanReplyOwnershipNote ? <p className="field-note">{latestHumanReplyOwnershipNote}</p> : null}
+                {latestHumanReplyOwnershipNote ? <p className="text-sm leading-7 text-ink-soft">{latestHumanReplyOwnershipNote}</p> : null}
               </div>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "لم يُسجل على هذه الحالة أي رد بشري بعد."
                   : "No human reply has been recorded on this case yet."}
@@ -274,50 +297,52 @@ export default async function LeadProfilePage(props: PageProps) {
           </Panel>
 
           <Panel title={qaReviewRequestCopy.title}>
-            <p className="panel-summary">{qaReviewRequestCopy.summary}</p>
-            <p className="field-note">{qaSamplingGuardNote}</p>
-            <QaReviewRequestForm
-              canManage={canManageQaSampling && qaReviewDisplay?.status !== "pending_review"}
-              caseId={persistedCase.caseId}
-              defaultRequestedByName={persistedCase.ownerName}
-              disabledLabel={locale === "ar" ? "يتطلب دوراً مخولاً للجودة" : "QA sampling role required"}
-              locale={locale}
-              returnPath={`/${locale}/leads/${persistedCase.caseId}`}
-            />
+            <div className="mt-4 space-y-4">
+              <p className={panelSummaryClassName}>{qaReviewRequestCopy.summary}</p>
+              <p className="text-sm leading-7 text-ink-soft">{qaSamplingGuardNote}</p>
+              <QaReviewRequestForm
+                canManage={canManageQaSampling && qaReviewDisplay?.status !== "pending_review"}
+                caseId={persistedCase.caseId}
+                defaultRequestedByName={persistedCase.ownerName}
+                disabledLabel={locale === "ar" ? "يتطلب دوراً مخولاً للجودة" : "QA sampling role required"}
+                locale={locale}
+                returnPath={`/${locale}/leads/${persistedCase.caseId}`}
+              />
+            </div>
           </Panel>
 
           <Panel title={locale === "ar" ? "حالة مراجعة الجودة" : "QA review status"}>
             {qaReviewDisplay ? (
-              <div className="page-stack">
-                <div className="row-between">
-                  <h3>{qaReviewDisplay.sampleSummary}</h3>
+              <div className="mt-4 space-y-4">
+                <div className={rowBetweenClassName}>
+                  <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{qaReviewDisplay.sampleSummary}</h3>
                   <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge>
                 </div>
-                <div className="status-row-wrap">
+                <div className={statusRowWrapClassName}>
                   <StatusBadge>{qaReviewDisplay.subjectTypeLabel}</StatusBadge>
                   <StatusBadge>{qaReviewDisplay.triggerSourceLabel}</StatusBadge>
                   {qaReviewDisplay.policySignalLabels.map((label) => (
                     <StatusBadge key={label}>{label}</StatusBadge>
                   ))}
                 </div>
-                {qaReviewDisplay.draftMessage ? <p>{qaReviewDisplay.draftMessage}</p> : null}
-                <p>{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
+                {qaReviewDisplay.draftMessage ? <p className="text-sm leading-7 text-ink-soft">{qaReviewDisplay.draftMessage}</p> : null}
+                <p className="text-sm leading-7 text-ink-soft">{qaReviewDisplay.reviewSummary ?? qaReviewDisplay.sampleSummary}</p>
                 {qaReviewDisplay.triggerEvidence.length > 0 ? (
-                  <p className="case-link-meta">{qaReviewDisplay.triggerEvidence.join(", ")}</p>
+                  <p className={caseMetaClassName}>{qaReviewDisplay.triggerEvidence.join(", ")}</p>
                 ) : null}
-                <p className="case-link-meta">
+                <p className={caseMetaClassName}>
                   {qaReviewDisplay.reviewerName ?? qaReviewDisplay.requestedByName}
                   {" · "}
                   {qaReviewDisplay.reviewedAt ?? qaReviewDisplay.updatedAt}
                 </p>
                 {canAccessQaWorkspace ? (
-                  <Link className="inline-link" href={`/${locale}/qa/cases/${persistedCase.caseId}`}>
+                  <Link className={inlineLinkClassName} href={`/${locale}/qa/cases/${persistedCase.caseId}`}>
                     {locale === "ar" ? "فتح سجل الجودة" : "Open QA record"}
                   </Link>
                 ) : null}
               </div>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "لم تُرسل هذه الحالة إلى طابور الجودة بعد."
                   : "This case has not been sent to the QA queue yet."}
@@ -328,22 +353,22 @@ export default async function LeadProfilePage(props: PageProps) {
 
         {persistedCase.handoverCase ? (
           <Panel title={locale === "ar" ? "حالة التسليم المرتبطة" : "Linked handover record"}>
-            <div className="row-between">
-              <div className="stack-tight">
-                <h3>{persistedCase.handoverCase.ownerName}</h3>
-                <p className="case-link-meta">{buildCaseReferenceCode(persistedCase.handoverCase.handoverCaseId)}</p>
+            <div className={`mt-4 ${rowBetweenClassName}`}>
+              <div className={stackTightClassName}>
+                <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{persistedCase.handoverCase.ownerName}</h3>
+                <p className={caseMetaClassName}>{buildCaseReferenceCode(persistedCase.handoverCase.handoverCaseId)}</p>
               </div>
               <StatusBadge tone="success">{getPersistedHandoverStatusLabel(locale, persistedCase.handoverCase)}</StatusBadge>
             </div>
             {canAccessHandoverWorkspace ? (
-              <Link className="inline-link" href={`/${locale}/handover/${persistedCase.handoverCase.handoverCaseId}`}>
+              <Link className={`mt-4 ${inlineLinkClassName}`} href={`/${locale}/handover/${persistedCase.handoverCase.handoverCaseId}`}>
                 {locale === "ar" ? "فتح صفحة التسليم" : "Open handover page"}
               </Link>
             ) : null}
           </Panel>
         ) : null}
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel
             title={
               locale === "ar"
@@ -364,12 +389,12 @@ export default async function LeadProfilePage(props: PageProps) {
               emptyTitle={locale === "ar" ? "لا توجد عناصر مفتوحة" : "Nothing open right now"}
               items={interventionItems.filter((intervention) => intervention.status === "open")}
               renderItem={(intervention) => (
-                <article key={intervention.interventionId} className="intervention-row">
-                  <div className="row-between">
-                    <h3>{intervention.summary}</h3>
+                <article key={intervention.interventionId} className={criticalAlertCardClassName}>
+                  <div className={rowBetweenClassName}>
+                    <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{intervention.summary}</h3>
                     <StatusBadge tone={intervention.severityTone}>{intervention.severityLabel}</StatusBadge>
                   </div>
-                  <p className="case-link-meta">{intervention.createdAt}</p>
+                  <p className={`mt-3 ${caseMetaClassName}`}>{intervention.createdAt}</p>
                 </article>
               )}
             />
@@ -385,45 +410,45 @@ export default async function LeadProfilePage(props: PageProps) {
               emptyTitle={locale === "ar" ? "لا يوجد سجل محلول" : "No resolved history yet"}
               items={interventionItems.filter((intervention) => intervention.status === "resolved")}
               renderItem={(intervention) => (
-                <article key={intervention.interventionId} className="intervention-row intervention-row-resolved">
-                  <div className="row-between">
-                    <h3>{intervention.summary}</h3>
+                <article key={intervention.interventionId} className={successCardClassName}>
+                  <div className={rowBetweenClassName}>
+                    <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{intervention.summary}</h3>
                     <StatusBadge>{intervention.severityLabel}</StatusBadge>
                   </div>
-                  <p className="case-link-meta">{intervention.resolvedAt ?? intervention.createdAt}</p>
+                  <p className={`mt-3 ${caseMetaClassName}`}>{intervention.resolvedAt ?? intervention.createdAt}</p>
                 </article>
               )}
             />
           </Panel>
         </div>
 
-        <div className="two-column-grid">
+        <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "ملخص التأهيل الحالي" : "Current qualification"}>
             {qualificationSummary ? (
-              <dl className="detail-list">
+              <dl className={detailListClassName}>
                 <div>
-                  <dt>{locale === "ar" ? "نطاق الميزانية" : "Budget band"}</dt>
-                  <dd>{qualificationSummary.budgetBand}</dd>
+                  <dt className={detailLabelClassName}>{locale === "ar" ? "نطاق الميزانية" : "Budget band"}</dt>
+                  <dd className="mt-1 text-sm leading-7 text-ink">{qualificationSummary.budgetBand}</dd>
                 </div>
                 <div>
-                  <dt>{locale === "ar" ? "الإطار الزمني" : "Move-in timeline"}</dt>
-                  <dd>{qualificationSummary.moveInTimeline}</dd>
+                  <dt className={detailLabelClassName}>{locale === "ar" ? "الإطار الزمني" : "Move-in timeline"}</dt>
+                  <dd className="mt-1 text-sm leading-7 text-ink">{qualificationSummary.moveInTimeline}</dd>
                 </div>
                 <div>
-                  <dt>{locale === "ar" ? "الجاهزية" : "Readiness"}</dt>
-                  <dd>{qualificationSummary.readiness}</dd>
+                  <dt className={detailLabelClassName}>{locale === "ar" ? "الجاهزية" : "Readiness"}</dt>
+                  <dd className="mt-1 text-sm leading-7 text-ink">{qualificationSummary.readiness}</dd>
                 </div>
                 <div>
-                  <dt>{locale === "ar" ? "آخر تحديث" : "Last updated"}</dt>
-                  <dd>{qualificationSummary.updatedAt}</dd>
+                  <dt className={detailLabelClassName}>{locale === "ar" ? "آخر تحديث" : "Last updated"}</dt>
+                  <dd className="mt-1 text-sm leading-7 text-ink">{qualificationSummary.updatedAt}</dd>
                 </div>
                 <div>
-                  <dt>{locale === "ar" ? "الملخص" : "Summary"}</dt>
-                  <dd>{qualificationSummary.intentSummary}</dd>
+                  <dt className={detailLabelClassName}>{locale === "ar" ? "الملخص" : "Summary"}</dt>
+                  <dd className="mt-1 text-sm leading-7 text-ink">{qualificationSummary.intentSummary}</dd>
                 </div>
               </dl>
             ) : (
-              <p className="panel-summary">
+              <p className={panelSummaryClassName}>
                 {locale === "ar"
                   ? "لم يتم حفظ التأهيل بعد. استخدم النموذج المجاور لتسجيل أول شريحة تأهيلية للحالة."
                   : "Qualification has not been saved yet. Use the adjacent form to capture the first structured qualification snapshot."}
@@ -432,12 +457,14 @@ export default async function LeadProfilePage(props: PageProps) {
           </Panel>
 
           <Panel title={locale === "ar" ? "تحديث التأهيل" : "Update qualification"}>
-            <p className="panel-summary">
+            <p className={panelSummaryClassName}>
               {locale === "ar"
                 ? "هذا النموذج يرفع الحالة من عميل جديد إلى عميل مؤهل داخل المسار الحي."
                 : "This form moves the live case from a new lead into a qualified state."}
             </p>
-            <QualificationForm caseId={persistedCase.caseId} locale={locale} returnPath={`/${locale}/leads/${persistedCase.caseId}`} />
+            <div className="mt-4">
+              <QualificationForm caseId={persistedCase.caseId} locale={locale} returnPath={`/${locale}/leads/${persistedCase.caseId}`} />
+            </div>
           </Panel>
         </div>
 
@@ -453,42 +480,42 @@ export default async function LeadProfilePage(props: PageProps) {
   }
 
   return (
-    <div className="page-stack">
+    <div className={pageStackClassName}>
       <ScreenIntro badge={caseItem.referenceCode} summary={getLocalizedText(caseItem.summary, locale)} title={messages.profile.title} />
       <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
 
-      <div className="two-column-grid">
+      <div className={twoColumnGridClassName}>
         <Panel title={caseItem.customerName}>
-          <div className="detail-grid">
+          <div className={detailGridClassName}>
             <div>
-              <p className="detail-label">{messages.common.stage}</p>
+              <p className={detailLabelClassName}>{messages.common.stage}</p>
               <StatusBadge>{getLocalizedText(caseItem.stage, locale)}</StatusBadge>
             </div>
             <div>
-              <p className="detail-label">{messages.common.currentOwner}</p>
-              <p>{caseItem.owner}</p>
+              <p className={detailLabelClassName}>{messages.common.currentOwner}</p>
+              <p className="text-sm leading-7 text-ink">{caseItem.owner}</p>
             </div>
             <div>
-              <p className="detail-label">{messages.common.nextAction}</p>
-              <p>{getLocalizedText(caseItem.nextAction, locale)}</p>
+              <p className={detailLabelClassName}>{messages.common.nextAction}</p>
+              <p className="text-sm leading-7 text-ink">{getLocalizedText(caseItem.nextAction, locale)}</p>
             </div>
             <div>
-              <p className="detail-label">{messages.common.lastChange}</p>
-              <p>{formatDateTime(caseItem.lastMeaningfulChange, locale)}</p>
+              <p className={detailLabelClassName}>{messages.common.lastChange}</p>
+              <p className="text-sm leading-7 text-ink">{formatDateTime(caseItem.lastMeaningfulChange, locale)}</p>
             </div>
           </div>
-          <div className="case-callout">
+          <div className="mt-5 rounded-4xl border border-brand-100/80 bg-brand-50/70 p-4 text-sm leading-7 text-ink-soft">
             <p>{getLocalizedText(caseItem.budgetLabel, locale)}</p>
             <p>{getLocalizedText(caseItem.attentionNote, locale)}</p>
           </div>
         </Panel>
 
         <Panel title={messages.common.visitReadiness}>
-          <div className="stack-list">
-            <div className="case-stack-card">
-              <p className="detail-label">{caseItem.visitPlan.scheduledAt}</p>
-              <h3>{getLocalizedText(caseItem.visitPlan.location, locale)}</h3>
-              <p>{getLocalizedText(caseItem.visitPlan.readinessNote, locale)}</p>
+          <div className="mt-4">
+            <div className={caseStackCardClassName}>
+              <p className={detailLabelClassName}>{caseItem.visitPlan.scheduledAt}</p>
+              <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{getLocalizedText(caseItem.visitPlan.location, locale)}</h3>
+              <p className="text-sm leading-7 text-ink-soft">{getLocalizedText(caseItem.visitPlan.readinessNote, locale)}</p>
             </div>
           </div>
         </Panel>
