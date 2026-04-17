@@ -16,6 +16,7 @@ import { StatefulStack } from "@/components/stateful-stack";
 import { WorkspaceAccessPanel } from "@/components/workspace-access-panel";
 import { ManagerBulkFollowUpForm } from "@/components/manager-bulk-follow-up-form";
 import { ManagerFollowUpForm } from "@/components/manager-follow-up-form";
+import type { ExportRecipient } from "@/lib/export-summary";
 import {
   getCaseQaPolicySignalLabel,
   getFollowUpManagerCopy,
@@ -774,7 +775,12 @@ export function RevenueManagerCommandCenter(props: {
     !hasScopedBatchView &&
     revenueScope.focusedCases.length > 1;
   const clearScopeHref = buildRevenueManagerHref(props.locale);
-  const batchExportHref = hasScopedBatchView ? buildRevenueManagerExportHref(props.locale, props.filters) : null;
+  const batchExportOptions = hasScopedBatchView
+    ? (["manager", "operations", "qa"] as const).map((recipient) => ({
+        href: buildRevenueManagerExportHref(props.locale, props.filters, { recipient }),
+        recipient
+      }))
+    : [];
   const batchDriftReasonSummaryByCaseId = new Map(
     buildRevenueManagerBatchDriftReasonSummaries(props.batchHistory).map((summary) => [summary.caseId, summary])
   );
@@ -1064,6 +1070,9 @@ export function RevenueManagerCommandCenter(props: {
                 {revenueScope.batchScope.currentOwnerNames.map((ownerName) => (
                   <StatusBadge key={`${revenueScope.batchScope?.batchId}:${ownerName}`}>{ownerName}</StatusBadge>
                 ))}
+                <StatusBadge tone="success">
+                  {props.locale === "ar" ? "تنزيلات حسب المستلم" : "Recipient-specific downloads"}
+                </StatusBadge>
               </div>
             ) : null}
             <div className="status-row-wrap">
@@ -1083,22 +1092,27 @@ export function RevenueManagerCommandCenter(props: {
                   {props.locale === "ar" ? "فتح كل الحالات التي تغيّرت لاحقاً" : "Open all changed-later cases"}
                 </Link>
               ) : null}
-              {batchExportHref ? (
-                <Link className="inline-link" href={batchExportHref}>
-                  {hasChangedLaterReasonScopedView && batchDriftReasonScopeLabel
-                    ? props.locale === "ar"
-                      ? `تنزيل CSV لنطاق ${batchDriftReasonScopeLabel}`
-                      : `Download ${batchDriftReasonScopeLabel} CSV`
-                    : hasChangedLaterBatchView
-                    ? props.locale === "ar"
-                      ? "تنزيل CSV للحالات التي تغيّرت لاحقاً"
-                      : "Download changed-case CSV"
-                    : props.locale === "ar"
-                      ? "تنزيل CSV للحالات المتأثرة"
-                      : "Download affected-case CSV"}
-                </Link>
-              ) : null}
             </div>
+            {batchExportOptions.length > 0 ? (
+              <div className="page-stack">
+                {batchExportOptions.map((option) => (
+                  <div key={`batch-export:${option.recipient}`} className="stack-tight">
+                    <Link className="inline-link" href={option.href}>
+                      {getRevenueExportOptionLabel(
+                        props.locale,
+                        option.recipient,
+                        hasChangedLaterBatchView,
+                        hasChangedLaterReasonScopedView,
+                        batchDriftReasonScopeLabel
+                      )}
+                    </Link>
+                    <span className="field-note">
+                      {getRevenueExportOptionSummary(props.locale, option.recipient, hasChangedLaterBatchView)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <p className="field-note">
               {hasScopedBatchView
                 ? props.locale === "ar"
@@ -2130,6 +2144,75 @@ function getRevenueManagerBatchDriftReasonScopeLabel(
   }
 
   return locale === "ar" ? "أسباب مختلطة" : "mixed reasons";
+}
+
+function getRevenueExportOptionLabel(
+  locale: SupportedLocale,
+  recipient: ExportRecipient,
+  hasChangedLaterBatchView: boolean,
+  hasChangedLaterReasonScopedView: boolean,
+  batchDriftReasonScopeLabel: string | null
+) {
+  const scopeLabel =
+    hasChangedLaterReasonScopedView && batchDriftReasonScopeLabel
+      ? batchDriftReasonScopeLabel
+      : hasChangedLaterBatchView
+        ? locale === "ar"
+          ? "الحالات التي تغيّرت لاحقاً"
+          : "changed-later cases"
+        : locale === "ar"
+          ? "الحالات المتأثرة"
+          : "affected cases";
+
+  if (locale === "ar") {
+    switch (recipient) {
+      case "manager":
+        return `تنزيل CSV إداري لنطاق ${scopeLabel}`;
+      case "operations":
+        return `تنزيل CSV تشغيلي لنطاق ${scopeLabel}`;
+      case "qa":
+        return `تنزيل CSV جودة لنطاق ${scopeLabel}`;
+    }
+  }
+
+  switch (recipient) {
+    case "manager":
+      return `Download manager CSV for ${scopeLabel}`;
+    case "operations":
+      return `Download operations CSV for ${scopeLabel}`;
+    case "qa":
+      return `Download QA CSV for ${scopeLabel}`;
+  }
+}
+
+function getRevenueExportOptionSummary(
+  locale: SupportedLocale,
+  recipient: ExportRecipient,
+  hasChangedLaterBatchView: boolean
+) {
+  if (locale === "ar") {
+    switch (recipient) {
+      case "manager":
+        return hasChangedLaterBatchView
+          ? "يحافظ هذا الخيار على سياق التوصية ونطاق الانجراف كما تحتاجه مراجعة الإدارة."
+          : "يحافظ هذا الخيار على صورة الدفعة الكاملة وسياق التوصية بصيغة إدارية."
+      case "operations":
+        return "يحزم نفس النطاق بصيغة أوضح لملاك المتابعة الحاليين والتنفيذ التشغيلي.";
+      case "qa":
+        return "يحزم نفس النطاق بصيغة تدقيق جودة وسياسات عند مشاركة الملف خارج المنتج.";
+    }
+  }
+
+  switch (recipient) {
+    case "manager":
+      return hasChangedLaterBatchView
+        ? "Keeps the recommendation and drift context in a manager-facing review format."
+        : "Keeps the full batch picture and recommendation context in a manager-facing format.";
+    case "operations":
+      return "Packages the same scope for current follow-up owners and operational execution.";
+    case "qa":
+      return "Packages the same scope for QA and policy audit when the file is shared outside the product.";
+  }
 }
 
 function getGovernanceRecentEventSummary(

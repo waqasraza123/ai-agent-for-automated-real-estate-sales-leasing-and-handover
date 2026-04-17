@@ -12,6 +12,7 @@ import {
 import { EmptyState, Panel, StatusBadge } from "@real-estate-ai/ui";
 
 import { ScreenIntro } from "@/components/screen-intro";
+import type { ExportRecipient } from "@/lib/export-summary";
 import type {
   GovernanceOperationalRiskExportCandidate,
   GovernanceOperationalRiskExportScope,
@@ -33,13 +34,18 @@ export function ManagerGovernanceReport(props: {
   view: GovernanceReportView;
 }) {
   const activeRoleLabel = getOperatorRoleLabel(props.locale, props.currentOperatorRole);
-  const exportHref = buildGovernanceExportHref(props.locale, props.filters);
   const currentOpenCount = props.governanceSummary?.currentOpenItems.totalCount ?? 0;
   const openedCount = props.governanceSummary?.openedItems.totalCount ?? 0;
   const resolvedCount = props.governanceSummary?.resolvedItems.totalCount ?? 0;
   const filteredCount = props.governanceEvents?.totalCount ?? 0;
   const showQaHistory = props.view !== "operational_risk";
   const showOperationalRisk = props.view !== "qa_history";
+  const exportOptions = showQaHistory
+    ? (["manager", "operations", "qa"] as const).map((recipient) => ({
+        href: buildGovernanceExportHref(props.locale, props.filters, recipient),
+        recipient
+      }))
+    : [];
 
   return (
     <div className="page-stack">
@@ -352,11 +358,23 @@ export function ManagerGovernanceReport(props: {
               {props.view === "operational_risk" ? (
                 <StatusBadge>{props.locale === "ar" ? "تصدير دفعات حيّة متاح" : "Live batch export available"}</StatusBadge>
               ) : null}
+              {showQaHistory ? (
+                <StatusBadge tone="success">
+                  {props.locale === "ar" ? "صيَغ مستلمين متعددة" : "Multiple recipient variants"}
+                </StatusBadge>
+              ) : null}
             </div>
             {showQaHistory ? (
-              <Link className="inline-link" href={exportHref}>
-                {props.locale === "ar" ? "تنزيل تقرير CSV" : "Download CSV report"}
-              </Link>
+              <div className="page-stack">
+                {exportOptions.map((option) => (
+                  <div key={`report-export:${option.recipient}`} className="stack-tight">
+                    <Link className="inline-link" href={option.href}>
+                      {getGovernanceExportOptionLabel(props.locale, option.recipient)}
+                    </Link>
+                    <span className="field-note">{getGovernanceExportOptionSummary(props.locale, option.recipient)}</span>
+                  </div>
+                ))}
+              </div>
             ) : null}
             <Link className="inline-link" href={`/${props.locale}/manager`}>
               {props.locale === "ar" ? "العودة إلى بوابة الإدارة" : "Return to the manager gateway"}
@@ -908,12 +926,16 @@ function FilterTabs(props: {
   );
 }
 
-function buildGovernanceExportHref(locale: SupportedLocale, filters: ListGovernanceEventsQuery) {
+function buildGovernanceExportHref(
+  locale: SupportedLocale,
+  filters: ListGovernanceEventsQuery,
+  recipient?: ExportRecipient
+) {
   const query = new URLSearchParams();
-  const recipient =
-    filters.subjectType === "prepared_reply_draft" || filters.status === "pending_review" ? "qa" : "manager";
+  const resolvedRecipient =
+    recipient ?? (filters.subjectType === "prepared_reply_draft" || filters.status === "pending_review" ? "qa" : "manager");
   query.set("limit", "500");
-  query.set("recipient", recipient);
+  query.set("recipient", resolvedRecipient);
   query.set("windowDays", String(filters.windowDays));
 
   if (filters.action) {
@@ -979,6 +1001,50 @@ function buildOperationalRiskExportHref(locale: SupportedLocale, candidate: Gove
         };
 
   return buildRevenueManagerExportHref(locale, filters, { recipient: "operations" });
+}
+
+function getGovernanceExportOptionLabel(locale: SupportedLocale, recipient: ExportRecipient) {
+  if (locale === "ar") {
+    switch (recipient) {
+      case "manager":
+        return "تنزيل تقرير CSV للإدارة";
+      case "operations":
+        return "تنزيل تقرير CSV للتشغيل";
+      case "qa":
+        return "تنزيل تقرير CSV للجودة";
+    }
+  }
+
+  switch (recipient) {
+    case "manager":
+      return "Download manager CSV report";
+    case "operations":
+      return "Download operations CSV report";
+    case "qa":
+      return "Download QA CSV report";
+  }
+}
+
+function getGovernanceExportOptionSummary(locale: SupportedLocale, recipient: ExportRecipient) {
+  if (locale === "ar") {
+    switch (recipient) {
+      case "manager":
+        return "يحتفظ هذا الخيار بسياق المراجعة الإداري والتاريخ الكامل للنطاق الحالي.";
+      case "operations":
+        return "يحوّل نفس السجل إلى صيغة جاهزة للمتابعة اليومية والتنفيذ التشغيلي.";
+      case "qa":
+        return "يعبّئ نفس السجل بصيغة تدقيق جودة وسياسات أوضح عند المراجعة خارج المنتج.";
+    }
+  }
+
+  switch (recipient) {
+    case "manager":
+      return "Keeps the current scope in a manager-facing review format with full historical context.";
+    case "operations":
+      return "Packages the same history for daily operational follow-up and action-ready review.";
+    case "qa":
+      return "Frames the same history for QA and policy audit when it leaves the product.";
+  }
 }
 
 function getOperationalRiskExportScopeLabel(locale: SupportedLocale, scope: GovernanceOperationalRiskExportScope) {
