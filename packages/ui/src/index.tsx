@@ -365,6 +365,39 @@ export function WorkflowCard(props: {
   );
 }
 
+export function WorkflowListItem(props: {
+  actions?: ReactNode;
+  badges?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+  meta?: ReactNode;
+  summary?: ReactNode;
+  title: ReactNode;
+  tone?: "neutral" | "warning" | "critical" | "success";
+}) {
+  return (
+    <article
+      className={cx(
+        "rounded-4xl border border-canvas-line/80 bg-canvas-raised/95 p-5 shadow-panel transition duration-300 ease-out sm:flex sm:items-start sm:justify-between sm:gap-4",
+        props.className
+      )}
+    >
+      <div className={pageStackClassName}>
+        <div className={rowBetweenClassName}>
+          <div className={stackTightClassName}>
+            <h3 className={cardTitleClassName}>{props.title}</h3>
+            {props.meta}
+          </div>
+          {props.badges ? <div className={statusRowWrapClassName}>{props.badges}</div> : null}
+        </div>
+        {props.summary ? <div>{props.summary}</div> : null}
+        {props.children}
+      </div>
+      {props.actions ? <div className={documentRowActionsClassName}>{props.actions}</div> : null}
+    </article>
+  );
+}
+
 export function StatusBadge(props: {
   children: ReactNode;
   tone?: "neutral" | "success" | "warning" | "critical";

@@ -7,16 +7,13 @@ import {
   caseMetaClassName,
   DetailGrid,
   DetailItem,
-  documentRowActionsClassName,
-  documentRowClassName,
   fieldNoteClassName,
   pageStackClassName,
   panelSummaryClassName,
   Panel,
-  rowBetweenClassName,
   StatusBadge,
-  statusRowWrapClassName,
   twoColumnGridClassName,
+  WorkflowListItem,
   WorkflowPanelBody,
 } from "@real-estate-ai/ui";
 
@@ -184,20 +181,16 @@ export default async function HandoverPage(props: PageProps) {
         </div>
 
         <Panel title={messages.common.handoverReadiness}>
-          <p className={fieldNoteClassName}>{taskGuardNote}</p>
+          <WorkflowPanelBody note={taskGuardNote}>
           <StatefulStack
             emptySummary={messages.states.emptyMilestonesSummary}
             emptyTitle={messages.states.emptyMilestonesTitle}
             items={taskItems}
             renderItem={(task) => (
-              <article key={task.taskId} className={documentRowClassName}>
-                <div>
-                  <h3>{task.title}</h3>
-                  <p>{task.summary}</p>
-                  <p className={caseMetaClassName}>{task.ownerName}</p>
-                  <p className={caseMetaClassName}>{task.dueAt}</p>
-                </div>
-                <div className={documentRowActionsClassName}>
+              <WorkflowListItem
+                key={task.taskId}
+                actions={
+                  <>
                   <StatusBadge tone={task.statusTone}>{task.statusLabel}</StatusBadge>
                   <HandoverTaskStatusForm
                     canManage={canManageHandoverTasks}
@@ -208,10 +201,20 @@ export default async function HandoverPage(props: PageProps) {
                     returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                     status={task.status}
                   />
-                </div>
-              </article>
+                  </>
+                }
+                meta={
+                  <>
+                    <p className={caseMetaClassName}>{task.ownerName}</p>
+                    <p className={caseMetaClassName}>{task.dueAt}</p>
+                  </>
+                }
+                summary={task.summary}
+                title={task.title}
+              />
             )}
           />
+          </WorkflowPanelBody>
         </Panel>
 
         <div className={twoColumnGridClassName}>
@@ -446,10 +449,9 @@ export default async function HandoverPage(props: PageProps) {
 
         <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "الموعد الداخلي" : "Internal appointment"}>
-            <div className={pageStackClassName}>
-              <p className={fieldNoteClassName}>{appointmentGuardNote}</p>
+            <WorkflowPanelBody note={appointmentGuardNote}>
               {appointmentItem ? (
-                <div className={pageStackClassName}>
+                <>
                   <DetailGrid>
                     <DetailItem label={locale === "ar" ? "الموقع" : "Location"} value={appointmentItem.location} />
                     <DetailItem
@@ -469,14 +471,15 @@ export default async function HandoverPage(props: PageProps) {
                     returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                     scheduledAt={appointmentItem.scheduledAtInput}
                   />
-                </div>
+                </>
               ) : (
-                <div className={pageStackClassName}>
-                  <p className={panelSummaryClassName}>
-                    {locale === "ar"
+                <WorkflowPanelBody
+                  summary={
+                    locale === "ar"
                       ? "لن يتم حفظ الموعد الداخلي حتى تصبح حدود الجدولة معتمدة ويصبح السجل جاهزاً للجدولة."
-                      : "The internal appointment stays unavailable until the scheduling boundary is approved and the record is ready for scheduling."}
-                  </p>
+                      : "The internal appointment stays unavailable until the scheduling boundary is approved and the record is ready for scheduling."
+                  }
+                >
                   <HandoverAppointmentForm
                     canManage={canManageAppointments}
                     coordinatorName={persistedHandoverCase.ownerName}
@@ -487,20 +490,21 @@ export default async function HandoverPage(props: PageProps) {
                     returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                     scheduledAt={appointmentHoldMilestone?.targetAtInput ?? ""}
                   />
-                </div>
+                </WorkflowPanelBody>
               )}
-            </div>
+            </WorkflowPanelBody>
           </Panel>
 
           <Panel title={locale === "ar" ? "تأكيد الموعد" : "Appointment confirmation"}>
             {appointmentItem ? (
-              <div className={pageStackClassName}>
-                <p className={panelSummaryClassName}>
-                  {locale === "ar"
+              <WorkflowPanelBody
+                note={appointmentGuardNote}
+                summary={
+                  locale === "ar"
                     ? "يتطلب هذا التأكيد اعتماد حد تأكيد الموعد أولاً، لكنه لا يطلق أي رسالة حقيقية إلى العميل."
-                    : "This confirmation requires the appointment-confirmation boundary first, and still does not trigger any real outbound message."}
-                </p>
-                <p className={fieldNoteClassName}>{appointmentGuardNote}</p>
+                    : "This confirmation requires the appointment-confirmation boundary first, and still does not trigger any real outbound message."
+                }
+              >
                 <HandoverAppointmentConfirmationForm
                   appointmentId={appointmentItem.appointmentId}
                   canManage={canManageAppointments}
@@ -510,7 +514,7 @@ export default async function HandoverPage(props: PageProps) {
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                   status={appointmentItem.status}
                 />
-              </div>
+              </WorkflowPanelBody>
             ) : (
               <p className={panelSummaryClassName}>
                 {locale === "ar"
@@ -524,13 +528,14 @@ export default async function HandoverPage(props: PageProps) {
         <div className={twoColumnGridClassName}>
           <Panel title={locale === "ar" ? "تجهيز الإرسال" : "Delivery preparation"}>
             {appointmentConfirmationUpdate ? (
-              <div className={pageStackClassName}>
-                <p className={panelSummaryClassName}>
-                  {locale === "ar"
+              <WorkflowPanelBody
+                note={customerUpdateGuardNote}
+                summary={
+                  locale === "ar"
                     ? "هذه الخطوة تحفظ صياغة التأكيد المعتمدة كرسالة جاهزة للإرسال لاحقاً من دون تشغيل أي قناة فعلية."
-                    : "This stores the approved confirmation as outbound-ready content for later dispatch without triggering any live channel."}
-                </p>
-                <p className={fieldNoteClassName}>{customerUpdateGuardNote}</p>
+                    : "This stores the approved confirmation as outbound-ready content for later dispatch without triggering any live channel."
+                }
+              >
                 {appointmentConfirmationUpdate.deliverySummary ? (
                   <DetailGrid className="xl:grid-cols-2">
                     <DetailItem label={locale === "ar" ? "ملخص التجهيز" : "Delivery summary"} value={appointmentConfirmationUpdate.deliverySummary} />
@@ -538,17 +543,20 @@ export default async function HandoverPage(props: PageProps) {
                   </DetailGrid>
                 ) : null}
                 {appointmentConfirmationQaReview ? (
-                  <div className={pageStackClassName}>
-                    <div className={statusRowWrapClassName}>
-                      <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
-                        {appointmentConfirmationQaReview.reviewStatusLabel}
-                      </StatusBadge>
-                      {appointmentConfirmationQaReview.policySignalLabels.map((label) => (
-                        <StatusBadge key={label}>{label}</StatusBadge>
-                      ))}
-                    </div>
-                    <p>{appointmentConfirmationQaReview.reviewSampleSummary}</p>
-                  </div>
+                  <WorkflowListItem
+                    badges={
+                      <>
+                        <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
+                          {appointmentConfirmationQaReview.reviewStatusLabel}
+                        </StatusBadge>
+                        {appointmentConfirmationQaReview.policySignalLabels.map((label) => (
+                          <StatusBadge key={label}>{label}</StatusBadge>
+                        ))}
+                      </>
+                    }
+                    summary={appointmentConfirmationQaReview.reviewSampleSummary}
+                    title={locale === "ar" ? "حالة مراجعة ضمان الجودة" : "QA review status"}
+                  />
                 ) : null}
                 <HandoverCustomerUpdateDeliveryForm
                   canManage={canManageCustomerUpdates}
@@ -561,7 +569,7 @@ export default async function HandoverPage(props: PageProps) {
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                   status={appointmentConfirmationUpdate.status}
                 />
-              </div>
+              </WorkflowPanelBody>
             ) : (
               <p className={panelSummaryClassName}>
                 {locale === "ar"
@@ -573,13 +581,14 @@ export default async function HandoverPage(props: PageProps) {
 
           <Panel title={locale === "ar" ? "جاهزية الإرسال" : "Dispatch readiness"}>
             {appointmentConfirmationUpdate ? (
-              <div className={pageStackClassName}>
-                <p className={panelSummaryClassName}>
-                  {locale === "ar"
+              <WorkflowPanelBody
+                note={customerUpdateGuardNote}
+                summary={
+                  locale === "ar"
                     ? "هذه الخطوة لا ترسل أي رسالة، لكنها ترفع سجل التسليم إلى حالة مجدولة داخلياً بمجرد اكتمال التجهيز."
-                    : "This still does not send anything, but it promotes the handover record into an internally scheduled state once preparation is complete."}
-                </p>
-                <p className={fieldNoteClassName}>{customerUpdateGuardNote}</p>
+                    : "This still does not send anything, but it promotes the handover record into an internally scheduled state once preparation is complete."
+                }
+              >
                 {appointmentConfirmationUpdate.dispatchReadyAt ? (
                   <DetailGrid className="xl:grid-cols-2">
                     <DetailItem label={locale === "ar" ? "جاهز للإرسال منذ" : "Ready since"} value={appointmentConfirmationUpdate.dispatchReadyAt} />
@@ -590,15 +599,18 @@ export default async function HandoverPage(props: PageProps) {
                   </DetailGrid>
                 ) : null}
                 {appointmentConfirmationQaReview ? (
-                  <div className={pageStackClassName}>
-                    <div className={statusRowWrapClassName}>
-                      <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
-                        {appointmentConfirmationQaReview.reviewStatusLabel}
-                      </StatusBadge>
-                      <StatusBadge>{appointmentConfirmationQaReview.typeLabel}</StatusBadge>
-                    </div>
-                    <p>{appointmentConfirmationQaReview.reviewSummary ?? appointmentConfirmationQaReview.reviewSampleSummary}</p>
-                  </div>
+                  <WorkflowListItem
+                    badges={
+                      <>
+                        <StatusBadge tone={appointmentConfirmationQaReview.reviewStatusTone}>
+                          {appointmentConfirmationQaReview.reviewStatusLabel}
+                        </StatusBadge>
+                        <StatusBadge>{appointmentConfirmationQaReview.typeLabel}</StatusBadge>
+                      </>
+                    }
+                    summary={appointmentConfirmationQaReview.reviewSummary ?? appointmentConfirmationQaReview.reviewSampleSummary}
+                    title={locale === "ar" ? "جاهزية مراجعة ضمان الجودة" : "QA dispatch review"}
+                  />
                 ) : null}
                 <HandoverCustomerUpdateDispatchReadyForm
                   canManage={canManageCustomerUpdates}
@@ -610,7 +622,7 @@ export default async function HandoverPage(props: PageProps) {
                   returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                   status={appointmentConfirmationUpdate.status}
                 />
-              </div>
+              </WorkflowPanelBody>
             ) : (
               <p className={panelSummaryClassName}>
                 {locale === "ar"
@@ -639,21 +651,9 @@ export default async function HandoverPage(props: PageProps) {
                 emptyTitle={locale === "ar" ? "لا توجد عوائق" : "No blockers"}
                 items={blockerItems}
                 renderItem={(blocker) => (
-                  <article key={blocker.blockerId} className={documentRowClassName}>
-                    <div>
-                      <div className={rowBetweenClassName}>
-                        <h3>{blocker.title}</h3>
-                        <div className={rowBetweenClassName}>
-                          <StatusBadge tone={blocker.severityTone}>{blocker.severityLabel}</StatusBadge>
-                          <StatusBadge tone={blocker.statusTone}>{blocker.statusLabel}</StatusBadge>
-                        </div>
-                      </div>
-                      <p>{blocker.typeDetail}</p>
-                      <p>{blocker.summary}</p>
-                      <p className={caseMetaClassName}>{blocker.ownerName}</p>
-                      <p className={caseMetaClassName}>{blocker.dueAt}</p>
-                    </div>
-                    <div className={documentRowActionsClassName}>
+                  <WorkflowListItem
+                    key={blocker.blockerId}
+                    actions={
                       <HandoverBlockerStatusForm
                         blockerId={blocker.blockerId}
                         canManage={canManageBlockers}
@@ -667,8 +667,24 @@ export default async function HandoverPage(props: PageProps) {
                         status={blocker.status}
                         summary={blocker.summary}
                       />
-                    </div>
-                  </article>
+                    }
+                    badges={
+                      <>
+                        <StatusBadge tone={blocker.severityTone}>{blocker.severityLabel}</StatusBadge>
+                        <StatusBadge tone={blocker.statusTone}>{blocker.statusLabel}</StatusBadge>
+                      </>
+                    }
+                    meta={
+                      <>
+                        <p className={caseMetaClassName}>{blocker.ownerName}</p>
+                        <p className={caseMetaClassName}>{blocker.dueAt}</p>
+                      </>
+                    }
+                    summary={blocker.typeDetail}
+                    title={blocker.title}
+                  >
+                    <p>{blocker.summary}</p>
+                  </WorkflowListItem>
                 )}
               />
               {persistedHandoverCase.status === "scheduled" ? (
@@ -699,17 +715,9 @@ export default async function HandoverPage(props: PageProps) {
                 emptyTitle={locale === "ar" ? "لا توجد محطات" : "No milestones"}
                 items={milestoneItems}
                 renderItem={(milestone) => (
-                  <article key={milestone.milestoneId} className={documentRowClassName}>
-                    <div>
-                      <div className={rowBetweenClassName}>
-                        <h3>{milestone.title}</h3>
-                        <StatusBadge tone={milestone.statusTone}>{milestone.statusLabel}</StatusBadge>
-                      </div>
-                      <p>{milestone.summary}</p>
-                      <p className={caseMetaClassName}>{milestone.ownerName}</p>
-                      <p className={caseMetaClassName}>{milestone.targetAt}</p>
-                    </div>
-                    <div className={documentRowActionsClassName}>
+                  <WorkflowListItem
+                    key={milestone.milestoneId}
+                    actions={
                       <HandoverMilestoneForm
                         canManage={canManageMilestones}
                         disabledLabel={locale === "ar" ? "يتطلب دور تنسيق التسليم" : "Handover coordination role required"}
@@ -721,8 +729,17 @@ export default async function HandoverPage(props: PageProps) {
                         status={milestone.status}
                         targetAt={milestone.targetAtInput}
                       />
-                    </div>
-                  </article>
+                    }
+                    badges={<StatusBadge tone={milestone.statusTone}>{milestone.statusLabel}</StatusBadge>}
+                    meta={
+                      <>
+                        <p className={caseMetaClassName}>{milestone.ownerName}</p>
+                        <p className={caseMetaClassName}>{milestone.targetAt}</p>
+                      </>
+                    }
+                    summary={milestone.summary}
+                    title={milestone.title}
+                  />
                 )}
               />
             </div>
@@ -740,24 +757,9 @@ export default async function HandoverPage(props: PageProps) {
                 emptyTitle={locale === "ar" ? "لا توجد حدود" : "No update boundaries"}
                 items={customerUpdateItems}
                 renderItem={(customerUpdate) => (
-                  <article key={customerUpdate.customerUpdateId} className={documentRowClassName}>
-                    <div>
-                      <div className={rowBetweenClassName}>
-                        <h3>{customerUpdate.title}</h3>
-                        <StatusBadge tone={customerUpdate.statusTone}>{customerUpdate.statusLabel}</StatusBadge>
-                      </div>
-                      <p>{customerUpdate.summary}</p>
-                      {customerUpdate.qaReviewStatus !== "not_required" ? (
-                        <div className={statusRowWrapClassName}>
-                          <StatusBadge tone={customerUpdate.qaReviewStatusTone}>{customerUpdate.qaReviewStatusLabel}</StatusBadge>
-                          {customerUpdate.qaPolicySignalLabels.map((label) => (
-                            <StatusBadge key={label}>{label}</StatusBadge>
-                          ))}
-                        </div>
-                      ) : null}
-                      <p className={caseMetaClassName}>{customerUpdate.updatedAt}</p>
-                    </div>
-                    <div className={documentRowActionsClassName}>
+                  <WorkflowListItem
+                    key={customerUpdate.customerUpdateId}
+                    actions={
                       <HandoverCustomerUpdateApprovalForm
                         canManage={canManageCustomerUpdates}
                         customerUpdateId={customerUpdate.customerUpdateId}
@@ -767,8 +769,24 @@ export default async function HandoverPage(props: PageProps) {
                         returnPath={`/${locale}/handover/${persistedHandoverCase.handoverCaseId}`}
                         status={customerUpdate.status}
                       />
-                    </div>
-                  </article>
+                    }
+                    badges={
+                      <>
+                        <StatusBadge tone={customerUpdate.statusTone}>{customerUpdate.statusLabel}</StatusBadge>
+                        {customerUpdate.qaReviewStatus !== "not_required" ? (
+                          <>
+                            <StatusBadge tone={customerUpdate.qaReviewStatusTone}>{customerUpdate.qaReviewStatusLabel}</StatusBadge>
+                            {customerUpdate.qaPolicySignalLabels.map((label) => (
+                              <StatusBadge key={label}>{label}</StatusBadge>
+                            ))}
+                          </>
+                        ) : null}
+                      </>
+                    }
+                    meta={<p className={caseMetaClassName}>{customerUpdate.updatedAt}</p>}
+                    summary={customerUpdate.summary}
+                    title={customerUpdate.title}
+                  />
                 )}
               />
             </div>
@@ -800,21 +818,22 @@ export default async function HandoverPage(props: PageProps) {
           emptyTitle={messages.states.emptyMilestonesTitle}
           items={handoverCase.milestones}
           renderItem={(milestone) => (
-            <article key={milestone.id} className="milestone-card">
-              <div className={rowBetweenClassName}>
-                <div>
-                  <h3>{getLocalizedText(milestone.title, locale)}</h3>
-                  <p>{getLocalizedText(milestone.detail, locale)}</p>
-                </div>
+            <WorkflowListItem
+              key={milestone.id}
+              badges={
                 <StatusBadge tone={milestone.status === "blocked" ? "critical" : milestone.status === "ready" ? "success" : "warning"}>
                   {milestone.status}
                 </StatusBadge>
-              </div>
-              <div className="milestone-meta">
-                <span>{milestone.owner}</span>
-                <span>{milestone.dueDate}</span>
-              </div>
-            </article>
+              }
+              meta={
+                <>
+                  <p className={caseMetaClassName}>{milestone.owner}</p>
+                  <p className={caseMetaClassName}>{milestone.dueDate}</p>
+                </>
+              }
+              summary={getLocalizedText(milestone.detail, locale)}
+              title={getLocalizedText(milestone.title, locale)}
+            />
           )}
         />
       </Panel>
