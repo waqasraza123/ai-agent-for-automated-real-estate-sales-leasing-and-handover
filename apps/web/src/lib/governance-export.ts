@@ -1,5 +1,7 @@
 import type { ListGovernanceEventsQuery, SupportedLocale } from "@real-estate-ai/contracts";
 
+import { buildCsvDocument, buildExportSummaryCsvRows, escapeCsvValue } from "./export-summary";
+
 interface GovernanceExportOptions {
   filters: ListGovernanceEventsQuery;
   generatedAt?: string;
@@ -46,7 +48,7 @@ export function buildGovernanceEventCsv(items: Array<Record<string, unknown>>, o
     ].map((value) => escapeCsvValue(typeof value === "string" ? value : value == null ? "" : String(value)))
   );
 
-  return [...summaryRows, "", headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+  return buildCsvDocument(headers, rows, { summaryRows });
 }
 
 function buildGovernanceExportSummaryRows(items: Array<Record<string, unknown>>, options: GovernanceExportOptions) {
@@ -55,70 +57,22 @@ function buildGovernanceExportSummaryRows(items: Array<Record<string, unknown>>,
   const uniqueCaseCount = new Set(items.map((item) => String(item.caseId ?? ""))).size;
   const openedCount = items.filter((item) => item.action === "opened").length;
   const resolvedCount = items.filter((item) => item.action === "resolved").length;
-  const rows = [
-    [
-      options.locale === "ar" ? "القسم" : "section",
-      options.locale === "ar" ? "الحقل" : "field",
-      options.locale === "ar" ? "القيمة" : "value"
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "أنشئ في" : "generated_at",
-      generatedAt
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "الجمهور المقصود" : "intended_audience",
-      getGovernanceExportAudience(options.locale, options.filters)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "محور المراجعة" : "review_focus",
-      getGovernanceExportReviewFocus(options.locale, options.filters)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "النطاق المختار" : "selected_scope",
-      getGovernanceExportScopeLabel(options.locale, options.filters)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "خلاصة الفلاتر" : "filter_summary",
-      getGovernanceExportFilterSummary(options.locale, options.filters)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "خلاصة النشاط" : "activity_summary",
-      getGovernanceExportActivitySummary(options.locale, matchingRows, uniqueCaseCount, openedCount, resolvedCount)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "غرض المشاركة" : "share_summary",
-      getGovernanceExportShareSummary(options.locale, options.filters, matchingRows)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "الصفوف المطابقة" : "matching_row_count",
-      String(matchingRows)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "الحالات الفريدة" : "unique_case_count",
-      String(uniqueCaseCount)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "الفتحات" : "opened_event_count",
-      String(openedCount)
-    ],
-    [
-      options.locale === "ar" ? "ملخص التصدير" : "export_summary",
-      options.locale === "ar" ? "الحسومات" : "resolved_event_count",
-      String(resolvedCount)
-    ]
-  ];
-
-  return rows.map((row) => row.map((value) => escapeCsvValue(value)).join(","));
+  return buildExportSummaryCsvRows(options.locale, [
+    { field: "generated_at", value: generatedAt },
+    { field: "intended_audience", value: getGovernanceExportAudience(options.locale, options.filters) },
+    { field: "review_focus", value: getGovernanceExportReviewFocus(options.locale, options.filters) },
+    { field: "selected_scope", value: getGovernanceExportScopeLabel(options.locale, options.filters) },
+    { field: "filter_summary", value: getGovernanceExportFilterSummary(options.locale, options.filters) },
+    {
+      field: "activity_summary",
+      value: getGovernanceExportActivitySummary(options.locale, matchingRows, uniqueCaseCount, openedCount, resolvedCount)
+    },
+    { field: "share_summary", value: getGovernanceExportShareSummary(options.locale, options.filters, matchingRows) },
+    { field: "matching_row_count", value: String(matchingRows) },
+    { field: "unique_case_count", value: String(uniqueCaseCount) },
+    { field: "opened_event_count", value: String(openedCount) },
+    { field: "resolved_event_count", value: String(resolvedCount) }
+  ]);
 }
 
 function getGovernanceExportAudience(locale: SupportedLocale, filters: ListGovernanceEventsQuery) {
@@ -248,12 +202,4 @@ function getGovernanceExportShareSummary(locale: SupportedLocale, filters: ListG
   }
 
   return `This export is suited for manager review or historical follow-up because it collects ${matchingRows} governance events inside one historical scope.`;
-}
-
-function escapeCsvValue(value: string) {
-  if (value.includes(",") || value.includes("\"") || value.includes("\n")) {
-    return `"${value.replaceAll("\"", "\"\"")}"`;
-  }
-
-  return value;
 }

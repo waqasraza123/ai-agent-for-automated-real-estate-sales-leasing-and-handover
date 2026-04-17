@@ -1,5 +1,6 @@
 import type { PersistedCaseDetail, PersistedCaseSummary, SupportedLocale } from "@real-estate-ai/contracts";
 
+import { buildCsvDocument, buildExportSummaryCsvRows, escapeCsvValue } from "./export-summary";
 import { buildManagerWorkspaceQueues } from "./manager-workspace";
 import { hasPersistedLatestHumanReplyEscalation } from "./persisted-case-presenters";
 
@@ -298,7 +299,7 @@ export function buildRevenueManagerBatchExportCsv(
     ].map((value) => escapeCsvValue(typeof value === "string" ? value : value == null ? "" : String(value)));
   });
 
-  return [...summaryRows, "", headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+  return buildCsvDocument(headers, rows, { summaryRows });
 }
 
 export function buildRevenueManagerBatchHistory(
@@ -532,54 +533,23 @@ function buildRevenueManagerBatchExportSummaryRows(
   const recommendationRationale = getRevenueManagerExportRecommendationRationale(locale, scope, options.filters);
   const comparisonSummary = getRevenueManagerExportComparisonSummary(locale, scope, options.filters);
   const ownerHandoffContext = getRevenueManagerExportOwnerHandoffContext(locale, scope);
-  const rows = [
-    [locale === "ar" ? "القسم" : "section", locale === "ar" ? "الحقل" : "field", locale === "ar" ? "القيمة" : "value"],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "أنشئ في" : "generated_at", generatedAt],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "الجمهور المقصود" : "intended_audience", audience],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "وضع المخاطر" : "risk_posture", riskPosture],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "النطاق المختار" : "selected_scope", scopeLabel],
-    [
-      locale === "ar" ? "ملخص التصدير" : "export_summary",
-      locale === "ar" ? "حالة التوصية" : "recommendation_status",
-      recommendationStatus
-    ],
-    [
-      locale === "ar" ? "ملخص التصدير" : "export_summary",
-      locale === "ar" ? "سبب الاختيار" : "selection_rationale",
-      recommendationRationale
-    ],
-    [
-      locale === "ar" ? "ملخص التصدير" : "export_summary",
-      locale === "ar" ? "المقارنة مع النطاق الأوسع" : "scope_comparison",
-      comparisonSummary
-    ],
-    [
-      locale === "ar" ? "ملخص التصدير" : "export_summary",
-      locale === "ar" ? "سياق المالكين الحاليين" : "owner_handoff_context",
-      ownerHandoffContext
-    ],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "خلاصة المشاركة" : "share_summary", shareSummary],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "معرّف الدفعة" : "batch_id", scope.batchScope.batchId],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "حُفظت الدفعة في" : "batch_saved_at", scope.batchScope.savedAt],
-    [locale === "ar" ? "ملخص التصدير" : "export_summary", locale === "ar" ? "نطاق المالك الأصلي" : "scoped_owner", scope.batchScope.scopedOwnerName],
-    [
-      locale === "ar" ? "ملخص التصدير" : "export_summary",
-      locale === "ar" ? "الحالات الظاهرة" : "visible_case_count",
-      String(scope.focusedCases.length)
-    ],
-    [
-      locale === "ar" ? "ملخص التصدير" : "export_summary",
-      locale === "ar" ? "الحالات المتصاعدة" : "still_escalated_case_count",
-      String(scope.batchScope.stillEscalatedCaseCount)
-    ],
-    [
-      locale === "ar" ? "ملخص التصدير" : "export_summary",
-      locale === "ar" ? "الحالات المصفّاة" : "cleared_case_count",
-      String(scope.batchScope.clearedCaseCount)
-    ]
-  ];
-
-  return rows.map((row) => row.map((value) => escapeCsvValue(value)).join(","));
+  return buildExportSummaryCsvRows(locale, [
+    { field: "generated_at", value: generatedAt },
+    { field: "intended_audience", value: audience },
+    { field: "risk_posture", value: riskPosture },
+    { field: "selected_scope", value: scopeLabel },
+    { field: "recommendation_status", value: recommendationStatus },
+    { field: "selection_rationale", value: recommendationRationale },
+    { field: "scope_comparison", value: comparisonSummary },
+    { field: "owner_handoff_context", value: ownerHandoffContext },
+    { field: "share_summary", value: shareSummary },
+    { field: "batch_id", value: scope.batchScope.batchId },
+    { field: "batch_saved_at", value: scope.batchScope.savedAt },
+    { field: "scoped_owner", value: scope.batchScope.scopedOwnerName },
+    { field: "visible_case_count", value: String(scope.focusedCases.length) },
+    { field: "still_escalated_case_count", value: String(scope.batchScope.stillEscalatedCaseCount) },
+    { field: "cleared_case_count", value: String(scope.batchScope.clearedCaseCount) }
+  ]);
 }
 
 function getRevenueManagerExportAudience(
@@ -1009,12 +979,4 @@ function readPayloadString(payload: Record<string, unknown>, key: string) {
   const value = payload[key];
 
   return typeof value === "string" && value.trim() ? value : null;
-}
-
-function escapeCsvValue(value: string) {
-  if (value.includes(",") || value.includes("\"") || value.includes("\n")) {
-    return `"${value.replaceAll("\"", "\"\"")}"`;
-  }
-
-  return value;
 }
