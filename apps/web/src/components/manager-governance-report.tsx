@@ -910,7 +910,10 @@ function FilterTabs(props: {
 
 function buildGovernanceExportHref(locale: SupportedLocale, filters: ListGovernanceEventsQuery) {
   const query = new URLSearchParams();
+  const recipient =
+    filters.subjectType === "prepared_reply_draft" || filters.status === "pending_review" ? "qa" : "manager";
   query.set("limit", "500");
+  query.set("recipient", recipient);
   query.set("windowDays", String(filters.windowDays));
 
   if (filters.action) {
@@ -975,7 +978,7 @@ function buildOperationalRiskExportHref(locale: SupportedLocale, candidate: Gove
           bulkBatchId: candidate.batchId
         };
 
-  return buildRevenueManagerExportHref(locale, filters);
+  return buildRevenueManagerExportHref(locale, filters, { recipient: "operations" });
 }
 
 function getOperationalRiskExportScopeLabel(locale: SupportedLocale, scope: GovernanceOperationalRiskExportScope) {

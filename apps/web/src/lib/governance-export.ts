@@ -1,11 +1,13 @@
 import type { ListGovernanceEventsQuery, SupportedLocale } from "@real-estate-ai/contracts";
 
 import { buildCsvDocument, buildExportSummaryCsvRows, escapeCsvValue } from "./export-summary";
+import type { ExportRecipient } from "./export-summary";
 
 interface GovernanceExportOptions {
   filters: ListGovernanceEventsQuery;
   generatedAt?: string;
   locale: SupportedLocale;
+  recipient?: ExportRecipient;
 }
 
 export function buildGovernanceEventCsv(items: Array<Record<string, unknown>>, options: GovernanceExportOptions) {
@@ -57,17 +59,19 @@ function buildGovernanceExportSummaryRows(items: Array<Record<string, unknown>>,
   const uniqueCaseCount = new Set(items.map((item) => String(item.caseId ?? ""))).size;
   const openedCount = items.filter((item) => item.action === "opened").length;
   const resolvedCount = items.filter((item) => item.action === "resolved").length;
+  const recipient = options.recipient ?? "manager";
   return buildExportSummaryCsvRows(options.locale, [
     { field: "generated_at", value: generatedAt },
-    { field: "intended_audience", value: getGovernanceExportAudience(options.locale, options.filters) },
-    { field: "review_focus", value: getGovernanceExportReviewFocus(options.locale, options.filters) },
+    { field: "recipient_variant", value: recipient },
+    { field: "intended_audience", value: getGovernanceExportAudience(options.locale, options.filters, recipient) },
+    { field: "review_focus", value: getGovernanceExportReviewFocus(options.locale, options.filters, recipient) },
     { field: "selected_scope", value: getGovernanceExportScopeLabel(options.locale, options.filters) },
     { field: "filter_summary", value: getGovernanceExportFilterSummary(options.locale, options.filters) },
     {
       field: "activity_summary",
       value: getGovernanceExportActivitySummary(options.locale, matchingRows, uniqueCaseCount, openedCount, resolvedCount)
     },
-    { field: "share_summary", value: getGovernanceExportShareSummary(options.locale, options.filters, matchingRows) },
+    { field: "share_summary", value: getGovernanceExportShareSummary(options.locale, options.filters, matchingRows, recipient) },
     { field: "matching_row_count", value: String(matchingRows) },
     { field: "unique_case_count", value: String(uniqueCaseCount) },
     { field: "opened_event_count", value: String(openedCount) },
@@ -75,7 +79,19 @@ function buildGovernanceExportSummaryRows(items: Array<Record<string, unknown>>,
   ]);
 }
 
-function getGovernanceExportAudience(locale: SupportedLocale, filters: ListGovernanceEventsQuery) {
+function getGovernanceExportAudience(
+  locale: SupportedLocale,
+  filters: ListGovernanceEventsQuery,
+  recipient: ExportRecipient
+) {
+  if (recipient === "qa") {
+    return locale === "ar" ? "مراجعة الجودة وتدقيق السياسات" : "QA review and policy audit";
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar" ? "قيادة العمليات وملاك المتابعة" : "Operations leadership and follow-up owners";
+  }
+
   if (locale === "ar") {
     return filters.kind === "handover_customer_update"
       ? "قيادة التسليم والجودة"
@@ -91,7 +107,23 @@ function getGovernanceExportAudience(locale: SupportedLocale, filters: ListGover
       : "Manager operations review";
 }
 
-function getGovernanceExportReviewFocus(locale: SupportedLocale, filters: ListGovernanceEventsQuery) {
+function getGovernanceExportReviewFocus(
+  locale: SupportedLocale,
+  filters: ListGovernanceEventsQuery,
+  recipient: ExportRecipient
+) {
+  if (recipient === "qa") {
+    return locale === "ar"
+      ? "أثر الحوكمة الجاهز للتدقيق عبر قرارات الجودة ومحفزات السياسات"
+      : "Audit-ready governance history across QA decisions and policy triggers";
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar"
+      ? "سجل الحوكمة المطلوب لتحويل قرارات الجودة إلى متابعة تشغيلية"
+      : "Governance history needed to turn QA decisions into operational follow-up";
+  }
+
   if (locale === "ar") {
     if (filters.status === "pending_review") {
       return "حدود جودة ما زالت مفتوحة وتنتظر القرار";
@@ -180,7 +212,24 @@ function getGovernanceExportActivitySummary(
   return `This file covers ${matchingRows} rows across ${uniqueCaseCount} unique cases, including ${openedCount} openings and ${resolvedCount} resolutions in the current scope.`;
 }
 
-function getGovernanceExportShareSummary(locale: SupportedLocale, filters: ListGovernanceEventsQuery, matchingRows: number) {
+function getGovernanceExportShareSummary(
+  locale: SupportedLocale,
+  filters: ListGovernanceEventsQuery,
+  matchingRows: number,
+  recipient: ExportRecipient
+) {
+  if (recipient === "qa") {
+    return locale === "ar"
+      ? `هذا التصدير مناسب لتدقيق الجودة لأنه يجمع ${matchingRows} أحداث حوكمة مع نفس حدود القرار ومحفزات السياسات.`
+      : `This export is suited for QA audit because it collects ${matchingRows} governance events under the same decision boundary and policy-trigger scope.`;
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar"
+      ? `هذا التصدير مناسب للمتابعة التشغيلية لأنه يجمع ${matchingRows} أحداث حوكمة ضمن نفس النطاق القابل للتنفيذ.`
+      : `This export is suited for operational follow-up because it collects ${matchingRows} governance events inside one action-ready scope.`;
+  }
+
   if (locale === "ar") {
     if (filters.status === "pending_review") {
       return `هذا التصدير مناسب لجلسات الفرز السريع لأنه يجمع ${matchingRows} حدود جودة ما زالت مفتوحة ضمن نفس النطاق.`;

@@ -1,6 +1,7 @@
 import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 import { operatorSessionHeaderName } from "@real-estate-ai/contracts";
 
+import { parseExportRecipient } from "@/lib/export-summary";
 import { buildGovernanceEventsPath, getWebApiBaseUrl, WebApiError } from "@/lib/live-api";
 import { buildGovernanceEventCsv } from "@/lib/governance-export";
 import { parseGovernanceReportSearchParams } from "@/lib/governance-report";
@@ -20,6 +21,7 @@ export async function GET(request: Request, context: { params: Promise<{ locale:
 
   const requestUrl = new URL(request.url);
   const filters = parseGovernanceReportSearchParams(requestUrl.searchParams);
+  const recipient = parseExportRecipient(requestUrl.searchParams.get("recipient"));
   const sessionToken = await getCurrentOperatorSessionToken();
 
   try {
@@ -39,9 +41,10 @@ export async function GET(request: Request, context: { params: Promise<{ locale:
 
     const csv = buildGovernanceEventCsv(responseBody?.items ?? [], {
       filters,
-      locale: locale === "ar" ? "ar" : "en"
+      locale: locale === "ar" ? "ar" : "en",
+      recipient
     });
-    const filename = `governance-report-${locale}-${filters.windowDays}d.csv`;
+    const filename = `governance-report-${recipient !== "manager" ? `${recipient}-` : ""}${locale}-${filters.windowDays}d.csv`;
 
     return new Response(csv, {
       headers: {

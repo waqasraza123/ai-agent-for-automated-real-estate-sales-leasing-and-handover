@@ -5,6 +5,8 @@ export interface ExportSummaryField {
   value: string;
 }
 
+export type ExportRecipient = "manager" | "operations" | "qa";
+
 export function buildExportSummaryCsvRows(
   locale: SupportedLocale,
   fields: ExportSummaryField[],
@@ -32,6 +34,14 @@ export function buildCsvDocument(headers: string[], rows: string[][], options?: 
     headers.join(","),
     ...rows.map((row) => row.join(","))
   ].join("\n");
+}
+
+export function parseExportRecipient(value: string | null | undefined): ExportRecipient {
+  if (value === "operations" || value === "qa") {
+    return value;
+  }
+
+  return "manager";
 }
 
 export function escapeCsvValue(value: string) {

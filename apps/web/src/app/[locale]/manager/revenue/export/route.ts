@@ -7,6 +7,7 @@ import {
   buildRevenueManagerBatchHistory,
   buildRevenueManagerDriftedCaseIdsByReason,
   buildRevenueManagerDriftedCaseIds,
+  parseRevenueManagerExportRecipient,
   buildRevenueManagerScope,
   parseRevenueManagerFilters
 } from "@/lib/revenue-manager";
@@ -22,6 +23,7 @@ export async function GET(request: Request, context: { params: Promise<{ locale:
 
   const requestUrl = new URL(request.url);
   const filters = parseRevenueManagerFilters(requestUrl.searchParams);
+  const recipient = parseRevenueManagerExportRecipient(requestUrl.searchParams);
 
   if (!filters.bulkBatchId) {
     return new Response(locale === "ar" ? "مطلوب نطاق دفعة جماعية صالح" : "A valid bulk batch scope is required", {
@@ -61,7 +63,8 @@ export async function GET(request: Request, context: { params: Promise<{ locale:
 
   const csv = buildRevenueManagerBatchExportCsv(revenueScope, {
     filters,
-    locale: locale === "ar" ? "ar" : "en"
+    locale: locale === "ar" ? "ar" : "en",
+    recipient
   });
 
   if (!csv) {
@@ -73,6 +76,8 @@ export async function GET(request: Request, context: { params: Promise<{ locale:
   const filename = `revenue-batch-${revenueScope.batchScope.batchId.slice(0, 8)}${
     filters.batchDrift === "changed_later" ? "-changed-later" : ""
   }${filters.batchDriftReason ? `-${filters.batchDriftReason.replace(/_/g, "-")}` : ""}-${
+    recipient !== "manager" ? `${recipient}-` : ""
+  }${
     locale
   }.csv`;
 

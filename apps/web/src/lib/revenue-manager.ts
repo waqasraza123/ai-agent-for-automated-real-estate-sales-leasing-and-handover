@@ -1,6 +1,7 @@
 import type { PersistedCaseDetail, PersistedCaseSummary, SupportedLocale } from "@real-estate-ai/contracts";
 
-import { buildCsvDocument, buildExportSummaryCsvRows, escapeCsvValue } from "./export-summary";
+import { buildCsvDocument, buildExportSummaryCsvRows, escapeCsvValue, parseExportRecipient } from "./export-summary";
+import type { ExportRecipient } from "./export-summary";
 import { buildManagerWorkspaceQueues } from "./manager-workspace";
 import { hasPersistedLatestHumanReplyEscalation } from "./persisted-case-presenters";
 
@@ -53,6 +54,7 @@ interface RevenueManagerBatchExportOptions {
   filters?: Partial<RevenueManagerFilters>;
   generatedAt?: string;
   locale?: SupportedLocale;
+  recipient?: ExportRecipient;
 }
 
 export type RevenueManagerBatchHistoryEntryType = "follow_up_update" | "later_bulk_reset" | "scoped_batch_reset";
@@ -173,8 +175,17 @@ export function buildRevenueManagerHref(
   return `${path}${hash}`;
 }
 
-export function buildRevenueManagerExportHref(locale: SupportedLocale, filters: Partial<RevenueManagerFilters> = {}) {
+export function buildRevenueManagerExportHref(
+  locale: SupportedLocale,
+  filters: Partial<RevenueManagerFilters> = {},
+  options: { recipient?: ExportRecipient } = {}
+) {
   const searchParams = buildRevenueManagerSearchParams(filters);
+
+  if (options.recipient && options.recipient !== "manager") {
+    searchParams.set("recipient", options.recipient);
+  }
+
   const serialized = searchParams.toString();
 
   return serialized.length > 0 ? `/${locale}/manager/revenue/export?${serialized}` : `/${locale}/manager/revenue/export`;
@@ -525,16 +536,18 @@ function buildRevenueManagerBatchExportSummaryRows(
 
   const locale = options.locale ?? "en";
   const generatedAt = options.generatedAt ?? new Date().toISOString();
-  const audience = getRevenueManagerExportAudience(locale, scope, options.filters);
+  const recipient = options.recipient ?? "manager";
+  const audience = getRevenueManagerExportAudience(locale, scope, recipient, options.filters);
   const riskPosture = getRevenueManagerExportRiskPosture(locale, scope);
   const scopeLabel = getRevenueManagerExportScopeLabel(locale, options.filters);
-  const shareSummary = getRevenueManagerExportShareSummary(locale, scope, options.filters);
-  const recommendationStatus = getRevenueManagerExportRecommendationStatus(locale, options.filters);
-  const recommendationRationale = getRevenueManagerExportRecommendationRationale(locale, scope, options.filters);
-  const comparisonSummary = getRevenueManagerExportComparisonSummary(locale, scope, options.filters);
-  const ownerHandoffContext = getRevenueManagerExportOwnerHandoffContext(locale, scope);
+  const shareSummary = getRevenueManagerExportShareSummary(locale, scope, recipient, options.filters);
+  const recommendationStatus = getRevenueManagerExportRecommendationStatus(locale, recipient, options.filters);
+  const recommendationRationale = getRevenueManagerExportRecommendationRationale(locale, scope, recipient, options.filters);
+  const comparisonSummary = getRevenueManagerExportComparisonSummary(locale, scope, recipient, options.filters);
+  const ownerHandoffContext = getRevenueManagerExportOwnerHandoffContext(locale, scope, recipient);
   return buildExportSummaryCsvRows(locale, [
     { field: "generated_at", value: generatedAt },
+    { field: "recipient_variant", value: recipient },
     { field: "intended_audience", value: audience },
     { field: "risk_posture", value: riskPosture },
     { field: "selected_scope", value: scopeLabel },
@@ -555,8 +568,17 @@ function buildRevenueManagerBatchExportSummaryRows(
 function getRevenueManagerExportAudience(
   locale: SupportedLocale,
   scope: RevenueManagerScope,
+  recipient: ExportRecipient,
   filters?: Partial<RevenueManagerFilters>
 ) {
+  if (recipient === "qa") {
+    return locale === "ar" ? "مراجعة الجودة وحوكمة الإيرادات" : "QA review and revenue governance";
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar" ? "ملاك المتابعة الحاليون وقيادة العمليات" : "Current follow-up owners and operations leads";
+  }
+
   if (locale === "ar") {
     if (filters?.batchDriftReason === "mixed") {
       return "قيادة الإيرادات مع مراجعة الجودة";
@@ -639,6 +661,7 @@ function getRevenueManagerExportScopeLabel(locale: SupportedLocale, filters?: Pa
 function getRevenueManagerExportShareSummary(
   locale: SupportedLocale,
   scope: RevenueManagerScope,
+  recipient: ExportRecipient,
   filters?: Partial<RevenueManagerFilters>
 ) {
   if (!scope.batchScope) {
@@ -648,6 +671,18 @@ function getRevenueManagerExportShareSummary(
   const visibleCount = scope.focusedCases.length;
   const stillEscalatedCount = scope.batchScope.stillEscalatedCaseCount;
   const clearedCount = scope.batchScope.clearedCaseCount;
+
+  if (recipient === "qa") {
+    return locale === "ar"
+      ? `هذا الملف مهيأ لمراجعة الجودة لأنه يجمع ${visibleCount} حالات حيّة مع ${stillEscalatedCount} ما زالت متصاعدة و${clearedCount} خرجت من الخطر داخل نفس مسار الحوكمة.`
+      : `This export is packaged for QA review because it keeps ${visibleCount} live cases together with ${stillEscalatedCount} still escalated and ${clearedCount} now cleared under the same governance path.`;
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar"
+      ? `هذا الملف مهيأ للتنفيذ التشغيلي لأنه يجمع ${visibleCount} حالات حيّة مع ${stillEscalatedCount} ما زالت تحتاج متابعة و${clearedCount} حالات تم احتواؤها داخل نفس النطاق.`
+      : `This export is packaged for operational execution because it keeps ${visibleCount} live cases together with ${stillEscalatedCount} still needing follow-up and ${clearedCount} already contained in the same scope.`;
+  }
 
   if (locale === "ar") {
     if (filters?.batchDriftReason === "mixed") {
@@ -672,7 +707,19 @@ function getRevenueManagerExportShareSummary(
   return `This export keeps the full live batch outcome across ${visibleCount} cases, including ${stillEscalatedCount} still escalated and ${clearedCount} now cleared for operational review.`;
 }
 
-function getRevenueManagerExportRecommendationStatus(locale: SupportedLocale, filters?: Partial<RevenueManagerFilters>) {
+function getRevenueManagerExportRecommendationStatus(
+  locale: SupportedLocale,
+  recipient: ExportRecipient,
+  filters?: Partial<RevenueManagerFilters>
+) {
+  if (recipient === "qa") {
+    return locale === "ar" ? "صيغة مراجعة جودة" : "QA review variant";
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar" ? "صيغة متابعة تشغيلية" : "Operations action variant";
+  }
+
   if (locale === "ar") {
     return filters?.batchDrift || filters?.batchDriftReason ? "نطاق موصى به من تقرير الحوكمة" : "نطاق مراجعة شامل";
   }
@@ -685,9 +732,22 @@ function getRevenueManagerExportRecommendationStatus(locale: SupportedLocale, fi
 function getRevenueManagerExportRecommendationRationale(
   locale: SupportedLocale,
   scope: RevenueManagerScope,
+  recipient: ExportRecipient,
   filters?: Partial<RevenueManagerFilters>
 ) {
   const visibleCount = scope.focusedCases.length;
+
+  if (recipient === "qa") {
+    return locale === "ar"
+      ? `اختيرت هذه الصيغة لأنها تحتفظ بـ ${visibleCount} حالات حيّة مع سياق التوصية نفسه حتى تتمكن الجودة من مراجعة سبب الاختيار من دون فقد أثر المخاطر الحالية.`
+      : `This variant was chosen because it preserves the same ${visibleCount} live cases with their recommendation context, so QA can review why this scope was selected without losing the current risk picture.`;
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar"
+      ? `اختيرت هذه الصيغة لأنها تبقي الحالات القابلة للتنفيذ في المقدمة حتى يتمكن ملاك المتابعة الحاليون من العمل على نفس النطاق الذي أوصى به التقرير.`
+      : "This variant was chosen because it keeps the action-ready cases and recommendation context together for the current follow-up owners who need to execute the next step.";
+  }
 
   if (locale === "ar") {
     if (filters?.batchDriftReason === "mixed") {
@@ -731,11 +791,24 @@ function getRevenueManagerExportRecommendationRationale(
 function getRevenueManagerExportComparisonSummary(
   locale: SupportedLocale,
   scope: RevenueManagerScope,
+  recipient: ExportRecipient,
   filters?: Partial<RevenueManagerFilters>
 ) {
   const visibleCount = scope.focusedCases.length;
   const fullScopeCount = scope.batchScope?.caseCount ?? visibleCount;
   const excludedCount = Math.max(fullScopeCount - visibleCount, 0);
+
+  if (recipient === "qa") {
+    return locale === "ar"
+      ? "تحافظ هذه الصيغة على مقارنة النطاق كما هي حتى تبقى مراجعة الجودة مرتبطة بنفس سبب التوصية وليس بسياق تشغيلي مختلف."
+      : "This variant preserves the same scope comparison so QA review stays anchored to the recommendation itself rather than a different operational framing.";
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar"
+      ? "تحافظ هذه الصيغة على مقارنة النطاق كما هي حتى يعرف الملاك الحاليون ما الذي استُبعد من العرض الأوسع قبل تنفيذ المتابعة."
+      : "This variant preserves the same scope comparison so current owners can see what was excluded from the broader batch before they act.";
+  }
 
   if (locale === "ar") {
     if (filters?.batchDriftReason || filters?.batchDrift === "changed_later") {
@@ -756,9 +829,33 @@ function getRevenueManagerExportComparisonSummary(
   return "This export already represents the broadest live batch scope, so no narrower recommendation comparison is embedded here.";
 }
 
-function getRevenueManagerExportOwnerHandoffContext(locale: SupportedLocale, scope: RevenueManagerScope) {
+function getRevenueManagerExportOwnerHandoffContext(
+  locale: SupportedLocale,
+  scope: RevenueManagerScope,
+  recipient: ExportRecipient
+) {
   const ownerCount = scope.batchOwnerGroups.length;
   const ownerNames = scope.batchOwnerGroups.map((group) => group.ownerName);
+
+  if (recipient === "qa") {
+    return locale === "ar"
+      ? ownerCount <= 1
+        ? `تحتاج الجودة إلى مراجعة مسار مالك حالي واحد: ${ownerNames[0] ?? scope.batchScope?.scopedOwnerName ?? "غير محدد"}.`
+        : `تحتاج الجودة إلى مراجعة نطاق موزع على ${ownerCount} ملاك حاليين: ${ownerNames.join(" | ")}.`
+      : ownerCount <= 1
+        ? `QA should review one current-owner path: ${ownerNames[0] ?? scope.batchScope?.scopedOwnerName ?? "Unassigned"}.`
+        : `QA should review a scope now split across ${ownerCount} current owners: ${ownerNames.join(" | ")}.`;
+  }
+
+  if (recipient === "operations") {
+    return locale === "ar"
+      ? ownerCount <= 1
+        ? `التنفيذ الحالي يقع تحت مالك واحد: ${ownerNames[0] ?? scope.batchScope?.scopedOwnerName ?? "غير محدد"}.`
+        : `التنفيذ الحالي موزع على ${ownerCount} ملاك: ${ownerNames.join(" | ")}.`
+      : ownerCount <= 1
+        ? `Execution currently sits with one owner: ${ownerNames[0] ?? scope.batchScope?.scopedOwnerName ?? "Unassigned"}.`
+        : `Execution is currently split across ${ownerCount} owners: ${ownerNames.join(" | ")}.`;
+  }
 
   if (locale === "ar") {
     return ownerCount <= 1
@@ -797,6 +894,13 @@ function sanitizeBatchDriftReason(batchDriftReason: string | undefined): Revenue
   }
 
   return undefined;
+}
+
+export function parseRevenueManagerExportRecipient(searchParams: SearchParamsInput) {
+  const rawSearchParams =
+    searchParams instanceof URLSearchParams ? Object.fromEntries(searchParams.entries()) : normalizeSearchParamRecord(searchParams);
+
+  return parseExportRecipient(rawSearchParams.recipient);
 }
 
 function isUuid(value: string) {

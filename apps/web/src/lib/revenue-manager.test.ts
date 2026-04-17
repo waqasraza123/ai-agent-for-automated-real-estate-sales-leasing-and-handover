@@ -88,6 +88,9 @@ describe("revenue manager filters", () => {
   it("builds stable revenue manager drill-down links", () => {
     expect(buildRevenueManagerHref("en")).toBe("/en/manager/revenue");
     expect(buildRevenueManagerExportHref("en")).toBe("/en/manager/revenue/export");
+    expect(buildRevenueManagerExportHref("en", {}, { recipient: "operations" })).toBe(
+      "/en/manager/revenue/export?recipient=operations"
+    );
     expect(
       buildRevenueManagerHref(
         "en",
@@ -112,6 +115,20 @@ describe("revenue manager filters", () => {
       })
     ).toBe(
       "/en/manager/revenue/export?queue=escalated_handoffs&bulkBatchId=33333333-3333-4333-8333-333333333333&batchDrift=changed_later&batchDriftReason=mixed"
+    );
+    expect(
+      buildRevenueManagerExportHref(
+        "en",
+        {
+          batchDrift: "changed_later",
+          batchDriftReason: "mixed",
+          bulkBatchId: "33333333-3333-4333-8333-333333333333",
+          queue: "escalated_handoffs"
+        },
+        { recipient: "operations" }
+      )
+    ).toBe(
+      "/en/manager/revenue/export?queue=escalated_handoffs&bulkBatchId=33333333-3333-4333-8333-333333333333&batchDrift=changed_later&batchDriftReason=mixed&recipient=operations"
     );
   });
 
@@ -264,6 +281,7 @@ describe("revenue manager filters", () => {
       })
     ).toBe(`section,field,value
 export_summary,generated_at,2026-04-11T12:00:00.000Z
+export_summary,recipient_variant,manager
 export_summary,intended_audience,Revenue and operations leadership
 export_summary,risk_posture,Mixed live pressure with cleared cases
 export_summary,selected_scope,Full affected cases
@@ -282,6 +300,78 @@ export_summary,cleared_case_count,1
 batchId,batchSavedAt,batchScopedOwnerName,batchVisibleCaseCount,batchStillEscalatedCaseCount,batchClearedCaseCount,currentOwnerName,currentOwnerGroupCaseCount,currentOwnerGroupStillEscalatedCaseCount,currentOwnerGroupClearedCaseCount,riskStatus,customerName,caseReference,caseId,projectInterest,preferredLocale,nextAction,nextActionDueAt,followUpStatus,openInterventionsCount,latestHumanReplySentBy,latestHumanReplySentAt,latestHumanReplyApprovedFromQa,latestManagerFollowUpSavedAt,latestManagerFollowUpOwnerName,latestManagerFollowUpNextAction
 33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk North,1,1,0,still_escalated,Customer batch-escalated,CASE-BATCH-ES,batch-escalated,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,attention,1,Amina Rahman,2026-04-11T10:00:00.000Z,true,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up
 33333333-3333-4333-8333-333333333333,2026-04-11T11:30:00.000Z,Revenue Ops Queue,2,1,1,Manager Desk South,1,0,1,cleared,Customer batch-cleared,CASE-BATCH-CL,batch-cleared,Sunrise Residences,en,Next follow-up,2026-04-12T08:00:00.000Z,on_track,0,Omar Saleh,2026-04-11T09:30:00.000Z,false,2026-04-11T11:30:00.000Z,Manager Desk North,Reset the desk follow-up`);
+  });
+
+  it("can package a batch export for operations recipients", () => {
+    const batchId = "33333333-3333-4333-8333-333333333333";
+    const scope = buildRevenueManagerScope(
+      [
+        buildCase("batch-escalated", {
+          followUpStatus: "attention",
+          latestHumanReply: {
+            approvedFromQa: true,
+            message: "Sent the approved update.",
+            nextAction: "Confirm callback timing",
+            nextActionDueAt: "2026-04-12T09:00:00.000Z",
+            sentAt: "2026-04-11T10:00:00.000Z",
+            sentByName: "Amina Rahman"
+          },
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId,
+              caseCount: 2,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-12T11:00:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-11T11:30:00.000Z"
+          },
+          openInterventionsCount: 1,
+          ownerName: "Manager Desk North"
+        }),
+        buildCase("batch-cleared", {
+          latestManagerFollowUp: {
+            bulkAction: {
+              batchId,
+              caseCount: 2,
+              scopedOwnerName: "Revenue Ops Queue"
+            },
+            nextAction: "Reset the desk follow-up",
+            nextActionDueAt: "2026-04-12T11:00:00.000Z",
+            ownerName: "Manager Desk North",
+            savedAt: "2026-04-11T11:30:00.000Z"
+          },
+          ownerName: "Manager Desk South"
+        })
+      ],
+      {
+        bulkBatchId: batchId,
+        queue: "all"
+      }
+    );
+
+    const csv = buildRevenueManagerBatchExportCsv(scope, {
+      filters: {
+        bulkBatchId: batchId
+      },
+      generatedAt: "2026-04-11T12:00:00.000Z",
+      locale: "en",
+      recipient: "operations"
+    });
+
+    expect(csv).toContain("export_summary,recipient_variant,operations");
+    expect(csv).toContain("export_summary,intended_audience,Current follow-up owners and operations leads");
+    expect(csv).toContain("export_summary,recommendation_status,Operations action variant");
+    expect(csv).toContain(
+      "export_summary,selection_rationale,This variant was chosen because it keeps the action-ready cases and recommendation context together for the current follow-up owners who need to execute the next step."
+    );
+    expect(csv).toContain(
+      "export_summary,share_summary,This export is packaged for operational execution because it keeps 2 live cases together with 1 still needing follow-up and 1 already contained in the same scope."
+    );
+    expect(csv).toContain(
+      "export_summary,owner_handoff_context,Execution is currently split across 2 owners: Manager Desk North | Manager Desk South."
+    );
   });
 
   it("can narrow a batch scope to only the cases that changed later", () => {
