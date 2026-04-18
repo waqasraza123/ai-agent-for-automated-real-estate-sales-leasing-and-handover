@@ -9,7 +9,7 @@ import {
   heroShellClassName,
   heroSummaryClassName,
   heroTitleClassName,
-  metricGridClassName,
+  metricGridCompactClassName,
   MetricTile,
   pageStackClassName,
   Panel,
@@ -110,9 +110,10 @@ export default async function LandingPage(props: PageProps) {
                 <StatusBadge>{locale === "ar" ? "تشغيل عربي أولاً" : "Arabic-first operations"}</StatusBadge>
                 <StatusBadge tone="success">{locale === "ar" ? "واجهة موثوقة" : "Trusted operator UX"}</StatusBadge>
               </div>
-              <div className={metricGridClassName}>
+              <div className={metricGridCompactClassName}>
                 {demoDataset.dashboardMetrics.map((metric) => (
                   <MetricTile
+                    density="compact"
                     key={metric.id}
                     detail={getLocalizedText(metric.change, locale)}
                     label={getLocalizedText(metric.label, locale)}

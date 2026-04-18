@@ -11,6 +11,7 @@ export function cx(...values: ClassValue[]): string {
 export const pageStackClassName = "flex flex-col gap-5 lg:gap-6";
 export const pageTransitionClassName = "animate-soft-reveal";
 export const metricGridClassName = "grid gap-4 sm:grid-cols-2 xl:grid-cols-4";
+export const metricGridCompactClassName = "grid gap-3 sm:grid-cols-2";
 export const twoColumnGridClassName = "grid gap-6 xl:grid-cols-2";
 export const heroShellClassName = "grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]";
 export const stackListClassName = "flex flex-col gap-4";
@@ -72,7 +73,10 @@ const cardDescendantBodyClassName = "[&_p]:text-sm [&_p]:leading-7 [&_p]:text-in
 export const metricLabelClassName = "text-xs font-semibold tracking-[0.18em] text-ink-soft";
 export const metricValueClassName = "font-display text-4xl font-semibold tracking-[-0.05em] text-ink";
 export const metricDetailClassName = "text-sm leading-7 text-ink-soft";
-export function metricTileClassName(tone: "ocean" | "sand" | "mint" | "rose") {
+export function metricTileClassName(
+  tone: "ocean" | "sand" | "mint" | "rose",
+  density: "default" | "compact" = "default"
+) {
   const toneClassName =
     tone === "ocean"
       ? "border-ai-200/80 bg-gradient-to-br from-ai-50/95 via-white to-white"
@@ -85,7 +89,9 @@ export function metricTileClassName(tone: "ocean" | "sand" | "mint" | "rose") {
   return cx(
     cardSurfaceClassName,
     interactiveCardClassName,
-    "flex min-h-44 flex-col justify-between p-5 sm:p-6",
+    density === "compact"
+      ? "flex min-h-36 flex-col justify-between p-4 sm:min-h-40 sm:p-5"
+      : "flex min-h-44 flex-col justify-between p-5 sm:p-6",
     toneClassName
   );
 }
@@ -521,16 +527,20 @@ export function StatusBadge(props: {
 }
 
 export function MetricTile(props: {
+  className?: string;
+  density?: "default" | "compact";
   label: string;
   value: string;
   detail: string;
   tone: "ocean" | "sand" | "mint" | "rose";
 }) {
   return (
-    <div className={metricTileClassName(props.tone)}>
+    <div className={cx(metricTileClassName(props.tone, props.density), props.className)}>
       <p className={metricLabelClassName}>{props.label}</p>
-      <p className={metricValueClassName}>{props.value}</p>
-      <p className={metricDetailClassName}>{props.detail}</p>
+      <p className={cx(metricValueClassName, props.density === "compact" ? "text-[2rem] sm:text-[2.35rem]" : undefined)}>
+        {props.value}
+      </p>
+      <p className={cx(metricDetailClassName, props.density === "compact" ? "leading-6" : undefined)}>{props.detail}</p>
     </div>
   );
 }
