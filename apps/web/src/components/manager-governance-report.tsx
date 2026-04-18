@@ -10,10 +10,10 @@ import {
   type SupportedLocale
 } from "@real-estate-ai/contracts";
 import {
-  dataTableCellClassName,
-  dataTableClassName,
-  dataTableHeaderCellClassName,
-  dataTableWrapperClassName,
+  DataTable,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeaderCell,
   EmptyState,
   fieldNoteClassName,
   inlineLinkClassName,
@@ -501,28 +501,27 @@ export function ManagerGovernanceReport(props: {
                 : "This summary ranks which live CSV scopes are worth pulling first before opening batch rows, based on visible drift volume, drift complexity, and cases that are still escalated."
             }
           >
-            <div className={dataTableWrapperClassName}>
-              <table className={dataTableClassName}>
-                <thead>
-                  <tr>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الأولوية" : "Priority"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الحجم" : "Volume"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الإجراء" : "Action"}</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <DataTable>
+              <DataTableHead>
+                <tr>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الأولوية" : "Priority"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الحجم" : "Volume"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الإجراء" : "Action"}</DataTableHeaderCell>
+                </tr>
+              </DataTableHead>
+              <tbody>
                   {props.operationalRiskSummary.exportCandidates.map((candidate) => (
                     <tr key={`${candidate.batchId}:${candidate.scope}`}>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الأولوية" : "Priority"}>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "الأولوية" : "Priority"}>
                         <div className={stackTightClassName}>
                           <StatusBadge tone={getExportCandidateTone(candidate.priority)}>
                             {getExportCandidatePriorityLabel(props.locale, candidate.priority)}
                           </StatusBadge>
                           <span>{formatDateTime(candidate.savedAt, props.locale)}</span>
                         </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "النطاق المقترح" : "Recommended scope"}>
                         <div className={tableLinkClassName}>
                           <strong className={tableLinkTitleClassName}>{getOperationalRiskExportScopeLabel(props.locale, candidate.scope)}</strong>
                           <span className={tableLinkMetaClassName}>
@@ -535,8 +534,8 @@ export function ManagerGovernanceReport(props: {
                             <span className={tableLinkMetaClassName}>{getExportCandidateComparisonLabel(props.locale, candidate)}</span>
                           ) : null}
                         </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الحجم" : "Volume"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "الحجم" : "Volume"}>
                         <div className={stackTightClassName}>
                           <StatusBadge tone={candidate.caseCount > 0 ? "warning" : "neutral"}>
                             {props.locale === "ar"
@@ -549,8 +548,8 @@ export function ManagerGovernanceReport(props: {
                               : `${candidate.stillEscalatedCaseCount} still escalated`}
                           </StatusBadge>
                         </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الإجراء" : "Action"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "الإجراء" : "Action"}>
                         <div className={stackTightClassName}>
                           {(["manager", "operations", "qa"] as const).map((recipient) => (
                             <Link
@@ -568,12 +567,11 @@ export function ManagerGovernanceReport(props: {
                             {props.locale === "ar" ? "فتح نفس النطاق" : "Open same scope"}
                           </Link>
                         </div>
-                      </td>
+                      </DataTableCell>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </DataTable>
           </WorkflowPanelBody>
         ) : (
           <EmptyState
@@ -598,20 +596,19 @@ export function ManagerGovernanceReport(props: {
                 : "This table shows overdue post-reply handoff pressure by current owner so managers can open the right live queue without widening the historical QA scope."
             }
           >
-            <div className={dataTableWrapperClassName}>
-              <table className={dataTableClassName}>
-                <thead>
-                  <tr>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "المالك الحالي" : "Current owner"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <DataTable>
+              <DataTableHead>
+                <tr>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "المالك الحالي" : "Current owner"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}</DataTableHeaderCell>
+                </tr>
+              </DataTableHead>
+              <tbody>
                   {props.operationalRiskSummary.owners.map((owner) => (
                     <tr key={owner.ownerName}>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "المالك الحالي" : "Current owner"}>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "المالك الحالي" : "Current owner"}>
                         <div className={tableLinkClassName}>
                           <strong className={tableLinkTitleClassName}>{owner.ownerName}</strong>
                           <span className={tableLinkMetaClassName}>
@@ -633,33 +630,32 @@ export function ManagerGovernanceReport(props: {
                             {props.locale === "ar" ? "فتح طابور المالك" : "Open owner queue"}
                           </Link>
                         </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "التسليمات المتصاعدة" : "Escalated handoffs"}>
                         <StatusBadge tone="warning">
                           {props.locale === "ar"
                             ? `${owner.escalatedHandoffCount} حالات`
                             : `${owner.escalatedHandoffCount} cases`}
                         </StatusBadge>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}>
                         <StatusBadge tone={owner.openInterventionsCount > 0 ? "warning" : "success"}>
                           {props.locale === "ar"
                             ? `${owner.openInterventionsCount} تدخلات`
                             : `${owner.openInterventionsCount} interventions`}
                         </StatusBadge>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "آخر مرسلي الرد" : "Latest reply senders"}>
                         <div className={statusRowWrapClassName}>
                           {owner.latestSenderNames.map((senderName) => (
                             <StatusBadge key={`${owner.ownerName}:${senderName}`}>{senderName}</StatusBadge>
                           ))}
                         </div>
-                      </td>
+                      </DataTableCell>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </DataTable>
           </WorkflowPanelBody>
         ) : (
           <EmptyState
@@ -684,21 +680,20 @@ export function ManagerGovernanceReport(props: {
                 : "This table tracks the latest bulk follow-up resets, while keeping exact live drill-down and export routes available for each affected scope and drift reason."
             }
           >
-            <div className={dataTableWrapperClassName}>
-              <table className={dataTableClassName}>
-                <thead>
-                  <tr>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الدفعة" : "Batch"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "النتيجة الحالية" : "Current result"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "المسار" : "Route"}</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <DataTable>
+              <DataTableHead>
+                <tr>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الدفعة" : "Batch"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "النتيجة الحالية" : "Current result"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "المسار" : "Route"}</DataTableHeaderCell>
+                </tr>
+              </DataTableHead>
+              <tbody>
                   {props.operationalRiskSummary.bulkBatches.map((batch) => (
                     <tr key={batch.batchId}>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الدفعة" : "Batch"}>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "الدفعة" : "Batch"}>
                         <div className={tableLinkClassName}>
                           <strong className={tableLinkTitleClassName}>{formatDateTime(batch.savedAt, props.locale)}</strong>
                           <span className={tableLinkMetaClassName}>
@@ -707,8 +702,8 @@ export function ManagerGovernanceReport(props: {
                               : `${batch.caseCount} cases in batch`}
                           </span>
                         </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "النطاق الأصلي" : "Original scope"}>
                         <div className={stackTightClassName}>
                           <StatusBadge>{batch.scopedOwnerName}</StatusBadge>
                           <div className={statusRowWrapClassName}>
@@ -717,8 +712,8 @@ export function ManagerGovernanceReport(props: {
                             ))}
                           </div>
                         </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "النتيجة الحالية" : "Current result"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "النتيجة الحالية" : "Current result"}>
                         <div className={stackTightClassName}>
                           <StatusBadge tone={batch.stillEscalatedCaseCount > 0 ? "warning" : "success"}>
                             {props.locale === "ar"
@@ -731,8 +726,8 @@ export function ManagerGovernanceReport(props: {
                               : `${batch.clearedCaseCount} now cleared`}
                           </StatusBadge>
                         </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}>
+                      </DataTableCell>
+                      <DataTableCell columnLabel={props.locale === "ar" ? "الانجراف اللاحق" : "Later drift"}>
                         {batch.drift ? (
                           <div className={stackTightClassName}>
                             <StatusBadge tone={batch.drift.casesWithLaterChangesCount > 0 ? "warning" : "success"}>
@@ -782,8 +777,8 @@ export function ManagerGovernanceReport(props: {
                       ) : (
                         <StatusBadge>{props.locale === "ar" ? "لا يوجد انجراف مرئي" : "No visible drift"}</StatusBadge>
                       )}
-                    </td>
-                    <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
+                    </DataTableCell>
+                    <DataTableCell columnLabel={props.locale === "ar" ? "المسار" : "Route"}>
                       <div className={stackTightClassName}>
                         {batch.drift && batch.drift.casesWithLaterChangesCount > 0 ? (
                           <Link
@@ -916,12 +911,11 @@ export function ManagerGovernanceReport(props: {
                             {props.locale === "ar" ? "تنزيل CSV لكامل الحالات المتأثرة" : "Download full affected-case CSV"}
                           </Link>
                         </div>
-                      </td>
+                      </DataTableCell>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </DataTable>
           </WorkflowPanelBody>
         ) : (
           <EmptyState
@@ -946,24 +940,23 @@ export function ManagerGovernanceReport(props: {
                 : "This log preserves the exportable historical QA event trail, keeping case context and the exact open or resolution path for each review."
             }
           >
-            <div className={dataTableWrapperClassName}>
-              <table className={dataTableClassName}>
-                <thead>
-                  <tr>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الحدث" : "Event"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الحالة" : "Status"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "السياق" : "Context"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "الأثر" : "Impact"}</th>
-                    <th className={dataTableHeaderCellClassName}>{props.locale === "ar" ? "المسار" : "Route"}</th>
-                  </tr>
-                </thead>
+            <DataTable>
+              <DataTableHead>
+                <tr>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الحدث" : "Event"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الحالة" : "Status"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "السياق" : "Context"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "الأثر" : "Impact"}</DataTableHeaderCell>
+                  <DataTableHeaderCell>{props.locale === "ar" ? "المسار" : "Route"}</DataTableHeaderCell>
+                </tr>
+              </DataTableHead>
                 <tbody>
                   {props.governanceEvents.items.map((event) => {
                     const routeLink = getEventRouteLink(props.locale, props.currentOperatorRole, event);
 
                     return (
                       <tr key={`${event.caseId}:${event.createdAt}:${event.action}:${event.subjectType ?? "unknown"}`}>
-                        <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الحدث" : "Event"}>
+                        <DataTableCell columnLabel={props.locale === "ar" ? "الحدث" : "Event"}>
                           <div className={tableLinkClassName}>
                             <strong className={tableLinkTitleClassName}>{event.customerName}</strong>
                             <span className={tableLinkMetaClassName}>{buildCaseReferenceCode(event.caseId)}</span>
@@ -972,54 +965,61 @@ export function ManagerGovernanceReport(props: {
                               {getActionLabel(props.locale, event.action)} · {getKindLabel(props.locale, event.kind)}
                             </span>
                           </div>
-                        </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الحالة" : "Status"}>
-                        <div className={stackTightClassName}>
-                          <StatusBadge tone={getStatusTone(event.status)}>{getStatusLabel(props.locale, event.status)}</StatusBadge>
-                          <StatusBadge>{getSubjectLabel(props.locale, event.subjectType)}</StatusBadge>
-                          {event.triggerSource ? (
-                            <StatusBadge>{event.triggerSource === "policy_rule" ? (props.locale === "ar" ? "قاعدة سياسة" : "Policy rule") : props.locale === "ar" ? "طلب يدوي" : "Manual request"}</StatusBadge>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "السياق" : "Context"}>
-                        <div className={stackTightClassName}>
-                          <p>{event.reviewSummary ?? event.sampleSummary ?? (props.locale === "ar" ? "لا يوجد ملخص إضافي." : "No additional summary.")}</p>
-                          {event.draftMessage ? <span>{event.draftMessage}</span> : null}
-                        </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "الأثر" : "Impact"}>
-                        <div className={stackTightClassName}>
-                          {event.policySignals.length > 0 ? (
-                            <div className={statusRowWrapClassName}>
-                              {event.policySignals.slice(0, 2).map((signal) => (
-                                <StatusBadge key={`${event.caseId}:${event.createdAt}:${signal}`}>{signal}</StatusBadge>
-                              ))}
-                            </div>
-                          ) : null}
-                          {event.triggerEvidence.length > 0 ? (
-                            <span>
-                              {props.locale === "ar" ? "أدلة:" : "Evidence:"} {event.triggerEvidence.slice(0, 2).join(" | ")}
-                            </span>
-                          ) : (
-                            <span>{props.locale === "ar" ? "لا توجد أدلة مسجلة." : "No explicit evidence recorded."}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className={dataTableCellClassName} data-column-label={props.locale === "ar" ? "المسار" : "Route"}>
-                        <div className={stackTightClassName}>
-                          <Link className={inlineLinkClassName} href={routeLink.href}>
-                            {routeLink.label}
-                          </Link>
-                          {event.handoverCaseId ? <span>{event.handoverCaseId}</span> : null}
-                        </div>
-                      </td>
+                        </DataTableCell>
+                        <DataTableCell columnLabel={props.locale === "ar" ? "الحالة" : "Status"}>
+                          <div className={stackTightClassName}>
+                            <StatusBadge tone={getStatusTone(event.status)}>{getStatusLabel(props.locale, event.status)}</StatusBadge>
+                            <StatusBadge>{getSubjectLabel(props.locale, event.subjectType)}</StatusBadge>
+                            {event.triggerSource ? (
+                              <StatusBadge>
+                                {event.triggerSource === "policy_rule"
+                                  ? props.locale === "ar"
+                                    ? "قاعدة سياسة"
+                                    : "Policy rule"
+                                  : props.locale === "ar"
+                                    ? "طلب يدوي"
+                                    : "Manual request"}
+                              </StatusBadge>
+                            ) : null}
+                          </div>
+                        </DataTableCell>
+                        <DataTableCell columnLabel={props.locale === "ar" ? "السياق" : "Context"}>
+                          <div className={stackTightClassName}>
+                            <p>{event.reviewSummary ?? event.sampleSummary ?? (props.locale === "ar" ? "لا يوجد ملخص إضافي." : "No additional summary.")}</p>
+                            {event.draftMessage ? <span>{event.draftMessage}</span> : null}
+                          </div>
+                        </DataTableCell>
+                        <DataTableCell columnLabel={props.locale === "ar" ? "الأثر" : "Impact"}>
+                          <div className={stackTightClassName}>
+                            {event.policySignals.length > 0 ? (
+                              <div className={statusRowWrapClassName}>
+                                {event.policySignals.slice(0, 2).map((signal) => (
+                                  <StatusBadge key={`${event.caseId}:${event.createdAt}:${signal}`}>{signal}</StatusBadge>
+                                ))}
+                              </div>
+                            ) : null}
+                            {event.triggerEvidence.length > 0 ? (
+                              <span>
+                                {props.locale === "ar" ? "أدلة:" : "Evidence:"} {event.triggerEvidence.slice(0, 2).join(" | ")}
+                              </span>
+                            ) : (
+                              <span>{props.locale === "ar" ? "لا توجد أدلة مسجلة." : "No explicit evidence recorded."}</span>
+                            )}
+                          </div>
+                        </DataTableCell>
+                        <DataTableCell columnLabel={props.locale === "ar" ? "المسار" : "Route"}>
+                          <div className={stackTightClassName}>
+                            <Link className={inlineLinkClassName} href={routeLink.href}>
+                              {routeLink.label}
+                            </Link>
+                            {event.handoverCaseId ? <span>{event.handoverCaseId}</span> : null}
+                          </div>
+                        </DataTableCell>
                       </tr>
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
+            </DataTable>
           </WorkflowPanelBody>
         ) : (
           <EmptyState

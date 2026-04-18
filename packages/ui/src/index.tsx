@@ -454,6 +454,48 @@ export function ActivityEntry(props: {
   );
 }
 
+export function DataTable(props: {
+  children: ReactNode;
+  className?: string;
+  testId?: string;
+  wrapperClassName?: string;
+}) {
+  return (
+    <div className={cx(dataTableWrapperClassName, props.wrapperClassName)} data-testid={props.testId}>
+      <table className={cx(dataTableClassName, props.className)}>{props.children}</table>
+    </div>
+  );
+}
+
+export function DataTableHead(props: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <thead className={cx(dataTableHeadClassName, props.className)}>{props.children}</thead>;
+}
+
+export function DataTableHeaderCell(props: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <th className={cx(dataTableHeaderCellClassName, props.className)}>{props.children}</th>;
+}
+
+export function DataTableCell(props: {
+  children: ReactNode;
+  className?: string;
+  columnLabel?: string;
+}) {
+  return (
+    <td
+      className={cx(dataTableCellClassName, props.className)}
+      {...(props.columnLabel ? { "data-column-label": props.columnLabel } : {})}
+    >
+      {props.children}
+    </td>
+  );
+}
+
 export function StatusBadge(props: {
   children: ReactNode;
   tone?: "neutral" | "success" | "warning" | "critical";
