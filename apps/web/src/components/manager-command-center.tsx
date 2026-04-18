@@ -11,8 +11,6 @@ import { demoDataset, getLocalizedText } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import {
   bulkFollowUpShellClassName,
-  caseLinkAsideClassName,
-  caseLinkCardClassName,
   caseMetaClassName,
   fieldNoteClassName,
   inlineLinkClassName,
@@ -29,6 +27,7 @@ import {
   WorkflowPanelBody
 } from "@real-estate-ai/ui";
 
+import { LinkedQueueCard } from "@/components/linked-queue-card";
 import { ScreenIntro } from "@/components/screen-intro";
 import { ReviewSummaryCard } from "@/components/review-summary-card";
 import { StatefulStack } from "@/components/stateful-stack";
@@ -187,22 +186,24 @@ export function HandoverManagerCommandCenter(props: {
               emptyTitle={messages.states.emptyMilestonesTitle}
               items={demoDataset.handoverCases}
               renderItem={(handoverCase) => (
-                <Link key={handoverCase.id} className={caseLinkCardClassName} href={`/${props.locale}/handover/${handoverCase.id}`}>
-                  <div>
-                    <p className={caseMetaClassName}>{getLocalizedText(handoverCase.projectName, props.locale)}</p>
-                    <h3>{handoverCase.customerName}</h3>
-                    <p>{getLocalizedText(handoverCase.readinessLabel, props.locale)}</p>
-                  </div>
-                  <div className={caseLinkAsideClassName}>
-                    <StatusBadge>{handoverCase.milestones.length}</StatusBadge>
-                    <StatusBadge tone="warning">
-                      {
-                        handoverCase.milestones.filter((milestone) => milestone.status === "blocked" || milestone.status === "in-progress")
-                          .length
-                      }
-                    </StatusBadge>
-                  </div>
-                </Link>
+                <LinkedQueueCard
+                  key={handoverCase.id}
+                  badges={
+                    <>
+                      <StatusBadge>{handoverCase.milestones.length}</StatusBadge>
+                      <StatusBadge tone="warning">
+                        {
+                          handoverCase.milestones.filter((milestone) => milestone.status === "blocked" || milestone.status === "in-progress")
+                            .length
+                        }
+                      </StatusBadge>
+                    </>
+                  }
+                  href={`/${props.locale}/handover/${handoverCase.id}`}
+                  meta={getLocalizedText(handoverCase.projectName, props.locale)}
+                  summary={getLocalizedText(handoverCase.readinessLabel, props.locale)}
+                  title={handoverCase.customerName}
+                />
               )}
             />
           </Panel>
@@ -213,14 +214,14 @@ export function HandoverManagerCommandCenter(props: {
               emptyTitle={messages.states.emptyCasesTitle}
               items={demoDataset.cases}
               renderItem={(caseItem) => (
-                <Link key={caseItem.id} className={caseLinkCardClassName} href={`/${props.locale}/handover/${caseItem.handoverCaseId}`}>
-                  <div>
-                    <p className={caseMetaClassName}>{caseItem.referenceCode}</p>
-                    <h3>{caseItem.customerName}</h3>
-                    <p>{getLocalizedText(caseItem.nextAction, props.locale)}</p>
-                  </div>
-                  <StatusBadge>{caseItem.owner}</StatusBadge>
-                </Link>
+                <LinkedQueueCard
+                  key={caseItem.id}
+                  badges={<StatusBadge>{caseItem.owner}</StatusBadge>}
+                  href={`/${props.locale}/handover/${caseItem.handoverCaseId}`}
+                  meta={caseItem.referenceCode}
+                  summary={getLocalizedText(caseItem.nextAction, props.locale)}
+                  title={caseItem.customerName}
+                />
               )}
             />
           </Panel>
@@ -388,18 +389,21 @@ export function HandoverManagerCommandCenter(props: {
               }
 
               return (
-                <Link key={caseItem.caseId} className={caseLinkCardClassName} href={`/${props.locale}/handover/${handoverDisplay.handoverCaseId}`}>
-                  <div>
-                    <p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>
-                    <h3>{caseItem.customerName}</h3>
-                    <p>{caseItem.nextAction}</p>
-                    <p className={caseMetaClassName}>{handoverDisplay.updatedAt}</p>
-                  </div>
-                  <div className={caseLinkAsideClassName}>
-                    <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge>
-                    <StatusBadge>{handoverDisplay.surfaceLabel}</StatusBadge>
-                  </div>
-                </Link>
+                <LinkedQueueCard
+                  key={caseItem.caseId}
+                  badges={
+                    <>
+                      <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge>
+                      <StatusBadge>{handoverDisplay.surfaceLabel}</StatusBadge>
+                    </>
+                  }
+                  href={`/${props.locale}/handover/${handoverDisplay.handoverCaseId}`}
+                  meta={buildCaseReferenceCode(caseItem.caseId)}
+                  summary={caseItem.nextAction}
+                  title={caseItem.customerName}
+                >
+                  <p className={caseMetaClassName}>{handoverDisplay.updatedAt}</p>
+                </LinkedQueueCard>
               );
             }}
           />
@@ -520,18 +524,21 @@ export function HandoverManagerCommandCenter(props: {
                 }
 
                 return (
-                  <Link key={caseItem.caseId} className={caseLinkCardClassName} href={`/${props.locale}/handover/${handoverDisplay.handoverCaseId}`}>
-                    <div>
-                      <p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>
-                      <h3>{caseItem.customerName}</h3>
-                      <p>{caseItem.nextAction}</p>
-                      <p className={caseMetaClassName}>{handoverDisplay.updatedAt}</p>
-                    </div>
-                    <div className={caseLinkAsideClassName}>
-                      <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge>
-                      <StatusBadge>{handoverDisplay.surfaceLabel}</StatusBadge>
-                    </div>
-                  </Link>
+                  <LinkedQueueCard
+                    key={caseItem.caseId}
+                    badges={
+                      <>
+                        <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge>
+                        <StatusBadge>{handoverDisplay.surfaceLabel}</StatusBadge>
+                      </>
+                    }
+                    href={`/${props.locale}/handover/${handoverDisplay.handoverCaseId}`}
+                    meta={buildCaseReferenceCode(caseItem.caseId)}
+                    summary={caseItem.nextAction}
+                    title={caseItem.customerName}
+                  >
+                    <p className={caseMetaClassName}>{handoverDisplay.updatedAt}</p>
+                  </LinkedQueueCard>
                 );
               }}
             />
@@ -556,18 +563,21 @@ export function HandoverManagerCommandCenter(props: {
                 }
 
                 return (
-                  <Link key={caseItem.caseId} className={caseLinkCardClassName} href={`/${props.locale}/handover/${handoverDisplay.handoverCaseId}`}>
-                    <div>
-                      <p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>
-                      <h3>{caseItem.customerName}</h3>
-                      <p>{caseItem.nextAction}</p>
-                      <p className={caseMetaClassName}>{handoverDisplay.updatedAt}</p>
-                    </div>
-                    <div className={caseLinkAsideClassName}>
-                      <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge>
-                      <StatusBadge>{handoverDisplay.surfaceLabel}</StatusBadge>
-                    </div>
-                  </Link>
+                  <LinkedQueueCard
+                    key={caseItem.caseId}
+                    badges={
+                      <>
+                        <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge>
+                        <StatusBadge>{handoverDisplay.surfaceLabel}</StatusBadge>
+                      </>
+                    }
+                    href={`/${props.locale}/handover/${handoverDisplay.handoverCaseId}`}
+                    meta={buildCaseReferenceCode(caseItem.caseId)}
+                    summary={caseItem.nextAction}
+                    title={caseItem.customerName}
+                  >
+                    <p className={caseMetaClassName}>{handoverDisplay.updatedAt}</p>
+                  </LinkedQueueCard>
                 );
               }}
             />
@@ -920,14 +930,14 @@ export function RevenueManagerCommandCenter(props: {
               emptyTitle={messages.states.emptyCasesTitle}
               items={demoDataset.cases}
               renderItem={(caseItem) => (
-                <Link key={caseItem.id} className={caseLinkCardClassName} href={`/${props.locale}/leads/${caseItem.id}`}>
-                  <div>
-                    <p className={caseMetaClassName}>{caseItem.referenceCode}</p>
-                    <h3>{caseItem.customerName}</h3>
-                    <p>{getLocalizedText(caseItem.nextAction, props.locale)}</p>
-                  </div>
-                  <StatusBadge>{caseItem.owner}</StatusBadge>
-                </Link>
+                <LinkedQueueCard
+                  key={caseItem.id}
+                  badges={<StatusBadge>{caseItem.owner}</StatusBadge>}
+                  href={`/${props.locale}/leads/${caseItem.id}`}
+                  meta={caseItem.referenceCode}
+                  summary={getLocalizedText(caseItem.nextAction, props.locale)}
+                  title={caseItem.customerName}
+                />
               )}
             />
           </Panel>
@@ -1813,51 +1823,54 @@ export function RevenueManagerCommandCenter(props: {
               );
 
               return (
-                <Link key={caseItem.caseId} className={caseLinkCardClassName} href={`/${props.locale}/leads/${caseItem.caseId}`}>
-                  <div>
-                    <p className={caseMetaClassName}>{buildCaseReferenceCode(caseItem.caseId)}</p>
-                    <h3>{caseItem.customerName}</h3>
-                    <p>{caseItem.nextAction}</p>
-                    {caseItem.latestHumanReply ? (
-                      <div className={stackTightClassName}>
-                        <p className={caseMetaClassName}>
-                          {latestHumanReplyLabel}
-                          {" · "}
-                          {caseItem.latestHumanReply.sentByName}
-                          {" · "}
-                          {latestHumanReplySentAt}
-                        </p>
-                        {latestHumanReplyOwnershipLabel ? <p className={caseMetaClassName}>{latestHumanReplyOwnershipLabel}</p> : null}
-                        {latestHumanReplyEscalationLabel ? <p className={caseMetaClassName}>{latestHumanReplyEscalationLabel}</p> : null}
-                      </div>
-                    ) : null}
-                    {caseItem.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
-                      <div className={stackTightClassName}>
-                        <p className={caseMetaClassName}>
-                          {latestManagerFollowUpLabel}
-                          {" · "}
-                          {caseItem.latestManagerFollowUp.ownerName}
-                          {" · "}
-                          {latestManagerFollowUpSavedAt}
-                        </p>
-                        {latestManagerFollowUpNote ? <p className={caseMetaClassName}>{latestManagerFollowUpNote}</p> : null}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className={caseLinkAsideClassName}>
-                    <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>
-                      {getPersistedFollowUpLabel(props.locale, caseItem)}
-                    </StatusBadge>
-                    <StatusBadge>{getPersistedAutomationLabel(props.locale, caseItem.automationStatus)}</StatusBadge>
-                    {automationHoldReasonLabel ? <StatusBadge tone="warning">{automationHoldReasonLabel}</StatusBadge> : null}
-                    {caseItem.openInterventionsCount > 0 ? (
-                      <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
-                    ) : null}
-                    {qaReviewDisplay ? <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge> : null}
-                    {handoverDisplay ? <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge> : null}
-                    <StatusBadge>{getPersistedCaseStageLabel(props.locale, caseItem.stage)}</StatusBadge>
-                  </div>
-                </Link>
+                <LinkedQueueCard
+                  key={caseItem.caseId}
+                  badges={
+                    <>
+                      <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>
+                        {getPersistedFollowUpLabel(props.locale, caseItem)}
+                      </StatusBadge>
+                      <StatusBadge>{getPersistedAutomationLabel(props.locale, caseItem.automationStatus)}</StatusBadge>
+                      {automationHoldReasonLabel ? <StatusBadge tone="warning">{automationHoldReasonLabel}</StatusBadge> : null}
+                      {caseItem.openInterventionsCount > 0 ? (
+                        <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
+                      ) : null}
+                      {qaReviewDisplay ? <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge> : null}
+                      {handoverDisplay ? <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge> : null}
+                      <StatusBadge>{getPersistedCaseStageLabel(props.locale, caseItem.stage)}</StatusBadge>
+                    </>
+                  }
+                  href={`/${props.locale}/leads/${caseItem.caseId}`}
+                  meta={buildCaseReferenceCode(caseItem.caseId)}
+                  summary={caseItem.nextAction}
+                  title={caseItem.customerName}
+                >
+                  {caseItem.latestHumanReply ? (
+                    <div className={stackTightClassName}>
+                      <p className={caseMetaClassName}>
+                        {latestHumanReplyLabel}
+                        {" · "}
+                        {caseItem.latestHumanReply.sentByName}
+                        {" · "}
+                        {latestHumanReplySentAt}
+                      </p>
+                      {latestHumanReplyOwnershipLabel ? <p className={caseMetaClassName}>{latestHumanReplyOwnershipLabel}</p> : null}
+                      {latestHumanReplyEscalationLabel ? <p className={caseMetaClassName}>{latestHumanReplyEscalationLabel}</p> : null}
+                    </div>
+                  ) : null}
+                  {caseItem.latestManagerFollowUp && latestManagerFollowUpLabel && latestManagerFollowUpSavedAt ? (
+                    <div className={stackTightClassName}>
+                      <p className={caseMetaClassName}>
+                        {latestManagerFollowUpLabel}
+                        {" · "}
+                        {caseItem.latestManagerFollowUp.ownerName}
+                        {" · "}
+                        {latestManagerFollowUpSavedAt}
+                      </p>
+                      {latestManagerFollowUpNote ? <p className={caseMetaClassName}>{latestManagerFollowUpNote}</p> : null}
+                    </div>
+                  ) : null}
+                </LinkedQueueCard>
               );
             }}
           />

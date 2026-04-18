@@ -3,8 +3,6 @@ import Link from "next/link";
 import { demoDataset, getLocalizedText, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import {
-  caseLinkCardClassName,
-  caseMetaClassName,
   heroActionsClassName,
   heroCopyClassName,
   heroEyebrowClassName,
@@ -23,6 +21,7 @@ import {
 } from "@real-estate-ai/ui";
 
 import { LeadCaptureForm } from "@/components/lead-capture-form";
+import { LinkedQueueCard } from "@/components/linked-queue-card";
 import { MarketingOrchestrationVisual } from "@/components/marketing-orchestration-visual";
 import { StatefulStack } from "@/components/stateful-stack";
 import { buildCaseReferenceCode, getPersistedCaseStageLabel } from "@/lib/persisted-case-presenters";
@@ -144,14 +143,14 @@ export default async function LandingPage(props: PageProps) {
                 emptyTitle={messages.states.emptyCasesTitle}
                 items={highlightedCases}
                 renderItem={(item) => (
-                  <Link key={item.caseId} className={caseLinkCardClassName} href={`/${locale}/leads/${item.caseId}`}>
-                    <div className="space-y-1.5">
-                      <p className={caseMetaClassName}>{buildCaseReferenceCode(item.caseId)}</p>
-                      <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{item.customerName}</h3>
-                      <p className="text-sm leading-7 text-ink-soft">{item.nextAction}</p>
-                    </div>
-                    <StatusBadge>{getPersistedCaseStageLabel(locale, item.stage)}</StatusBadge>
-                  </Link>
+                  <LinkedQueueCard
+                    key={item.caseId}
+                    badges={<StatusBadge>{getPersistedCaseStageLabel(locale, item.stage)}</StatusBadge>}
+                    href={`/${locale}/leads/${item.caseId}`}
+                    meta={buildCaseReferenceCode(item.caseId)}
+                    summary={item.nextAction}
+                    title={item.customerName}
+                  />
                 )}
               />
             ) : (
@@ -160,14 +159,14 @@ export default async function LandingPage(props: PageProps) {
                 emptyTitle={messages.states.emptyCasesTitle}
                 items={demoDataset.cases}
                 renderItem={(item) => (
-                  <Link key={item.id} className={caseLinkCardClassName} href={`/${locale}/leads/${item.id}`}>
-                    <div className="space-y-1.5">
-                      <p className={caseMetaClassName}>{item.referenceCode}</p>
-                      <h3 className="text-base font-semibold tracking-[-0.02em] text-ink">{item.customerName}</h3>
-                      <p className="text-sm leading-7 text-ink-soft">{getLocalizedText(item.summary, locale)}</p>
-                    </div>
-                    <StatusBadge>{getLocalizedText(item.stage, locale)}</StatusBadge>
-                  </Link>
+                  <LinkedQueueCard
+                    key={item.id}
+                    badges={<StatusBadge>{getLocalizedText(item.stage, locale)}</StatusBadge>}
+                    href={`/${locale}/leads/${item.id}`}
+                    meta={item.referenceCode}
+                    summary={getLocalizedText(item.summary, locale)}
+                    title={item.customerName}
+                  />
                 )}
               />
             )}
