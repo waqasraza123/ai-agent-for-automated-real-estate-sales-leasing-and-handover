@@ -1,3 +1,87 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-canvas text-ink;
+    background-attachment: fixed;
+  }
+
+  *, *::before, *::after {
+    @apply border-canvas-line;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-brand-300/80 ring-offset-2 ring-offset-canvas-raised;
+  }
+
+  ::selection {
+    @apply bg-brand-100 text-brand-800;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-ink-muted/75;
+  }
+
+  html[dir="rtl"] body {
+    text-align: right;
+  }
+
+  html[dir="rtl"] input,
+  html[dir="rtl"] textarea,
+  html[dir="rtl"] select {
+    text-align: start;
+  }
+
+  * {
+    scrollbar-color: #c5b8a7 rgba(253, 250, 244, 0.78);
+    scrollbar-width: thin;
+  }
+
+  ::-webkit-scrollbar {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(253, 250, 244, 0.82);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid rgba(253, 250, 244, 0.88);
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(186, 131, 67, 0.42), rgba(104, 117, 136, 0.38));
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(56, 139, 118, 0.56), rgba(90, 109, 243, 0.48));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

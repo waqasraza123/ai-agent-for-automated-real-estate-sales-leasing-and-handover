@@ -23,6 +23,7 @@
 - Shared web formatting now routes date and number presentation through locale-aware helpers in `apps/web/src/lib/format.ts`, and the web shell now uses local Arabic-capable system font stacks instead of runtime Google font fetches
 - The web frontend is now Tailwind-first: `apps/web` uses Tailwind, Tailwind Forms, `tailwindcss-animate`, and a selective Flowbite plugin foundation, while the prior custom global CSS system has been removed in favor of utility-driven primitives and theme tokens
 - `packages/ui` is now the shared Tailwind design-system layer for the app shell, cards, buttons, inputs, tables, badges, empty states, and skeletons, with Arabic-first spacing, premium light-theme tokens, motion utilities, and no remaining descendant-bridge fallback inside `apps/web`
+- The shared frontend base layer is now explicitly RTL-first at the shell level: `globals.css` owns motion-reduction, focus, selection, and scrollbar defaults, while `packages/ui` centralizes the glass-like panel, card, control, and table surface language so route code keeps inheriting one production-grade visual system instead of page-local polish
 
 ## Non-Negotiable Rules
 - Never store secrets in repository memory files
