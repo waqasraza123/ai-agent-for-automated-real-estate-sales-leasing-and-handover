@@ -16,13 +16,9 @@ import {
   caseMetaClassName,
   fieldNoteClassName,
   inlineLinkClassName,
-  metricDetailClassName,
   metricGridClassName,
-  metricLabelClassName,
-  metricTileClassName,
-  metricValueClassName,
+  MetricTile,
   pageStackClassName,
-  panelSummaryClassName,
   Panel,
   rowBetweenClassName,
   stackTightClassName,
@@ -116,12 +112,13 @@ export function HandoverManagerCommandCenter(props: {
         <ScreenIntro badge={workspaceCopy.title} summary={workspaceCopy.summary} title={workspaceCopy.title} />
 
         <Panel title={props.locale === "ar" ? "سجل الدور المحلي الحالي" : "Current local role mode"}>
-          <div className={pageStackClassName}>
-            <p className={panelSummaryClassName}>
-              {props.locale === "ar"
+          <WorkflowPanelBody
+            summary={
+              props.locale === "ar"
                 ? `يعمل هذا المركز بدور ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)} مع واجهة تجريبية جاهزة لمسارات التخطيط والتنفيذ والإغلاق.`
-                : `This command center is running as ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)} with a fixture-backed shell for planning, execution, and closure queues.`}
-            </p>
+                : `This command center is running as ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)} with a fixture-backed shell for planning, execution, and closure queues.`
+            }
+          >
             <div className={statusRowWrapClassName}>
               <StatusBadge>{getOperatorRoleLabel(props.locale, props.currentOperatorRole)}</StatusBadge>
               {actionableSurfaceLabels.map((label) => (
@@ -130,56 +127,56 @@ export function HandoverManagerCommandCenter(props: {
                 </StatusBadge>
               ))}
             </div>
-          </div>
+          </WorkflowPanelBody>
         </Panel>
 
         <div className={metricGridClassName}>
-          <article className={metricTileClassName("mint")}>
-            <p className={metricLabelClassName}>{props.locale === "ar" ? "سجلات التسليم التجريبية" : "Fixture handovers"}</p>
-            <p className={metricValueClassName}>{demoDataset.handoverCases.length}</p>
-            <p className={metricDetailClassName}>
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "واجهة جاهزة لإظهار الحدود التشغيلية حتى قبل تشغيل البيانات الحية."
-                : "A seeded surface showing the intended operational boundaries before live data is available."}
-            </p>
-          </article>
-          <article className={metricTileClassName("sand")}>
-            <p className={metricLabelClassName}>{props.locale === "ar" ? "المراحل الجاهزة" : "Ready milestones"}</p>
-            <p className={metricValueClassName}>
-              {
-                demoDataset.handoverCases.flatMap((handoverCase) => handoverCase.milestones).filter((milestone) => milestone.status === "ready")
-                  .length
-              }
-            </p>
-            <p className={metricDetailClassName}>
-              {props.locale === "ar"
+                : "A seeded surface showing the intended operational boundaries before live data is available."
+            }
+            label={props.locale === "ar" ? "سجلات التسليم التجريبية" : "Fixture handovers"}
+            tone="mint"
+            value={String(demoDataset.handoverCases.length)}
+          />
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "مراحل قابلة للانتقال إلى خطوة مديرية تالية."
-                : "Milestones already staged for the next manager-owned boundary."}
-            </p>
-          </article>
-          <article className={metricTileClassName("rose")}>
-            <p className={metricLabelClassName}>{props.locale === "ar" ? "عوائق مفتوحة" : "Open blockers"}</p>
-            <p className={metricValueClassName}>
-              {
-                demoDataset.handoverCases.flatMap((handoverCase) => handoverCase.milestones).filter((milestone) => milestone.status === "blocked")
-                  .length
-              }
-            </p>
-            <p className={metricDetailClassName}>
-              {props.locale === "ar"
+                : "Milestones already staged for the next manager-owned boundary."
+            }
+            label={props.locale === "ar" ? "المراحل الجاهزة" : "Ready milestones"}
+            tone="sand"
+            value={String(
+              demoDataset.handoverCases.flatMap((handoverCase) => handoverCase.milestones).filter((milestone) => milestone.status === "ready")
+                .length
+            )}
+          />
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "توضح كيف سيظهر خطر التسليم حتى قبل تفعيل الرحلة الحية بالكامل."
-                : "Shows how handover risk will surface before the live workflow is fully enabled."}
-            </p>
-          </article>
-          <article className={metricTileClassName("ocean")}>
-            <p className={metricLabelClassName}>{props.locale === "ar" ? "بوابات جودة المسودات" : "Draft QA gates"}</p>
-            <p className={metricValueClassName}>0</p>
-            <p className={metricDetailClassName}>
-              {props.locale === "ar"
+                : "Shows how handover risk will surface before the live workflow is fully enabled."
+            }
+            label={props.locale === "ar" ? "عوائق مفتوحة" : "Open blockers"}
+            tone="rose"
+            value={String(
+              demoDataset.handoverCases.flatMap((handoverCase) => handoverCase.milestones).filter((milestone) => milestone.status === "blocked")
+                .length
+            )}
+          />
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "ستظهر هنا ضغوط جودة المسودات الصادرة عندما تتوفر سجلات تسليم حيّة."
-                : "Outbound draft-governance pressure will surface here once live handover records are available."}
-            </p>
-          </article>
+                : "Outbound draft-governance pressure will surface here once live handover records are available."
+            }
+            label={props.locale === "ar" ? "بوابات جودة المسودات" : "Draft QA gates"}
+            tone="ocean"
+            value="0"
+          />
         </div>
 
         <div className={twoColumnGridClassName}>
@@ -293,12 +290,13 @@ export function HandoverManagerCommandCenter(props: {
       <ScreenIntro badge={workspaceCopy.title} summary={workspaceCopy.summary} title={workspaceCopy.title} />
 
       <Panel title={props.locale === "ar" ? "سجل الدور المحلي الحالي" : "Current local role mode"}>
-        <div className={pageStackClassName}>
-          <p className={panelSummaryClassName}>
-            {props.locale === "ar"
+        <WorkflowPanelBody
+          summary={
+            props.locale === "ar"
               ? `يعمل هذا المركز الآن بدور ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)}. يتم فصل طوابير التخطيط والتنفيذ والإغلاق في مسار مستقل عن متابعة الإيرادات.`
-              : `This command center is currently running as ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)}. Planning, execution, and closure queues now live on a dedicated route separate from revenue follow-up.`}
-          </p>
+              : `This command center is currently running as ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)}. Planning, execution, and closure queues now live on a dedicated route separate from revenue follow-up.`
+          }
+        >
           <div className={statusRowWrapClassName}>
             <StatusBadge>{getOperatorRoleLabel(props.locale, props.currentOperatorRole)}</StatusBadge>
             {actionableSurfaceLabels.map((label) => (
@@ -315,55 +313,60 @@ export function HandoverManagerCommandCenter(props: {
           <Link className={inlineLinkClassName} href={`/${props.locale}/manager/governance`}>
             {props.locale === "ar" ? "فتح تقرير الحوكمة" : "Open governance report"}
           </Link>
-        </div>
+        </WorkflowPanelBody>
       </Panel>
 
       <div className={metricGridClassName}>
-        <article className={metricTileClassName("mint")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "تخطيط التسليم" : "Handover planning"}</p>
-          <p className={metricValueClassName}>{planningCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "سجلات حيّة ما زالت داخل حدود الجاهزية أو الجدولة."
-              : "Live records still inside readiness and customer-scheduling boundaries."}
-          </p>
-        </article>
-        <article className={metricTileClassName("sand")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "تنفيذ التسليم" : "Handover execution"}</p>
-          <p className={metricValueClassName}>{executionCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Live records still inside readiness and customer-scheduling boundaries."
+          }
+          label={props.locale === "ar" ? "تخطيط التسليم" : "Handover planning"}
+          tone="mint"
+          value={String(planningCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "سجلات مجدولة أو قيد التنفيذ تحتاج وضوحاً تشغيلياً."
-              : "Scheduled and in-progress records that still need active operational control."}
-          </p>
-        </article>
-        <article className={metricTileClassName("rose")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "إغلاق التسليم" : "Handover closure"}</p>
-          <p className={metricValueClassName}>{closureCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Scheduled and in-progress records that still need active operational control."
+          }
+          label={props.locale === "ar" ? "تنفيذ التسليم" : "Handover execution"}
+          tone="sand"
+          value={String(executionCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "سجلات مكتملة دخلت مرحلة المراجعة أو المتابعة أو الأرشفة."
-              : "Completed records now inside review, aftercare, or administrative archive boundaries."}
-          </p>
-        </article>
-        <article className={metricTileClassName("ocean")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "حوكمة المسودات" : "Draft governance"}</p>
-          <p className={metricValueClassName}>{governanceSummary.handoverAttentionCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Completed records now inside review, aftercare, or administrative archive boundaries."
+          }
+          label={props.locale === "ar" ? "إغلاق التسليم" : "Handover closure"}
+          tone="rose"
+          value={String(closureCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "مسودات تحديث العميل التي لا تزال متوقفة بانتظار جودة أو تحتاج إعادة صياغة."
-              : "Prepared customer updates that are still blocked on QA or need draft changes before they can move on."}
-          </p>
-        </article>
-        <article className={metricTileClassName("rose")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "مراجعات قديمة" : "Stale pending QA"}</p>
-          <p className={metricValueClassName}>{governanceSummary.stalePendingCasesCount}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Prepared customer updates that are still blocked on QA or need draft changes before they can move on."
+          }
+          label={props.locale === "ar" ? "حوكمة المسودات" : "Draft governance"}
+          tone="ocean"
+          value={String(governanceSummary.handoverAttentionCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "عناصر جودة معلقة لأكثر من يوم وتحتاج تصعيداً أو إعادة توجيه واضحة."
-              : "Governance items that have been pending for more than a day and likely need escalation or re-routing."}
-          </p>
-        </article>
+              : "Governance items that have been pending for more than a day and likely need escalation or re-routing."
+          }
+          label={props.locale === "ar" ? "مراجعات قديمة" : "Stale pending QA"}
+          tone="rose"
+          value={String(governanceSummary.stalePendingCasesCount)}
+        />
       </div>
 
       {managerCapabilities.canManagePlanning ? (
@@ -602,12 +605,13 @@ export function ManagerWorkspaceGateway(props: {
       />
 
       <Panel title={props.locale === "ar" ? "سجل الدور المحلي الحالي" : "Current local role mode"}>
-        <div className={pageStackClassName}>
-          <p className={panelSummaryClassName}>
-            {props.locale === "ar"
+        <WorkflowPanelBody
+          summary={
+            props.locale === "ar"
               ? `يعمل مدخل الإدارة الآن بدور ${currentRoleLabel}. بما أن هذا الدور يملك أكثر من مساحة إدارية، فقد تم إبقاء هذا المسار كبوابة اختيار واضحة.`
-              : `The manager entry is currently running as ${currentRoleLabel}. Because this role can operate more than one manager surface, this route now acts as an explicit workspace gateway.`}
-          </p>
+              : `The manager entry is currently running as ${currentRoleLabel}. Because this role can operate more than one manager surface, this route now acts as an explicit workspace gateway.`
+          }
+        >
           <div className={statusRowWrapClassName}>
             <StatusBadge>{currentRoleLabel}</StatusBadge>
             <StatusBadge tone="success">{getManagerWorkspaceCopy(props.locale, "manager_revenue").title}</StatusBadge>
@@ -616,17 +620,18 @@ export function ManagerWorkspaceGateway(props: {
           <Link className={inlineLinkClassName} href={`/${props.locale}/manager/governance`}>
             {props.locale === "ar" ? "فتح تقرير الحوكمة" : "Open governance report"}
           </Link>
-        </div>
+        </WorkflowPanelBody>
       </Panel>
 
       {props.persistedCases.length > 0 ? (
         <Panel title={props.locale === "ar" ? "ضغط الحوكمة الحالي" : "Current governance pressure"}>
-          <div className={pageStackClassName}>
-            <p className={panelSummaryClassName}>
-              {props.locale === "ar"
+          <WorkflowPanelBody
+            summary={
+              props.locale === "ar"
                 ? `${governanceSummary.totalAttentionCasesCount} عنصر حوكمة مفتوح عبر الإيرادات والتسليم، منها ${governanceSummary.pendingCasesCount} بانتظار القرار و${governanceSummary.followUpRequiredCasesCount} تحتاج تصحيحاً.`
-                : `${governanceSummary.totalAttentionCasesCount} governance items are open across revenue and handover, with ${governanceSummary.pendingCasesCount} waiting for a decision and ${governanceSummary.followUpRequiredCasesCount} needing corrective follow-up.`}
-            </p>
+                : `${governanceSummary.totalAttentionCasesCount} governance items are open across revenue and handover, with ${governanceSummary.pendingCasesCount} waiting for a decision and ${governanceSummary.followUpRequiredCasesCount} needing corrective follow-up.`
+            }
+          >
             <div className={statusRowWrapClassName}>
               <StatusBadge tone="critical">
                 {props.locale === "ar" ? `${governanceSummary.pendingCasesCount} بانتظار المراجعة` : `${governanceSummary.pendingCasesCount} pending`}
@@ -658,8 +663,8 @@ export function ManagerWorkspaceGateway(props: {
           <Link className={inlineLinkClassName} href={`/${props.locale}/manager/governance`}>
             {props.locale === "ar" ? "فتح تقرير الحوكمة" : "Open governance report"}
           </Link>
-        </div>
-      </Panel>
+          </WorkflowPanelBody>
+        </Panel>
       ) : null}
 
       <div className={twoColumnGridClassName}>
@@ -843,49 +848,53 @@ export function RevenueManagerCommandCenter(props: {
         <ScreenIntro badge={workspaceCopy.title} summary={workspaceCopy.summary} title={workspaceCopy.title} />
 
         <Panel title={props.locale === "ar" ? "سجل الدور المحلي الحالي" : "Current local role mode"}>
-          <div className={pageStackClassName}>
-            <p className={panelSummaryClassName}>
-              {props.locale === "ar"
+          <WorkflowPanelBody
+            summary={
+              props.locale === "ar"
                 ? `يعمل هذا المركز بدور ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)} مع طابور متابعة تجريبي جاهز للتحول إلى بيانات حية.`
-                : `This command center is running as ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)} with a fixture-backed follow-up queue ready to move onto live data.`}
-            </p>
+                : `This command center is running as ${getOperatorRoleLabel(props.locale, props.currentOperatorRole)} with a fixture-backed follow-up queue ready to move onto live data.`
+            }
+          >
             <div className={statusRowWrapClassName}>
               <StatusBadge>{getOperatorRoleLabel(props.locale, props.currentOperatorRole)}</StatusBadge>
               {managerCapabilities.canManageFollowUp ? (
                 <StatusBadge tone="success">{props.locale === "ar" ? "المتابعة" : "Follow-up"}</StatusBadge>
               ) : null}
             </div>
-          </div>
+          </WorkflowPanelBody>
         </Panel>
 
         <div className={metricGridClassName}>
-          <article className={metricTileClassName("ocean")}>
-            <p className={metricLabelClassName}>{props.locale === "ar" ? "تنبيهات الإدارة" : "Manager alerts"}</p>
-            <p className={metricValueClassName}>{demoDataset.managerAlerts.length}</p>
-            <p className={metricDetailClassName}>
-              {props.locale === "ar"
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "تنبيهات مزروعة لإثبات وضوح طوابير التدخل التجاري."
-                : "Fixture alerts proving the intended commercial intervention queue."}
-            </p>
-          </article>
-          <article className={metricTileClassName("sand")}>
-            <p className={metricLabelClassName}>{props.locale === "ar" ? "حالات مرتبطة" : "Linked cases"}</p>
-            <p className={metricValueClassName}>{demoDataset.cases.length}</p>
-            <p className={metricDetailClassName}>
-              {props.locale === "ar"
+                : "Fixture alerts proving the intended commercial intervention queue."
+            }
+            label={props.locale === "ar" ? "تنبيهات الإدارة" : "Manager alerts"}
+            tone="ocean"
+            value={String(demoDataset.managerAlerts.length)}
+          />
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "سجل حالات جاهز للانتقال من المتابعة إلى الإجراءات التالية."
-                : "A case list already wired for follow-up ownership and next-step visibility."}
-            </p>
-          </article>
-          <article className={metricTileClassName("rose")}>
-            <p className={metricLabelClassName}>{props.locale === "ar" ? "ضغوط الحوكمة" : "Governance pressure"}</p>
-            <p className={metricValueClassName}>0</p>
-            <p className={metricDetailClassName}>
-              {props.locale === "ar"
+                : "A case list already wired for follow-up ownership and next-step visibility."
+            }
+            label={props.locale === "ar" ? "حالات مرتبطة" : "Linked cases"}
+            tone="sand"
+            value={String(demoDataset.cases.length)}
+          />
+          <MetricTile
+            detail={
+              props.locale === "ar"
                 ? "ستظهر مراجعات جودة الرسائل هنا عندما تتوفر حالات حيّة محفوظة."
-                : "Conversation-governance holds will surface here once persisted live cases are available."}
-            </p>
-          </article>
+                : "Conversation-governance holds will surface here once persisted live cases are available."
+            }
+            label={props.locale === "ar" ? "ضغوط الحوكمة" : "Governance pressure"}
+            tone="rose"
+            value="0"
+          />
         </div>
 
         <div className={twoColumnGridClassName}>
@@ -1598,78 +1607,86 @@ export function RevenueManagerCommandCenter(props: {
       ) : null}
 
       <div className={metricGridClassName}>
-        <article className={metricTileClassName("ocean")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "طابور المتابعة" : "Follow-up queue"}</p>
-          <p className={metricValueClassName}>{revenueAttentionCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "حالات تجاوزت مواعيد المتابعة أو تحتوي على تدخلات مفتوحة."
-              : "Cases with overdue follow-up or open manager interventions."}
-          </p>
-        </article>
-        <article className={metricTileClassName("sand")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}</p>
-          <p className={metricValueClassName}>{openInterventionsCount}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Cases with overdue follow-up or open manager interventions."
+          }
+          label={props.locale === "ar" ? "طابور المتابعة" : "Follow-up queue"}
+          tone="ocean"
+          value={String(revenueAttentionCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "إجمالي التدخلات غير المحلولة عبر الحالات الحية."
-              : "The total unresolved intervention count across live cases."}
-          </p>
-        </article>
-        <article className={metricTileClassName("rose")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "الأتمتة المتوقفة" : "Paused automation"}</p>
-          <p className={metricValueClassName}>{pausedAutomationCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "The total unresolved intervention count across live cases."
+          }
+          label={props.locale === "ar" ? "التدخلات المفتوحة" : "Open interventions"}
+          tone="sand"
+          value={String(openInterventionsCount)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "حالات أوقفت فيها الأتمتة بقرار إداري واضح."
-              : "Cases where automation was paused behind an explicit managerial decision."}
-          </p>
-        </article>
-        <article className={metricTileClassName("sand")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "أتمتة معلقة بالجودة" : "QA-held automation"}</p>
-          <p className={metricValueClassName}>{governanceHeldAutomationCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Cases where automation was paused behind an explicit managerial decision."
+          }
+          label={props.locale === "ar" ? "الأتمتة المتوقفة" : "Paused automation"}
+          tone="rose"
+          value={String(pausedAutomationCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "حالات لا تستطيع فيها المتابعة التلقائية الاستمرار حتى تُغلق مراجعة الجودة الحالية."
-              : "Cases where follow-up automation is blocked until the current QA boundary is cleared."}
-          </p>
-        </article>
-        <article className={metricTileClassName("mint")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "حوكمة المحادثات" : "Conversation governance"}</p>
-          <p className={metricValueClassName}>{governanceSummary.revenueAttentionCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Cases where follow-up automation is blocked until the current QA boundary is cleared."
+          }
+          label={props.locale === "ar" ? "أتمتة معلقة بالجودة" : "QA-held automation"}
+          tone="sand"
+          value={String(governanceHeldAutomationCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "حالات ما زالت رسائلها داخل مراجعة الجودة أو تحتاج متابعة تصحيحية."
-              : "Cases whose customer-facing message state is still blocked on QA or needs corrective follow-up."}
-          </p>
-        </article>
-        <article className={metricTileClassName("rose")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "مراجعات قديمة" : "Stale pending QA"}</p>
-          <p className={metricValueClassName}>{governanceSummary.stalePendingCasesCount}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Cases whose customer-facing message state is still blocked on QA or needs corrective follow-up."
+          }
+          label={props.locale === "ar" ? "حوكمة المحادثات" : "Conversation governance"}
+          tone="mint"
+          value={String(governanceSummary.revenueAttentionCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "مراجعات جودة معلقة لأكثر من يوم وقد تحتاج تصعيداً من الإدارة."
-              : "QA items that have been pending for more than a day and may need managerial escalation."}
-          </p>
-        </article>
-        <article className={metricTileClassName("ocean")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "تسليمات ما بعد الرد" : "Post-reply handoffs"}</p>
-          <p className={metricValueClassName}>{postReplyHandoffCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "QA items that have been pending for more than a day and may need managerial escalation."
+          }
+          label={props.locale === "ar" ? "مراجعات قديمة" : "Stale pending QA"}
+          tone="rose"
+          value={String(governanceSummary.stalePendingCasesCount)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "حالات أرسل فيها شخص آخر آخر رد بشري ثم انتقلت المتابعة الحالية إلى مالك مختلف."
-              : "Cases where the latest human reply was sent by one operator and the active follow-up now sits with a different owner."}
-          </p>
-        </article>
-        <article className={metricTileClassName("rose")}>
-          <p className={metricLabelClassName}>{props.locale === "ar" ? "تسليمات متصاعدة" : "Escalated handoffs"}</p>
-          <p className={metricValueClassName}>{escalatedPostReplyHandoffCases.length}</p>
-          <p className={metricDetailClassName}>
-            {props.locale === "ar"
+              : "Cases where the latest human reply was sent by one operator and the active follow-up now sits with a different owner."
+          }
+          label={props.locale === "ar" ? "تسليمات ما بعد الرد" : "Post-reply handoffs"}
+          tone="ocean"
+          value={String(postReplyHandoffCases.length)}
+        />
+        <MetricTile
+          detail={
+            props.locale === "ar"
               ? "تسليمات بعد الرد أصبحت الآن متأخرة أو عليها تدخل إداري مفتوح."
-              : "Post-reply handoffs that are already overdue or carrying open managerial intervention pressure."}
-          </p>
-        </article>
+              : "Post-reply handoffs that are already overdue or carrying open managerial intervention pressure."
+          }
+          label={props.locale === "ar" ? "تسليمات متصاعدة" : "Escalated handoffs"}
+          tone="rose"
+          value={String(escalatedPostReplyHandoffCases.length)}
+        />
       </div>
 
       <div className={twoColumnGridClassName}>
