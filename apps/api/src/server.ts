@@ -2,6 +2,7 @@ import { createAlphaLeadCaptureStore } from "@real-estate-ai/database";
 import { createGoogleCalendarClient } from "@real-estate-ai/integrations";
 
 import { buildApiApp } from "./app";
+import { createLocalDocumentStorage } from "./document-storage";
 import { parseApiEnvironment } from "./env";
 
 const environment = parseApiEnvironment(process.env);
@@ -17,6 +18,8 @@ const calendarClient =
     : null;
 const app = buildApiApp({
   calendarClient,
+  documentStorage: createLocalDocumentStorage(environment.API_DOCUMENT_STORAGE_PATH ?? `${environment.API_DATABASE_PATH}/document-uploads`),
+  documentUploadMaxBytes: environment.API_DOCUMENT_UPLOAD_MAX_BYTES,
   store,
   whatsappWebhookAppSecret: environment.API_META_WHATSAPP_APP_SECRET ?? null,
   whatsappWebhookVerifyToken: environment.API_META_WHATSAPP_WEBHOOK_VERIFY_TOKEN ?? null

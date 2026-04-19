@@ -334,12 +334,24 @@ export const persistedVisitSchema = z.object({
   visitId: z.uuid()
 });
 
+export const persistedDocumentUploadSchema = z.object({
+  checksumSha256: z.string(),
+  createdAt: z.iso.datetime(),
+  documentUploadId: z.uuid(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  uploadedAt: z.iso.datetime()
+});
+
 export const persistedDocumentRequestSchema = z.object({
   createdAt: z.iso.datetime(),
   documentRequestId: z.uuid(),
+  latestUpload: persistedDocumentUploadSchema.nullable(),
   status: documentRequestStatusSchema,
   type: documentRequestTypeSchema,
-  updatedAt: z.iso.datetime()
+  updatedAt: z.iso.datetime(),
+  uploads: z.array(persistedDocumentUploadSchema)
 });
 
 export const persistedManagerInterventionSchema = z.object({
@@ -835,6 +847,7 @@ export type PersistedLatestManagerFollowUp = z.infer<typeof persistedLatestManag
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
 export type PersistedCurrentHandoverCustomerUpdateQaReview = z.infer<typeof persistedCurrentHandoverCustomerUpdateQaReviewSchema>;
 export type PersistedDocumentRequest = z.infer<typeof persistedDocumentRequestSchema>;
+export type PersistedDocumentUpload = z.infer<typeof persistedDocumentUploadSchema>;
 export type PersistedGovernanceDailyActivity = z.infer<typeof persistedGovernanceDailyActivitySchema>;
 export type PersistedGovernanceEventList = z.infer<typeof persistedGovernanceEventListSchema>;
 export type PersistedGovernanceEventRecord = z.infer<typeof persistedGovernanceEventRecordSchema>;

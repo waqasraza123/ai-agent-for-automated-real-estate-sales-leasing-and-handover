@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { operatorSessionHeaderName, type OperatorRole } from "@real-estate-ai/contracts";
@@ -5,6 +9,7 @@ import { createOperatorSessionToken } from "@real-estate-ai/contracts/operator-s
 import { createMetaWhatsAppWebhookSignature } from "@real-estate-ai/integrations";
 
 import { buildApiApp } from "./app";
+import { createLocalDocumentStorage } from "./document-storage";
 
 import { createAlphaLeadCaptureStore } from "@real-estate-ai/database";
 
@@ -17,12 +22,16 @@ function withOperatorSession(role: OperatorRole) {
 describe("lead capture api", () => {
   let store: Awaited<ReturnType<typeof createAlphaLeadCaptureStore>>;
   let app: ReturnType<typeof buildApiApp>;
+  let documentStoragePath: string;
 
   beforeEach(async () => {
     store = await createAlphaLeadCaptureStore({
       inMemory: true
     });
+    documentStoragePath = await mkdtemp(path.join(os.tmpdir(), "real-estate-ai-docs-"));
     app = buildApiApp({
+      documentStorage: createLocalDocumentStorage(documentStoragePath),
+      documentUploadMaxBytes: 8 * 1024 * 1024,
       store
     });
   });
@@ -30,6 +39,7 @@ describe("lead capture api", () => {
   afterEach(async () => {
     await app.close();
     await store.close();
+    await rm(documentStoragePath, { force: true, recursive: true });
   });
 
   it("creates a persisted website lead case with seeded document requests", async () => {
@@ -74,6 +84,57 @@ describe("lead capture api", () => {
     expect(detailResponse.json().channelSummary?.contactValue).toBe("+15550100");
   });
 
+  it("stores uploaded document evidence and streams it back through the document download route", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Huda Kareem",
+        email: "huda@example.com",
+        message: "I can upload the requested documents today.",
+        phone: "+966 55 000 1111",
+        preferredLocale: "en",
+        projectInterest: "Palm Horizon"
+      },
+      url: "/v1/website-leads"
+    });
+    const createdCase = createResponse.json();
+
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: `/v1/cases/${createdCase.caseId}`
+    });
+    const documentRequestId = detailResponse.json().documentRequests[0].documentRequestId;
+    const fileBytes = Buffer.from("%PDF-1.7 test document", "utf8");
+
+    const uploadResponse = await app.inject({
+      headers: {
+        ...withOperatorSession("sales_manager"),
+        "content-type": "application/octet-stream",
+        "x-document-file-name": encodeURIComponent("passport-copy.pdf"),
+        "x-document-mime-type": encodeURIComponent("application/pdf")
+      },
+      method: "POST",
+      payload: fileBytes,
+      url: `/v1/cases/${createdCase.caseId}/documents/${documentRequestId}/uploads`
+    });
+
+    expect(uploadResponse.statusCode).toBe(201);
+    expect(uploadResponse.json().documentRequests[0].status).toBe("under_review");
+    expect(uploadResponse.json().documentRequests[0].latestUpload?.fileName).toBe("passport-copy.pdf");
+    expect(uploadResponse.json().documentRequests[0].uploads).toHaveLength(1);
+
+    const uploadedDocumentId = uploadResponse.json().documentRequests[0].uploads[0].documentUploadId;
+    const downloadResponse = await app.inject({
+      headers: withOperatorSession("sales_manager"),
+      method: "GET",
+      url: `/v1/cases/${createdCase.caseId}/documents/${documentRequestId}/uploads/${uploadedDocumentId}`
+    });
+
+    expect(downloadResponse.statusCode).toBe(200);
+    expect(downloadResponse.headers["content-type"]).toContain("application/pdf");
+    expect(downloadResponse.body).toBe(fileBytes.toString("utf8"));
+  });
+
   it("persists Google Calendar confirmation state after scheduling a visit", async () => {
     const calendarApp = buildApiApp({
       calendarClient: {
@@ -83,6 +144,8 @@ describe("lead capture api", () => {
           providerEventId: "google-event-1"
         })
       },
+      documentStorage: createLocalDocumentStorage(documentStoragePath),
+      documentUploadMaxBytes: 8 * 1024 * 1024,
       store
     });
 
@@ -148,6 +211,8 @@ describe("lead capture api", () => {
 
   it("accepts a signed Meta WhatsApp webhook callback when an app secret is configured", async () => {
     const signedWebhookApp = buildApiApp({
+      documentStorage: createLocalDocumentStorage(documentStoragePath),
+      documentUploadMaxBytes: 8 * 1024 * 1024,
       store,
       whatsappWebhookAppSecret: "meta-app-secret"
     });
@@ -177,6 +242,8 @@ describe("lead capture api", () => {
 
   it("rejects an unsigned or invalid Meta WhatsApp webhook callback when an app secret is configured", async () => {
     const signedWebhookApp = buildApiApp({
+      documentStorage: createLocalDocumentStorage(documentStoragePath),
+      documentUploadMaxBytes: 8 * 1024 * 1024,
       store,
       whatsappWebhookAppSecret: "meta-app-secret"
     });

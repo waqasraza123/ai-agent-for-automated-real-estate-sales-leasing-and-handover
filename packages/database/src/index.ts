@@ -65,6 +65,7 @@ import type {
   PersistedCaseSummary,
   PersistedCurrentHandoverCustomerUpdateQaReview,
   PersistedDocumentRequest,
+  PersistedDocumentUpload,
   PersistedGovernanceEventList,
   PersistedGovernanceEventRecord,
   PersistedGovernanceSummary,
@@ -277,6 +278,23 @@ const documentRequests = pgTable("document_requests", {
   status: text("status").notNull(),
   type: text("type").notNull(),
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const documentUploads = pgTable("document_uploads", {
+  caseId: uuid("case_id")
+    .notNull()
+    .references(() => cases.id, { onDelete: "cascade" }),
+  checksumSha256: text("checksum_sha256").notNull(),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  documentRequestId: uuid("document_request_id")
+    .notNull()
+    .references(() => documentRequests.id, { onDelete: "cascade" }),
+  fileName: text("file_name").notNull(),
+  id: uuid("id").primaryKey(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  storagePath: text("storage_path").notNull(),
+  uploadedAt: timestamp("uploaded_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const handoverCases = pgTable("handover_cases", {
@@ -559,6 +577,22 @@ export interface LeadCaptureStore {
     limit: number;
     runAt: string;
   }): Promise<DueAutomationJob[]>;
+  getDocumentUploadRecord(
+    caseId: string,
+    documentRequestId: string,
+    documentUploadId: string
+  ): Promise<
+    | {
+        checksumSha256: string;
+        documentUploadId: string;
+        fileName: string;
+        mimeType: string;
+        sizeBytes: number;
+        storagePath: string;
+        uploadedAt: string;
+      }
+    | null
+  >;
   recordVisitBooking(
     caseId: string,
     visitId: string,
@@ -602,6 +636,21 @@ export interface LeadCaptureStore {
       sentByName: string | null;
       status: MessageDeliveryStatus;
       updatedAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
+  recordDocumentUpload(
+    caseId: string,
+    documentRequestId: string,
+    input: {
+      checksumSha256: string;
+      documentUploadId: string;
+      fileName: string;
+      mimeType: string;
+      nextAction: string;
+      nextActionDueAt: string;
+      sizeBytes: number;
+      storagePath: string;
+      uploadedAt: string;
     }
   ): Promise<PersistedCaseDetail | null>;
   prepareCaseReplyDraftQaReview(caseId: string, input: PrepareCaseReplyDraftQaReviewInput): Promise<PersistedCaseDetail | null>;
@@ -875,6 +924,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       caseQaReviews,
       cases,
       documentRequests,
+      documentUploads,
       handoverAppointments,
       handoverArchiveReviews,
       handoverArchiveStatuses,
@@ -1063,6 +1113,19 @@ export async function createAlphaLeadCaptureStore(options?: {
       status text not null,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
+    );
+
+    create table if not exists document_uploads (
+      id uuid primary key,
+      case_id uuid not null references cases(id) on delete cascade,
+      document_request_id uuid not null references document_requests(id) on delete cascade,
+      file_name text not null,
+      mime_type text not null,
+      size_bytes integer not null,
+      checksum_sha256 text not null,
+      storage_path text not null,
+      uploaded_at timestamptz not null default now(),
+      created_at timestamptz not null default now()
     );
 
     create table if not exists handover_cases (
@@ -1266,6 +1329,8 @@ export async function createAlphaLeadCaptureStore(options?: {
     create index if not exists visit_bookings_visit_id_idx on visit_bookings (visit_id);
     create index if not exists case_channel_states_case_id_idx on case_channel_states (case_id);
     create index if not exists document_requests_case_id_idx on document_requests (case_id, created_at asc);
+    create index if not exists document_uploads_document_request_id_idx on document_uploads (document_request_id, uploaded_at desc);
+    create index if not exists document_uploads_case_id_idx on document_uploads (case_id, uploaded_at desc);
     create index if not exists handover_tasks_case_id_idx on handover_tasks (handover_case_id, due_at asc);
     create index if not exists handover_blockers_case_id_idx on handover_blockers (handover_case_id, due_at asc);
     create index if not exists handover_milestones_case_id_idx on handover_milestones (handover_case_id, target_at asc);
@@ -2230,6 +2295,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       qualificationRecord,
       currentVisit,
       persistedDocumentRequests,
+      persistedDocumentUploads,
       persistedInterventions,
       persistedQaReviews,
       persistedCaseAgentMemory,
@@ -2283,6 +2349,20 @@ export async function createAlphaLeadCaptureStore(options?: {
           .from(documentRequests)
           .where(eq(documentRequests.caseId, caseId))
           .orderBy(asc(documentRequests.createdAt)),
+        db
+          .select({
+            checksumSha256: documentUploads.checksumSha256,
+            createdAt: documentUploads.createdAt,
+            documentRequestId: documentUploads.documentRequestId,
+            documentUploadId: documentUploads.id,
+            fileName: documentUploads.fileName,
+            mimeType: documentUploads.mimeType,
+            sizeBytes: documentUploads.sizeBytes,
+            uploadedAt: documentUploads.uploadedAt
+          })
+          .from(documentUploads)
+          .where(eq(documentUploads.caseId, caseId))
+          .orderBy(desc(documentUploads.uploadedAt), desc(documentUploads.createdAt)),
         db
           .select({
             createdAt: managerInterventions.createdAt,
@@ -2379,6 +2459,15 @@ export async function createAlphaLeadCaptureStore(options?: {
     const hydratedInterventions = persistedInterventions.map((intervention) => hydrateManagerIntervention(intervention));
     const hydratedQaReviews = persistedQaReviews.map((qaReview) => hydrateCaseQaReview(qaReview));
     const hydratedAgentRuns = persistedCaseAgentRuns.map((agentRun) => hydrateCaseAgentRun(agentRun));
+    const documentUploadsByRequestId = persistedDocumentUploads.reduce<Map<string, PersistedDocumentUpload[]>>((map, upload) => {
+      const hydratedUpload = hydrateDocumentUpload(upload);
+      const existingUploads = map.get(upload.documentRequestId) ?? [];
+
+      existingUploads.push(hydratedUpload);
+      map.set(upload.documentRequestId, existingUploads);
+
+      return map;
+    }, new Map());
     const currentQaReview = hydratedQaReviews[0] ?? null;
     const latestHumanReply = caseAuditEvents
       .filter((event) => event.eventType === "case_reply_sent")
@@ -2419,9 +2508,11 @@ export async function createAlphaLeadCaptureStore(options?: {
       documentRequests: persistedDocumentRequests.map((documentRequest) => ({
         createdAt: documentRequest.createdAt,
         documentRequestId: documentRequest.documentRequestId,
+        latestUpload: (documentUploadsByRequestId.get(documentRequest.documentRequestId) ?? [])[0] ?? null,
         status: toDocumentRequestStatus(documentRequest.status),
         type: toDocumentRequestType(documentRequest.type),
-        updatedAt: documentRequest.updatedAt
+        updatedAt: documentRequest.updatedAt,
+        uploads: documentUploadsByRequestId.get(documentRequest.documentRequestId) ?? []
       })),
       email: caseRecord.email,
       followUpStatus: toFollowUpStatus(caseRecord.nextActionDueAt),
@@ -3434,6 +3525,29 @@ export async function createAlphaLeadCaptureStore(options?: {
     async getCaseDetail(caseId) {
       return getPersistedCaseDetail(caseId);
     },
+    async getDocumentUploadRecord(caseId, documentRequestId, documentUploadId) {
+      const uploadRecord = await db
+        .select({
+          checksumSha256: documentUploads.checksumSha256,
+          documentUploadId: documentUploads.id,
+          fileName: documentUploads.fileName,
+          mimeType: documentUploads.mimeType,
+          sizeBytes: documentUploads.sizeBytes,
+          storagePath: documentUploads.storagePath,
+          uploadedAt: documentUploads.uploadedAt
+        })
+        .from(documentUploads)
+        .where(
+          and(
+            eq(documentUploads.caseId, caseId),
+            eq(documentUploads.documentRequestId, documentRequestId),
+            eq(documentUploads.id, documentUploadId)
+          )
+        )
+        .limit(1);
+
+      return uploadRecord[0] ?? null;
+    },
     async listGovernanceEvents(input) {
       return listGovernanceEvents(input);
     },
@@ -4269,10 +4383,21 @@ export async function createAlphaLeadCaptureStore(options?: {
           const outstandingDocumentRecords = caseRecord
             ? await transaction
                 .select({
+                  documentRequestId: documentRequests.id,
                   status: documentRequests.status
                 })
                 .from(documentRequests)
                 .where(eq(documentRequests.caseId, caseRecord.caseId))
+            : [];
+          const latestDocumentUploadRecords = caseRecord
+            ? await transaction
+                .select({
+                  documentRequestId: documentUploads.documentRequestId,
+                  uploadedAt: documentUploads.uploadedAt
+                })
+                .from(documentUploads)
+                .where(eq(documentUploads.caseId, caseRecord.caseId))
+                .orderBy(desc(documentUploads.uploadedAt), desc(documentUploads.createdAt))
             : [];
 
           await transaction
@@ -4309,7 +4434,16 @@ export async function createAlphaLeadCaptureStore(options?: {
 
           const hasOutstandingDocuments =
             caseRecord.stage === "documents_in_progress" &&
-            outstandingDocumentRecords.some((documentRecord) => toDocumentRequestStatus(documentRecord.status) !== "accepted");
+            outstandingDocumentRecords.some((documentRecord) => {
+              const hasUpload = latestDocumentUploadRecords.some(
+                (uploadRecord) => uploadRecord.documentRequestId === documentRecord.documentRequestId
+              );
+
+              return documentRequestNeedsCustomerUpload({
+                hasUpload,
+                status: toDocumentRequestStatus(documentRecord.status)
+              });
+            });
 
           await syncCaseAgentTriggerJob(transaction, {
             caseId: caseRecord.caseId,
@@ -4597,6 +4731,83 @@ export async function createAlphaLeadCaptureStore(options?: {
           caseId,
           runAfter: input.nextActionDueAt,
           updatedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async recordDocumentUpload(caseId, documentRequestId, input) {
+      const documentRequest = await db
+        .select({
+          documentRequestId: documentRequests.id
+        })
+        .from(documentRequests)
+        .where(and(eq(documentRequests.caseId, caseId), eq(documentRequests.id, documentRequestId)))
+        .limit(1);
+
+      if (!documentRequest[0]) {
+        return null;
+      }
+
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      await db.transaction(async (transaction) => {
+        await transaction.insert(documentUploads).values({
+          caseId,
+          checksumSha256: input.checksumSha256,
+          createdAt: input.uploadedAt,
+          documentRequestId,
+          fileName: input.fileName,
+          id: input.documentUploadId,
+          mimeType: input.mimeType,
+          sizeBytes: input.sizeBytes,
+          storagePath: input.storagePath,
+          uploadedAt: input.uploadedAt
+        });
+
+        await transaction
+          .update(documentRequests)
+          .set({
+            status: "under_review",
+            updatedAt: input.uploadedAt
+          })
+          .where(and(eq(documentRequests.caseId, caseId), eq(documentRequests.id, documentRequestId)));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "documents_in_progress",
+            updatedAt: input.uploadedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.uploadedAt,
+          eventType: "document_uploaded",
+          id: randomUUID(),
+          payload: {
+            checksumSha256: input.checksumSha256,
+            documentRequestId,
+            documentUploadId: input.documentUploadId,
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            sizeBytes: input.sizeBytes
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt: input.uploadedAt
         });
       });
 
@@ -5982,7 +6193,34 @@ function deriveDocumentWorkflowNextAction(documentRequests: PersistedDocumentReq
     return locale === "ar" ? "رفع الحالة إلى اعتماد التسليم بعد اكتمال المستندات" : "Escalate the case for handover approval after documents are complete";
   }
 
-  return locale === "ar" ? "متابعة المستندات المطلوبة مع العميل" : "Track the outstanding document requests with the prospect";
+  if (documentRequests.some((documentRequest) => documentRequestNeedsCustomerUpload(documentRequest))) {
+    return locale === "ar" ? "متابعة المستندات المطلوبة مع العميل" : "Track the outstanding document requests with the prospect";
+  }
+
+  return locale === "ar"
+    ? "راجع الملفات المرفوعة ووافق على الجاهزية أو اطلب بديلاً واضحاً"
+    : "Review the uploaded files and either approve readiness or request a clear replacement";
+}
+
+function documentRequestNeedsCustomerUpload(
+  documentRequest:
+    | PersistedDocumentRequest
+    | {
+        hasUpload: boolean;
+        status: DocumentRequestStatus;
+      }
+) {
+  if (documentRequest.status === "accepted") {
+    return false;
+  }
+
+  if (documentRequest.status === "rejected") {
+    return true;
+  }
+
+  const hasUpload = "uploads" in documentRequest ? documentRequest.uploads.length > 0 : documentRequest.hasUpload;
+
+  return !hasUpload;
 }
 
 function deriveHandoverCaseStatus(
@@ -6776,6 +7014,26 @@ function hydrateVisitBooking(value: {
     providerEventId: value.providerEventId,
     status: toVisitBookingStatus(value.status),
     updatedAt: value.updatedAt
+  };
+}
+
+function hydrateDocumentUpload(value: {
+  checksumSha256: string;
+  createdAt: string;
+  documentUploadId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+}): PersistedDocumentUpload {
+  return {
+    checksumSha256: value.checksumSha256,
+    createdAt: value.createdAt,
+    documentUploadId: value.documentUploadId,
+    fileName: value.fileName,
+    mimeType: value.mimeType,
+    sizeBytes: value.sizeBytes,
+    uploadedAt: value.uploadedAt
   };
 }
 

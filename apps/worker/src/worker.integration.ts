@@ -178,4 +178,49 @@ describe("case agent worker", () => {
     expect(caseDetail?.agentState?.latestRecommendedAction).toBe("send_whatsapp_message");
     expect(caseDetail?.agentMemory?.documentGapSummary).toContain("government");
   });
+
+  it("stops document-missing escalation once all outstanding document requests have uploaded evidence", async () => {
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Nadia Ibrahim",
+      email: "nadia@example.com",
+      message: "I will upload the required files after the visit.",
+      nextAction: "Track the lead after the visit",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 55 777 8181",
+      preferredLocale: "en",
+      projectInterest: "Palm Horizon"
+    });
+    const firstCase = await store.getCaseDetail(createdCase.caseId);
+
+    expect(firstCase?.documentRequests).toHaveLength(3);
+
+    for (const [index, documentRequest] of (firstCase?.documentRequests ?? []).entries()) {
+      await store.recordDocumentUpload(createdCase.caseId, documentRequest.documentRequestId, {
+        checksumSha256: `checksum-${index + 1}`,
+        documentUploadId: `00000000-0000-4000-8000-00000000000${index + 1}`,
+        fileName: `document-${index + 1}.pdf`,
+        mimeType: "application/pdf",
+        nextAction: "Review the uploaded files and either approve readiness or request a clear replacement",
+        nextActionDueAt: "2026-04-12T10:00:00.000Z",
+        sizeBytes: 1024,
+        storagePath: `${createdCase.caseId}/${documentRequest.documentRequestId}/document-${index + 1}.pdf`,
+        uploadedAt: "2026-04-12T09:00:00.000Z"
+      });
+    }
+
+    const dueCycle = await runPersistedFollowUpCycle(store, {
+      limit: 10,
+      runAt: "2026-04-12T12:00:00.000Z"
+    });
+    const agentCycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      runAt: "2026-04-12T12:00:00.000Z"
+    });
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
+
+    expect(dueCycle.processedJobs).toBe(1);
+    expect(agentCycle.processedJobs).toBe(1);
+    expect(caseDetail?.agentState?.latestTriggerType).toBe("no_response_follow_up");
+    expect(caseDetail?.agentMemory?.documentGapSummary).toBeNull();
+  });
 });

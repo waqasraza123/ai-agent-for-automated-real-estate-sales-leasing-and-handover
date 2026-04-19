@@ -521,9 +521,23 @@ export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail:
     detail: getDocumentRequestDetail(locale, documentRequest.type),
     documentRequestId: documentRequest.documentRequestId,
     label: getDocumentRequestTypeLabel(locale, documentRequest.type),
+    latestUploadSummary: documentRequest.latestUpload
+      ? locale === "ar"
+        ? `آخر ملف: ${documentRequest.latestUpload.fileName} • ${formatFileSize(locale, documentRequest.latestUpload.sizeBytes)}`
+        : `Latest file: ${documentRequest.latestUpload.fileName} • ${formatFileSize(locale, documentRequest.latestUpload.sizeBytes)}`
+      : locale === "ar"
+        ? "لا يوجد ملف مرفوع بعد."
+        : "No file uploaded yet.",
     statusLabel: getDocumentRequestStatusLabel(locale, documentRequest.status),
     statusTone: getDocumentTone(documentRequest.status),
     updatedAt: formatDateTime(documentRequest.updatedAt, locale),
+    uploads: documentRequest.uploads.map((upload) => ({
+      documentUploadId: upload.documentUploadId,
+      fileName: upload.fileName,
+      mimeType: upload.mimeType,
+      sizeLabel: formatFileSize(locale, upload.sizeBytes),
+      uploadedAt: formatDateTime(upload.uploadedAt, locale)
+    })),
     value: documentRequest.status
   }));
 }
@@ -541,6 +555,18 @@ export function getPersistedHandoverDisplay(locale: SupportedLocale, handoverCas
     updatedAt: formatDateTime(task.updatedAt, locale),
     summary: getHandoverTaskTypeDetail(locale, task.type)
   }));
+}
+
+function formatFileSize(locale: SupportedLocale, sizeBytes: number) {
+  if (sizeBytes < 1024 * 1024) {
+    const kilobytes = Math.max(1, Math.round(sizeBytes / 102.4) / 10);
+
+    return locale === "ar" ? `${kilobytes} كيلوبايت` : `${kilobytes} KB`;
+  }
+
+  const megabytes = Math.round(sizeBytes / (1024 * 1024 / 10)) / 10;
+
+  return locale === "ar" ? `${megabytes} ميغابايت` : `${megabytes} MB`;
 }
 
 export function getPersistedHandoverBlockerDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {

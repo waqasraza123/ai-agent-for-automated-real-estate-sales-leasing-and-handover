@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 import { z } from "zod";
 
@@ -6,6 +7,8 @@ const defaultDatabasePath = fileURLToPath(new URL("../.data/phase2-alpha", impor
 
 const apiEnvSchema = z.object({
   API_DATABASE_PATH: z.string().min(1).default(defaultDatabasePath),
+  API_DOCUMENT_STORAGE_PATH: z.string().min(1).optional(),
+  API_DOCUMENT_UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
   API_GOOGLE_CALENDAR_ACCESS_TOKEN: z.string().min(1).optional(),
   API_GOOGLE_CALENDAR_ID: z.string().min(1).optional(),
   API_HOST: z.string().min(1).default("0.0.0.0"),
@@ -36,5 +39,10 @@ const apiEnvSchema = z.object({
 export type ApiEnvironment = z.infer<typeof apiEnvSchema>;
 
 export function parseApiEnvironment(environment: NodeJS.ProcessEnv): ApiEnvironment {
-  return apiEnvSchema.parse(environment);
+  const parsedEnvironment = apiEnvSchema.parse(environment);
+
+  return {
+    ...parsedEnvironment,
+    API_DOCUMENT_STORAGE_PATH: parsedEnvironment.API_DOCUMENT_STORAGE_PATH ?? path.join(parsedEnvironment.API_DATABASE_PATH, "document-uploads")
+  };
 }

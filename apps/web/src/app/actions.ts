@@ -75,6 +75,7 @@ import {
   startHandoverExecution,
   updateHandoverArchiveStatus,
   updateAutomationStatus,
+  uploadCaseDocument,
   updateDocumentRequest,
   updateHandoverBlocker,
   updateHandoverMilestone,
@@ -636,6 +637,66 @@ export async function updateDocumentStatusAction(_: FormActionState, formData: F
 
     return {
       message: messages.actions.documentUpdated,
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function uploadDocumentAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const caseId = formData.get("caseId");
+  const documentRequestId = formData.get("documentRequestId");
+  const returnPath = formData.get("returnPath");
+  const uploadedFile = formData.get("documentFile");
+
+  if (typeof caseId !== "string" || typeof documentRequestId !== "string" || typeof returnPath !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  if (!(uploadedFile instanceof File) || uploadedFile.size === 0) {
+    return {
+      message: locale === "ar" ? "اختر ملفاً قبل محاولة الرفع." : "Choose a file before trying to upload.",
+      status: "error"
+    };
+  }
+
+  if (!isSupportedDocumentMimeType(uploadedFile.type)) {
+    return {
+      message:
+        locale === "ar"
+          ? "يُسمح حالياً بملفات PDF أو صور PNG وJPEG فقط."
+          : "Only PDF, PNG, and JPEG documents are supported right now.",
+      status: "error"
+    };
+  }
+
+  if (uploadedFile.size > 8 * 1024 * 1024) {
+    return {
+      message: locale === "ar" ? "حجم الملف يتجاوز الحد الحالي البالغ 8 ميغابايت." : "The file exceeds the current 8 MB limit.",
+      status: "error"
+    };
+  }
+
+  try {
+    const updatedCase = await uploadCaseDocument(
+      caseId,
+      documentRequestId,
+      {
+        bytes: await uploadedFile.arrayBuffer(),
+        fileName: uploadedFile.name,
+        mimeType: uploadedFile.type
+      },
+      await getOperatorRole()
+    );
+    revalidatePaths(locale, returnPath, caseId, updatedCase.handoverCase?.handoverCaseId);
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم حفظ الملف وتحويل المستند إلى قيد المراجعة."
+          : "The file was saved and the document moved into review.",
       status: "success"
     };
   } catch (error) {
@@ -1504,6 +1565,10 @@ function normalizeOptionalString(value: FormDataEntryValue | null) {
 
 async function getOperatorRole() {
   return getCurrentOperatorRole();
+}
+
+function isSupportedDocumentMimeType(mimeType: string) {
+  return mimeType === "application/pdf" || mimeType === "image/jpeg" || mimeType === "image/png";
 }
 
 function revalidatePaths(locale: "en" | "ar", returnPath: string, caseId: string, handoverCaseId?: string) {

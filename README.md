@@ -50,6 +50,7 @@ The repository is past bootstrap and currently contains a working local alpha fo
 - English and Arabic locale routing with RTL-aware rendering
 - hybrid web routes that fall back to premium seeded demo data when the API is unavailable
 - live alpha workflow for website lead intake, WhatsApp-first reply orchestration, qualification, visit scheduling, document tracking, and manager review
+- persisted document upload and authenticated download flow backed by local storage for live cases
 - production-style `CaseAgentOrchestrator` runtime for `new_lead`, `no_response_follow_up`, and `document_missing`
 - provider-backed model adapter boundary with deterministic fallback and scenario-based evaluation coverage
 - Playwright smoke tests and opt-in visual regression baselines
@@ -61,7 +62,7 @@ Not implemented yet:
 - full production PostgreSQL deployment wiring
 - authentication and authorization
 - CRM export and sync
-- document upload and storage
+- document OCR, extraction, and review intelligence over uploaded files
 - production deployment automation around provider secrets and hosting
 - broader handover packaging beyond the current local implementation
 
@@ -215,6 +216,18 @@ Local or sales-demo mode:
 - leave the client-managed provider variables unset
 - website lead capture, case progression, QA, documents, and manager visibility still work
 - WhatsApp and calendar surfaces will stay truthful by showing that live delivery or sync is awaiting client credentials
+
+Document storage configuration:
+
+- `API_DOCUMENT_STORAGE_PATH`: local directory used by the API to persist uploaded document bytes
+- `API_DOCUMENT_UPLOAD_MAX_BYTES`: max accepted upload size in bytes; defaults to `8388608`
+
+Current document flow:
+
+- operators can upload PDF, PNG, and JPEG evidence against live document requests
+- the API persists upload metadata plus the file bytes
+- the web app exposes authenticated download links through a Next.js proxy route
+- `document_missing` agent logic now keys off real upload evidence instead of checklist status alone
 
 ## Verification
 

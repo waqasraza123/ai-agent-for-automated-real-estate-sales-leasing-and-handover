@@ -69,6 +69,7 @@ import {
   setPersistedAutomationStatus,
   startPersistedHandoverIntake,
   submitWebsiteLead,
+  uploadPersistedDocument,
   updatePersistedHandoverArchiveStatus,
   updatePersistedDocumentRequest,
   updatePersistedHandoverBlocker,
@@ -76,6 +77,7 @@ import {
   updatePersistedHandoverTask
 } from "@real-estate-ai/workflows";
 
+import type { DocumentStorage } from "./document-storage";
 import { requireAnyOperatorWorkspace, requireOperatorPermission, requireOperatorWorkspace } from "./operator-session";
 
 declare module "fastify" {
@@ -96,8 +98,22 @@ function mapMetaStatusToDeliveryStatus(status: string) {
   return "failed" as const;
 }
 
+function readSingleHeaderValue(headerValue: string | string[] | undefined) {
+  return typeof headerValue === "string" && headerValue.trim().length > 0 ? decodeURIComponent(headerValue) : null;
+}
+
+function isSupportedDocumentMimeType(mimeType: string) {
+  return mimeType === "application/pdf" || mimeType === "image/jpeg" || mimeType === "image/png";
+}
+
+function buildAttachmentHeader(fileName: string) {
+  return `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+}
+
 export function buildApiApp(dependencies: {
   calendarClient?: CalendarBookingClient | null;
+  documentStorage: DocumentStorage;
+  documentUploadMaxBytes: number;
   store: LeadCaptureStore;
   whatsappWebhookAppSecret?: string | null;
   whatsappWebhookVerifyToken?: string | null;
@@ -116,6 +132,11 @@ export function buildApiApp(dependencies: {
     } catch (error) {
       done(error as Error, undefined);
     }
+  });
+
+  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (request, body, done) => {
+    request.rawBody = typeof body === "string" ? body : body.toString("utf8");
+    done(null, body);
   });
 
   app.get("/health", async () => ({
@@ -669,6 +690,111 @@ export function buildApiApp(dependencies: {
 
       throw error;
     }
+  });
+
+  app.post<{
+    Params: {
+      caseId: string;
+      documentRequestId: string;
+    };
+  }>("/v1/cases/:caseId/documents/:documentRequestId/uploads", async (request, reply) => {
+    if (!requireOperatorWorkspace(request, reply, "sales")) {
+      return reply;
+    }
+
+    const fileName = readSingleHeaderValue(request.headers["x-document-file-name"]);
+    const mimeType = readSingleHeaderValue(request.headers["x-document-mime-type"]);
+    const body = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
+
+    if (!fileName || !mimeType || body.byteLength === 0) {
+      return reply.status(400).send({
+        error: "invalid_document_upload"
+      });
+    }
+
+    if (!isSupportedDocumentMimeType(mimeType)) {
+      return reply.status(415).send({
+        error: "unsupported_document_mime_type"
+      });
+    }
+
+    if (body.byteLength > dependencies.documentUploadMaxBytes) {
+      return reply.status(413).send({
+        error: "document_upload_too_large"
+      });
+    }
+
+    const caseDetail = await getPersistedCaseDetail(dependencies.store, request.params.caseId);
+
+    if (!caseDetail || !caseDetail.documentRequests.some((documentRequest) => documentRequest.documentRequestId === request.params.documentRequestId)) {
+      return reply.status(404).send({
+        error: "resource_not_found"
+      });
+    }
+
+    const storedUpload = await dependencies.documentStorage.saveUpload({
+      bytes: body,
+      caseId: request.params.caseId,
+      documentRequestId: request.params.documentRequestId,
+      fileName
+    });
+
+    try {
+      const updatedCase = await uploadPersistedDocument(dependencies.store, request.params.caseId, request.params.documentRequestId, {
+        checksumSha256: storedUpload.checksumSha256,
+        documentUploadId: storedUpload.documentUploadId,
+        fileName,
+        mimeType,
+        sizeBytes: storedUpload.sizeBytes,
+        storagePath: storedUpload.storagePath,
+        uploadedAt: new Date().toISOString()
+      });
+
+      if (!updatedCase) {
+        await dependencies.documentStorage.deleteUpload(storedUpload.storagePath);
+
+        return reply.status(404).send({
+          error: "resource_not_found"
+        });
+      }
+
+      return reply.status(201).send(updatedCase);
+    } catch (error) {
+      await dependencies.documentStorage.deleteUpload(storedUpload.storagePath);
+      throw error;
+    }
+  });
+
+  app.get<{
+    Params: {
+      caseId: string;
+      documentRequestId: string;
+      uploadId: string;
+    };
+  }>("/v1/cases/:caseId/documents/:documentRequestId/uploads/:uploadId", async (request, reply) => {
+    if (!requireOperatorWorkspace(request, reply, "sales")) {
+      return reply;
+    }
+
+    const uploadRecord = await dependencies.store.getDocumentUploadRecord(
+      request.params.caseId,
+      request.params.documentRequestId,
+      request.params.uploadId
+    );
+
+    if (!uploadRecord) {
+      return reply.status(404).send({
+        error: "resource_not_found"
+      });
+    }
+
+    const fileBuffer = await dependencies.documentStorage.readUpload(uploadRecord.storagePath);
+
+    reply.header("content-disposition", buildAttachmentHeader(uploadRecord.fileName));
+    reply.header("content-length", String(uploadRecord.sizeBytes));
+    reply.type(uploadRecord.mimeType);
+
+    return reply.send(fileBuffer);
   });
 
   app.patch<{

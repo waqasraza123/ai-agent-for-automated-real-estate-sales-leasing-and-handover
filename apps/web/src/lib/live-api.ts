@@ -247,6 +247,38 @@ export async function updateDocumentRequest(caseId: string, documentRequestId: s
   });
 }
 
+export async function uploadCaseDocument(
+  caseId: string,
+  documentRequestId: string,
+  input: {
+    bytes: ArrayBuffer;
+    fileName: string;
+    mimeType: string;
+  },
+  operatorRole?: OperatorRole
+) {
+  const response = await fetch(`${getWebApiBaseUrl()}/v1/cases/${caseId}/documents/${documentRequestId}/uploads`, {
+    body: input.bytes,
+    cache: "no-store",
+    headers: {
+      ...(await getOperatorSessionHeaders(operatorRole)),
+      "content-type": "application/octet-stream",
+      "x-document-file-name": encodeURIComponent(input.fileName),
+      "x-document-mime-type": encodeURIComponent(input.mimeType)
+    },
+    method: "POST",
+    signal: AbortSignal.timeout(12000)
+  });
+
+  const responseBody = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new WebApiError(`web_api_request_failed:${response.status}`, response.status, responseBody);
+  }
+
+  return responseBody as PersistedCaseDetail;
+}
+
 export async function updateHandoverTask(handoverCaseId: string, handoverTaskId: string, input: UpdateHandoverTaskStatusInput) {
   return requestJson<PersistedHandoverCaseDetail>(`/v1/handover-cases/${handoverCaseId}/tasks/${handoverTaskId}`, {
     method: "PATCH",

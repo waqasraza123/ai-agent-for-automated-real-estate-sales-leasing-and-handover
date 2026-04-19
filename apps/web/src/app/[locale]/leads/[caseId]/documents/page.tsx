@@ -19,6 +19,7 @@ import {
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
 import { DocumentStatusForm } from "@/components/document-status-form";
+import { DocumentUploadForm } from "@/components/document-upload-form";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
@@ -87,7 +88,12 @@ export default async function DocumentsPage(props: PageProps) {
                     key={documentItem.documentRequestId}
                     badges={<StatusBadge tone={documentItem.statusTone}>{documentItem.statusLabel}</StatusBadge>}
                     meta={<p className={caseMetaClassName}>{documentItem.updatedAt}</p>}
-                    summary={documentItem.detail}
+                    summary={
+                      <div className="space-y-2 text-sm leading-7 text-ink-soft">
+                        <p>{documentItem.detail}</p>
+                        <p>{documentItem.latestUploadSummary}</p>
+                      </div>
+                    }
                     title={documentItem.label}
                     actions={
                       <DocumentStatusForm
@@ -98,7 +104,44 @@ export default async function DocumentsPage(props: PageProps) {
                         status={documentItem.value}
                       />
                     }
-                  />
+                  >
+                    <div className="mt-4 space-y-4">
+                      <DocumentUploadForm
+                        caseId={persistedCase.caseId}
+                        documentRequestId={documentItem.documentRequestId}
+                        locale={locale}
+                        returnPath={`/${locale}/leads/${persistedCase.caseId}/documents`}
+                      />
+
+                      {documentItem.uploads.length > 0 ? (
+                        <div className="space-y-2">
+                          <p className={caseMetaClassName}>
+                            {locale === "ar" ? "الملفات المرفوعة" : "Uploaded files"}
+                          </p>
+                          <ul className="space-y-2">
+                            {documentItem.uploads.map((upload) => (
+                              <li key={upload.documentUploadId} className="rounded-3xl border border-canvas-line/60 bg-white/72 px-4 py-3">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-ink">{upload.fileName}</p>
+                                    <p className="text-xs leading-6 text-ink-soft">
+                                      {upload.sizeLabel} • {upload.mimeType} • {upload.uploadedAt}
+                                    </p>
+                                  </div>
+                                  <Link
+                                    className={inlineLinkClassName}
+                                    href={`/api/cases/${persistedCase.caseId}/documents/${documentItem.documentRequestId}/uploads/${upload.documentUploadId}`}
+                                  >
+                                    {locale === "ar" ? "تنزيل الملف" : "Download file"}
+                                  </Link>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  </WorkflowListItem>
                 )}
               />
             </WorkflowPanelBody>

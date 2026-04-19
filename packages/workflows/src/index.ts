@@ -542,6 +542,63 @@ export async function updatePersistedDocumentRequest(
   });
 }
 
+export async function uploadPersistedDocument(
+  store: LeadCaptureStore,
+  caseId: string,
+  documentRequestId: string,
+  input: {
+    checksumSha256: string;
+    documentUploadId: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    storagePath: string;
+    uploadedAt: string;
+  }
+): Promise<PersistedCaseDetail | null> {
+  const caseDetail = await store.getCaseDetail(caseId);
+
+  if (!caseDetail) {
+    return null;
+  }
+
+  const projectedDocumentRequests = caseDetail.documentRequests.map((documentRequest) =>
+    documentRequest.documentRequestId === documentRequestId
+      ? {
+          ...documentRequest,
+          latestUpload: {
+            checksumSha256: input.checksumSha256,
+            createdAt: input.uploadedAt,
+            documentUploadId: input.documentUploadId,
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            sizeBytes: input.sizeBytes,
+            uploadedAt: input.uploadedAt
+          },
+          status: "under_review" as const,
+          uploads: [
+            {
+              checksumSha256: input.checksumSha256,
+              createdAt: input.uploadedAt,
+              documentUploadId: input.documentUploadId,
+              fileName: input.fileName,
+              mimeType: input.mimeType,
+              sizeBytes: input.sizeBytes,
+              uploadedAt: input.uploadedAt
+            },
+            ...documentRequest.uploads
+          ]
+        }
+      : documentRequest
+  );
+
+  return store.recordDocumentUpload(caseId, documentRequestId, {
+    ...input,
+    nextAction: deriveDocumentWorkflowNextAction(projectedDocumentRequests, caseDetail.preferredLocale),
+    nextActionDueAt: createFutureTimestamp(12)
+  });
+}
+
 export async function updatePersistedHandoverTask(
   store: LeadCaptureStore,
   handoverCaseId: string,
@@ -2113,7 +2170,7 @@ function buildBlockedRationale(
 
 function summarizeDocumentGaps(caseDetail: PersistedCaseDetail, locale: SupportedLocale) {
   const missingTypes = caseDetail.documentRequests
-    .filter((documentRequest) => documentRequest.status !== "accepted")
+    .filter((documentRequest) => documentRequestNeedsCustomerUpload(documentRequest))
     .map((documentRequest) => {
       if (locale === "ar") {
         if (documentRequest.type === "government_id") {
@@ -2135,6 +2192,18 @@ function summarizeDocumentGaps(caseDetail: PersistedCaseDetail, locale: Supporte
     });
 
   return missingTypes.length > 0 ? missingTypes.join(locale === "ar" ? "، " : ", ") : null;
+}
+
+function documentRequestNeedsCustomerUpload(documentRequest: PersistedCaseDetail["documentRequests"][number]) {
+  if (documentRequest.status === "accepted") {
+    return false;
+  }
+
+  if (documentRequest.status === "rejected") {
+    return true;
+  }
+
+  return documentRequest.uploads.length === 0;
 }
 
 function buildRiskFlags(caseDetail: PersistedCaseDetail) {
