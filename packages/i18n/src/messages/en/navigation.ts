@@ -1,9 +1,9 @@
 import type { NavigationSection } from "../types";
 
 export const enNavigation: NavigationSection = {
-  landing: "Landing",
-  dashboard: "Dashboard",
-  leads: "Lead inbox",
-  manager: "Command center",
-  qa: "QA"
+  landing: "Home",
+  dashboard: "Overview",
+  leads: "Inbox",
+  manager: "Manager queue",
+  qa: "Review queue"
 };

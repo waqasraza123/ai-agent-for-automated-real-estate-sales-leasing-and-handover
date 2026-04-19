@@ -33,6 +33,8 @@ import {
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
   getPersistedCaseStageLabel,
+  getPersistedChannelStatusLabel,
+  getPersistedChannelStatusNote,
   getPersistedFollowUpLabel,
   getPersistedHandoverWorkspaceDisplay,
   getPersistedLatestManagerFollowUpLabel,
@@ -103,18 +105,21 @@ export default async function LeadsPage(props: PageProps) {
           <WorkflowPanelBody
             note={
               locale === "ar"
-                ? "يعرض هذا الجدول الحالات الحية من مسار البيانات المحلي الموثوق مع نفس القواعد المشتركة الخاصة بالأسطح والتحكم والتجاوب."
-                : "This table shows live cases from the trusted local data path using the same shared surface, control, and responsive table contract."
+                ? "يعرض هذا الجدول الحالات الحية من مسار البيانات المحلي الموثوق. وعند غياب بيانات مزود واتساب أو Google Calendar الخاصة بالعميل، سيظهر ذلك كحالة انتظار واضحة بدلاً من ادعاء الربط."
+                : "This table shows live cases from the trusted local data path. When client WhatsApp or Google Calendar credentials are still missing, the UI keeps that visible as an explicit waiting state instead of pretending the integration is live."
             }
             summary={
               locale === "ar"
-                ? "مساحة المبيعات الآن تستخدم نفس طبقة الجداول والبطاقات المحسنة المشتركة مع بقية السطوح التشغيلية حتى تظل القراءة والفرز والمتابعة متسقة عبر التطبيق."
-                : "The sales workspace now uses the same upgraded shared table and surface layer as the rest of the operational routes, keeping scanability and follow-up context consistent across the app."
+                ? "مساحة المبيعات الآن تستخدم نفس طبقة الجداول والبطاقات المحسنة المشتركة مع بقية السطوح التشغيلية، مع إبقاء جاهزية التكاملات الخارجية في الواجهة حتى يمكن تفعيلها لاحقاً ببيانات العميل."
+                : "The sales workspace now uses the same upgraded shared table and surface layer as the rest of the operational routes, while keeping external integration readiness visible so it can be activated later with client-supplied credentials."
             }
           >
             <div className={statusRowWrapClassName}>
               <StatusBadge>{locale === "ar" ? `${persistedCases.length} حالات حيّة` : `${persistedCases.length} live cases`}</StatusBadge>
               <StatusBadge>{locale === "ar" ? "مصدر موثوق" : "Trusted source"}</StatusBadge>
+              <StatusBadge tone="warning">
+                {locale === "ar" ? "تكاملات العميل عند الطلب" : "Client-managed integrations"}
+              </StatusBadge>
               {canAccessHandoverWorkspace ? (
                 <StatusBadge>{locale === "ar" ? "مسار التسليم ظاهر" : "Handover visible"}</StatusBadge>
               ) : null}
@@ -202,6 +207,8 @@ function renderPersistedLeadRow(props: {
     caseItem.followUpStatus,
     caseItem.openInterventionsCount
   );
+  const channelStatusLabel = getPersistedChannelStatusLabel(locale, caseItem.channelSummary);
+  const channelStatusNote = getPersistedChannelStatusNote(locale, caseItem.channelSummary);
 
   return (
     <tr key={caseItem.caseId}>
@@ -262,12 +269,16 @@ function renderPersistedLeadRow(props: {
           ) : null}
           <div className={statusRowWrapClassName}>
             <StatusBadge>{getPersistedAutomationLabel(locale, caseItem.automationStatus)}</StatusBadge>
+            {caseItem.channelSummary ? (
+              <StatusBadge tone={caseItem.channelSummary.latestOutboundStatus === "failed" ? "critical" : "neutral"}>{channelStatusLabel}</StatusBadge>
+            ) : null}
             {automationHoldReasonLabel ? <StatusBadge tone="warning">{automationHoldReasonLabel}</StatusBadge> : null}
             {caseItem.openInterventionsCount > 0 ? (
               <StatusBadge tone="warning">{getInterventionCountLabel(locale, caseItem.openInterventionsCount)}</StatusBadge>
             ) : null}
             {qaReviewDisplay ? <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge> : null}
           </div>
+          {channelStatusNote ? <span className={caseMetaClassName}>{channelStatusNote}</span> : null}
           <StatusBadge tone={caseItem.followUpStatus === "attention" ? "critical" : "success"}>
             {getPersistedFollowUpLabel(locale, caseItem)}
           </StatusBadge>

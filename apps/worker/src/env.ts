@@ -7,7 +7,18 @@ const defaultDatabasePath = fileURLToPath(new URL("../../api/.data/phase2-alpha"
 const workerEnvironmentSchema = z.object({
   WORKER_BATCH_LIMIT: z.coerce.number().int().positive().default(25),
   WORKER_DATABASE_PATH: z.string().min(1).default(defaultDatabasePath),
+  WORKER_META_WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
+  WORKER_META_WHATSAPP_API_VERSION: z.string().min(1).default("v20.0"),
+  WORKER_META_WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000)
+}).superRefine((environment, context) => {
+  if (Boolean(environment.WORKER_META_WHATSAPP_ACCESS_TOKEN) !== Boolean(environment.WORKER_META_WHATSAPP_PHONE_NUMBER_ID)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "WORKER_META_WHATSAPP_ACCESS_TOKEN and WORKER_META_WHATSAPP_PHONE_NUMBER_ID must be set together.",
+      path: ["WORKER_META_WHATSAPP_ACCESS_TOKEN"]
+    });
+  }
 });
 
 export type WorkerEnvironment = z.infer<typeof workerEnvironmentSchema>;

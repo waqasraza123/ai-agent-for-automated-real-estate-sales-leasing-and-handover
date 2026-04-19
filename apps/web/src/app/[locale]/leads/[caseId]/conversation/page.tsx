@@ -26,7 +26,13 @@ import { getCaseManualReplyCopy, getCaseReplyDraftQaRequestCopy } from "@/lib/li
 import { getOperatorPermissionGuardNote } from "@/lib/operator-role";
 import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
-import { buildCaseReferenceCode, buildPersistedConversation, getPersistedQaReviewDisplay } from "@/lib/persisted-case-presenters";
+import {
+  buildCaseReferenceCode,
+  buildPersistedConversation,
+  getPersistedChannelStatusLabel,
+  getPersistedChannelStatusNote,
+  getPersistedQaReviewDisplay
+} from "@/lib/persisted-case-presenters";
 import { tryGetPersistedCaseDetail } from "@/lib/live-api";
 
 export const dynamic = "force-dynamic";
@@ -103,11 +109,13 @@ export default async function ConversationPage(props: PageProps) {
       : locale === "ar"
         ? "لا يمكن حفظ الرد بينما مراجعة الجودة الحالية ما زالت مفتوحة أو تطلب متابعة."
         : "A human reply cannot be saved while the current QA review is still open or requires follow-up.";
+    const channelStatusLabel = getPersistedChannelStatusLabel(locale, persistedCase.channelSummary);
+    const channelStatusNote = getPersistedChannelStatusNote(locale, persistedCase.channelSummary);
 
     return (
       <div className={pageStackClassName}>
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.conversation.summary} title={messages.conversation.title} />
-        <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
+        <CaseRouteTabs caseId={persistedCase.caseId} locale={locale} />
 
         {qaReviewDisplay ? (
           <Panel title={locale === "ar" ? "حالة التحكم البشري" : "Human takeover state"}>
@@ -127,6 +135,25 @@ export default async function ConversationPage(props: PageProps) {
             </WorkflowPanelBody>
           </Panel>
         ) : null}
+
+        <Panel title={locale === "ar" ? "قناة المحادثة الحية" : "Live conversation channel"}>
+          <WorkflowPanelBody className="mt-4">
+            <p className="text-sm leading-7 text-ink-soft">
+              {channelStatusNote ??
+                (locale === "ar"
+                  ? "يعرض هذا السجل قناة واتساب الفعلية عندما تكون مفعلة، مع الاحتفاظ بالبوابات البشرية الحالية."
+                  : "This console reflects the live WhatsApp channel when available while preserving the current human control gates.")}
+            </p>
+            <p className={caseMetaClassName}>{channelStatusLabel}</p>
+            {persistedCase.channelSummary?.latestOutboundFailureCode === "client_credentials_pending" ? (
+              <p className={caseMetaClassName}>
+                {locale === "ar"
+                  ? "يمكن تفعيل الإرسال الحي لاحقاً بمجرد أن يزوّد العميل بيانات Meta الخاصة به."
+                  : "Live outbound sending can be activated later as soon as the client provides their Meta credentials."}
+              </p>
+            ) : null}
+          </WorkflowPanelBody>
+        </Panel>
 
         <div className={twoColumnGridClassName}>
           <Panel title={manualReplyCopy.title}>
@@ -212,7 +239,7 @@ export default async function ConversationPage(props: PageProps) {
   return (
     <div className={pageStackClassName}>
       <ScreenIntro badge={caseItem.referenceCode} summary={messages.conversation.summary} title={messages.conversation.title} />
-      <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
+      <CaseRouteTabs caseId={caseItem.id} locale={locale} />
 
       <Panel title={caseItem.customerName}>
         <MessageThread locale={locale} messages={caseItem.conversation} />

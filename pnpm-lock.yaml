@@ -62,6 +62,9 @@ importers:
       '@real-estate-ai/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@real-estate-ai/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@real-estate-ai/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
@@ -120,6 +123,9 @@ importers:
       '@real-estate-ai/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@real-estate-ai/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@real-estate-ai/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
@@ -141,6 +147,9 @@ importers:
       '@real-estate-ai/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@real-estate-ai/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       drizzle-orm:
         specifier: ^0.44.6
         version: 0.44.7(@electric-sql/pglite@0.3.16)
@@ -152,6 +161,15 @@ importers:
       '@real-estate-ai/domain':
         specifier: workspace:*
         version: link:../domain
+
+  packages/integrations:
+    dependencies:
+      '@real-estate-ai/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
 
   packages/testing:
     dependencies:

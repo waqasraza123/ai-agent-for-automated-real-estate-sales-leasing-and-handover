@@ -34,6 +34,11 @@ import {
 } from "@real-estate-ai/contracts";
 import type { LeadCaptureStore } from "@real-estate-ai/database";
 import {
+  parseMetaWhatsAppWebhook,
+  type CalendarBookingClient,
+  verifyMetaWhatsAppWebhookSignature
+} from "@real-estate-ai/integrations";
+import {
   approvePersistedHandoverCustomerUpdate,
   completePersistedHandover,
   confirmPersistedHandoverAppointment,
@@ -73,16 +78,115 @@ import {
 
 import { requireAnyOperatorWorkspace, requireOperatorPermission, requireOperatorWorkspace } from "./operator-session";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    rawBody?: string;
+  }
+}
+
+function mapMetaStatusToDeliveryStatus(status: string) {
+  if (status === "delivered" || status === "read") {
+    return "delivered" as const;
+  }
+
+  if (status === "sent") {
+    return "sent" as const;
+  }
+
+  return "failed" as const;
+}
+
 export function buildApiApp(dependencies: {
+  calendarClient?: CalendarBookingClient | null;
   store: LeadCaptureStore;
+  whatsappWebhookAppSecret?: string | null;
+  whatsappWebhookVerifyToken?: string | null;
 }) {
   const app = Fastify({
     logger: false
   });
 
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
+    const rawBody = typeof body === "string" ? body : body.toString("utf8");
+
+    request.rawBody = rawBody;
+
+    try {
+      done(null, rawBody.length > 0 ? JSON.parse(rawBody) : {});
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
   app.get("/health", async () => ({
     status: "ok"
   }));
+
+  app.get<{
+    Querystring: {
+      "hub.challenge"?: string;
+      "hub.mode"?: string;
+      "hub.verify_token"?: string;
+    };
+  }>("/v1/integrations/meta/whatsapp/webhook", async (request, reply) => {
+    const verifyToken = dependencies.whatsappWebhookVerifyToken ?? null;
+
+    if (
+      request.query["hub.mode"] !== "subscribe" ||
+      !verifyToken ||
+      request.query["hub.verify_token"] !== verifyToken ||
+      !request.query["hub.challenge"]
+    ) {
+      return reply.status(403).send({
+        error: "webhook_verification_failed"
+      });
+    }
+
+    return reply.type("text/plain").send(request.query["hub.challenge"]);
+  });
+
+  app.post("/v1/integrations/meta/whatsapp/webhook", async (request, reply) => {
+    if (
+      dependencies.whatsappWebhookAppSecret &&
+      !verifyMetaWhatsAppWebhookSignature({
+        appSecret: dependencies.whatsappWebhookAppSecret,
+        rawBody: request.rawBody ?? "",
+        signatureHeader: request.headers["x-hub-signature-256"]
+      })
+    ) {
+      return reply.status(401).send({
+        error: "webhook_signature_invalid"
+      });
+    }
+
+    const parsedWebhook = parseMetaWhatsAppWebhook(request.body);
+
+    await Promise.all([
+      ...parsedWebhook.inboundMessages.map((message) =>
+        dependencies.store.recordWhatsAppInboundMessage({
+          messageId: message.messageId,
+          normalizedPhone: message.phoneNumber,
+          profileName: message.profileName,
+          receivedAt: message.timestamp,
+          textBody: message.textBody
+        })
+      ),
+      ...parsedWebhook.deliveryStatuses.map((status) =>
+        dependencies.store.recordWhatsAppDeliveryStatus({
+          failureCode: status.failureCode,
+          failureDetail: status.failureDetail,
+          normalizedPhone: status.phoneNumber,
+          providerMessageId: status.providerMessageId,
+          status: mapMetaStatusToDeliveryStatus(status.status),
+          updatedAt: status.timestamp
+        })
+      )
+    ]);
+
+    return reply.status(200).send({
+      received: true
+    });
+  });
 
   app.post("/v1/website-leads", async (request, reply) => {
     const result = createWebsiteLeadInputSchema.safeParse(request.body);
@@ -420,7 +524,48 @@ export function buildApiApp(dependencies: {
       });
     }
 
-    return reply.status(200).send(caseDetail);
+    const currentVisit = caseDetail.currentVisit;
+
+    if (!currentVisit) {
+      return reply.status(200).send(caseDetail);
+    }
+
+    if (!dependencies.calendarClient) {
+      const failedCaseDetail = await dependencies.store.recordVisitBooking(caseDetail.caseId, currentVisit.visitId, {
+        confirmedAt: null,
+        failureCode: "client_credentials_pending",
+        failureDetail: "Google Calendar sync code is ready, but client credentials are not configured for this environment yet.",
+        provider: "google_calendar",
+        providerEventId: null,
+        status: "blocked",
+        updatedAt: new Date().toISOString()
+      });
+
+      return reply.status(200).send(failedCaseDetail ?? caseDetail);
+    }
+
+    const scheduledStart = new Date(result.data.scheduledAt);
+    const scheduledEnd = new Date(scheduledStart.getTime() + 60 * 60 * 1000).toISOString();
+    const bookingResult = await dependencies.calendarClient.createBooking({
+      customerName: caseDetail.customerName,
+      description: `${caseDetail.customerName} visit for ${caseDetail.projectInterest}`,
+      endAt: scheduledEnd,
+      location: result.data.location,
+      startAt: result.data.scheduledAt,
+      title: `${caseDetail.customerName} visit`,
+    });
+
+    const bookingCaseDetail = await dependencies.store.recordVisitBooking(caseDetail.caseId, currentVisit.visitId, {
+      confirmedAt: bookingResult.kind === "confirmed" ? bookingResult.confirmedAt : null,
+      failureCode: bookingResult.kind === "failed" ? bookingResult.code : null,
+      failureDetail: bookingResult.kind === "failed" ? bookingResult.detail : null,
+      provider: "google_calendar",
+      providerEventId: bookingResult.kind === "confirmed" ? bookingResult.providerEventId : null,
+      status: bookingResult.kind === "confirmed" ? "confirmed" : "failed",
+      updatedAt: new Date().toISOString()
+    });
+
+    return reply.status(200).send(bookingCaseDetail ?? caseDetail);
   });
 
   app.post<{

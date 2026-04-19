@@ -1,5 +1,5 @@
 {
-  "name": "@real-estate-ai/database",
+  "name": "@real-estate-ai/integrations",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,10 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.3.14",
     "@real-estate-ai/contracts": "workspace:*",
-    "@real-estate-ai/integrations": "workspace:*",
-    "drizzle-orm": "^0.44.6"
+    "zod": "^4.1.12"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

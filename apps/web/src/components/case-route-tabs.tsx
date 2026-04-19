@@ -9,7 +9,6 @@ import { SegmentedLinkTabs } from "@/components/segmented-link-tabs";
 
 export function CaseRouteTabs(props: {
   caseId: string;
-  handoverCaseId?: string | undefined;
   locale: SupportedLocale;
 }) {
   const pathname = usePathname();
@@ -30,13 +29,7 @@ export function CaseRouteTabs(props: {
     {
       href: `/${props.locale}/leads/${props.caseId}/documents`,
       label: messages.documents.title
-    },
-    props.handoverCaseId
-      ? {
-          href: `/${props.locale}/handover/${props.handoverCaseId}`,
-          label: messages.handover.title
-        }
-      : null
+    }
   ].filter(Boolean) as Array<{
     href: string;
     label: string;

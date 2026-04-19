@@ -1,25 +1,25 @@
 import type { LandingSection, WorkspaceSummarySection } from "../types";
 
 export const arLanding: LandingSection = {
-  eyebrow: "طبقة تشغيل عقارية عربية أولاً",
-  title: "حوّل سرعة الرد، وانضباط المتابعة، ووضوح التسليم إلى ميزة تشغيلية حقيقية.",
-  summary: "هذه النسخة تبني تجربة عربية أولاً عبر الواجهة، ومسارات العمل، والحالة الحية، مع إبقاء الإنجليزية كخيار ثانٍ كامل.",
-  primaryAction: "فتح لوحة المتابعة",
-  secondaryAction: "استعراض صندوق العملاء",
-  spotlightTitle: "ما الذي يثبته هذا النظام",
-  spotlightSummary: "يثبت بنية المسارات، وطبقة اللغة، وسلوك RTL، وتجربة التشغيل الحية قبل التوسع في المزيد من النطاق.",
+  eyebrow: "تشغيل عربي أولاً لفرق المبيعات والتأجير العقاري في السعودية",
+  title: "حوّل سرعة الرد، وانضباط المتابعة، وجاهزية المستندات إلى ميزة تشغيلية حقيقية.",
+  summary: "هذه النسخة تركّز على الوتد الأساسي: استقبال ثنائي اللغة، وتأهيل أوضح، وخطوات تالية مرئية، وإشارات خطر يمكن للمدير قراءتها من مسار واحد.",
+  primaryAction: "فتح صندوق العملاء",
+  secondaryAction: "فتح طابور المدير",
+  spotlightTitle: "ما الذي يثبته المنتج أولاً",
+  spotlightSummary: "يثبت المسار التشغيلي الثنائي اللغة الأهم: التقاط العميل، والرد السريع، والتأهيل الواضح، واستمرار المتابعة، وإظهار الخطر للإدارة.",
   liveAlphaTitle: "الإدخال الحي",
-  liveAlphaSummary: "هذا هو أول مسار حي يخرج من واجهة الويب إلى `apps/api` ثم يعود إلى شاشات الحالة والإدارة المحفوظة."
+  liveAlphaSummary: "هذا هو أول مسار حي يخرج من واجهة الويب إلى `apps/api` ثم يعود كسجل محفوظ بمالك واضح وخطوات تالية مرئية."
 };
 
 export const arDashboard: WorkspaceSummarySection = {
-  title: "مركز قيادة عمليات الإيرادات",
-  summary: "لوحة تشغيل تعرض المؤشرات، وإشارات الإدارة، وجاهزية المسارات الثنائية اللغة مع أولوية واضحة للعربية."
+  title: "نظرة تشغيلية عامة",
+  summary: "واجهة داعمة تعرض ضغط الرد، وخطر المتابعة، وجاهزية المستندات حول صندوق العملاء وطابور المدير."
 };
 
 export const arLeads: WorkspaceSummarySection = {
   title: "صندوق العملاء الموحد",
-  summary: "حالات حية وتجريبية لعرض المرحلة، والملكية، والخطوة التالية، ومسارات العمل باللغة المناسبة."
+  summary: "حالات حية وتجريبية تعرض المرحلة، والملكية، والخطوة التالية، وخطر المسار باللغة المناسبة."
 };
 
 export const arProfile: WorkspaceSummarySection = {
@@ -29,7 +29,7 @@ export const arProfile: WorkspaceSummarySection = {
 
 export const arConversation: WorkspaceSummarySection = {
   title: "وحدة المحادثة",
-  summary: "سجل محادثة عربي أولاً مع وضوح للأتمتة، واعتماد الجودة، والتدخل البشري."
+  summary: "سجل محادثة عربي أولاً مع وضوح للأتمتة، والتدخل البشري، وتثبيت الخطوة التالية."
 };
 
 export const arSchedule: WorkspaceSummarySection = {
@@ -39,7 +39,7 @@ export const arSchedule: WorkspaceSummarySection = {
 
 export const arDocuments: WorkspaceSummarySection = {
   title: "مركز المستندات",
-  summary: "متابعة المستندات المطلوبة وحالتها دون كسر الحدود الحالية للنطاق الحي."
+  summary: "متابعة المستندات المطلوبة، والعوائق، وجاهزية الملف من قائمة واحدة يمكن للمدير قراءتها."
 };
 
 export const arHandover: WorkspaceSummarySection = {
@@ -48,11 +48,11 @@ export const arHandover: WorkspaceSummarySection = {
 };
 
 export const arManager: WorkspaceSummarySection = {
-  title: "مركز قيادة الإدارة",
-  summary: "رؤية تشغيلية لمسارات الإيرادات والتسليم والحوكمة دون التضحية بوضوح الدور أو حالة المتابعة."
+  title: "طابور مخاطر المدير",
+  summary: "سطح إداري مركز للحالات المتأخرة، وضغط المتابعة، ومخاطر الملكية، والتدخل التالي المطلوب."
 };
 
 export const arQa: WorkspaceSummarySection = {
-  title: "مركز مراجعة الجودة",
-  summary: "طابور مراجعة للحالات والتحديثات التي تحتاج تدخلاً بشرياً صريحاً قبل استمرار المسار."
+  title: "طابور المراجعة",
+  summary: "طابور مراجعة ثانوي للحالات والتحديثات التي تحتاج تدخلاً بشرياً صريحاً قبل استمرار المسار."
 };

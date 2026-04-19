@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { canOperatorRoleAccessWorkspace, canOperatorRolePerform } from "@real-estate-ai/contracts";
+import { canOperatorRoleAccessWorkspace } from "@real-estate-ai/contracts";
 import { getDemoCaseById, getLocalizedText, type SupportedLocale } from "@real-estate-ai/domain";
 import { getMessages } from "@real-estate-ai/i18n";
 import {
@@ -19,7 +19,6 @@ import {
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
 import { DocumentStatusForm } from "@/components/document-status-form";
-import { HandoverIntakeForm } from "@/components/handover-intake-form";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
 import { ScreenIntro } from "@/components/screen-intro";
 import { StatefulStack } from "@/components/stateful-stack";
@@ -29,9 +28,8 @@ import {
   getPersistedDocumentDisplay,
   getPersistedHandoverStatusLabel
 } from "@/lib/persisted-case-presenters";
-import { getHandoverIntakeCopy } from "@/lib/live-copy";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
-import { getOperatorPermissionGuardNote, getPreferredOperatorSurfacePath } from "@/lib/operator-role";
+import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { tryGetPersistedCaseDetail } from "@/lib/live-api";
 
 export const dynamic = "force-dynamic";
@@ -70,16 +68,12 @@ export default async function DocumentsPage(props: PageProps) {
 
   if (persistedCase) {
     const documentItems = getPersistedDocumentDisplay(locale, persistedCase);
-    const handoverIntakeCopy = getHandoverIntakeCopy(locale);
-    const documentsAccepted = persistedCase.documentRequests.every((documentRequest) => documentRequest.status === "accepted");
     const canAccessHandoverWorkspace = canOperatorRoleAccessWorkspace("handover", currentOperatorRole);
-    const canManageHandoverIntake = canOperatorRolePerform("manage_handover_intake", currentOperatorRole);
-    const handoverIntakeGuardNote = getOperatorPermissionGuardNote(locale, "manage_handover_intake");
 
     return (
       <div className={pageStackClassName}>
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.documents.summary} title={messages.documents.title} />
-        <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
+        <CaseRouteTabs caseId={persistedCase.caseId} locale={locale} />
 
         <div className={twoColumnGridClassName}>
           <Panel title={messages.common.documents}>
@@ -110,7 +104,7 @@ export default async function DocumentsPage(props: PageProps) {
             </WorkflowPanelBody>
           </Panel>
 
-          <Panel title={handoverIntakeCopy.title}>
+          <Panel title={locale === "ar" ? "المسار التالي" : "Next workflow boundary"}>
             {persistedCase.handoverCase ? (
               <WorkflowPanelBody className="mt-4">
                 <WorkflowCard
@@ -123,33 +117,30 @@ export default async function DocumentsPage(props: PageProps) {
                   }
                   badges={<StatusBadge tone="success">{getPersistedHandoverStatusLabel(locale, persistedCase.handoverCase)}</StatusBadge>}
                   meta={<p className={caseMetaClassName}>{persistedCase.handoverCase.ownerName}</p>}
-                  summary={handoverIntakeCopy.helperReady}
-                  title={locale === "ar" ? "سجل التسليم مرتبط" : "Linked handover record"}
+                  summary={
+                    locale === "ar"
+                      ? "يوجد سجل تسليم مرتبط بالفعل، لكنه يبقى خارج الوتد الحالي للمنتج ويظهر هنا كمرجع لاحق فقط."
+                      : "A linked handover record already exists, but it stays outside the current product wedge and appears here only as a downstream reference."
+                  }
+                  title={locale === "ar" ? "مرجع تسليم لاحق" : "Downstream handover reference"}
                   tone="success"
-                />
-              </WorkflowPanelBody>
-            ) : documentsAccepted ? (
-              <WorkflowPanelBody className="mt-4" note={handoverIntakeGuardNote} summary={handoverIntakeCopy.helperReady}>
-                <HandoverIntakeForm
-                  canManage={canManageHandoverIntake}
-                  caseId={persistedCase.caseId}
-                  defaultOwnerName={persistedCase.ownerName}
-                  disabledLabel={locale === "ar" ? "يتطلب مدير التسليم" : "Handover manager required"}
-                  locale={locale}
-                  returnPath={`/${locale}/leads/${persistedCase.caseId}/documents`}
                 />
               </WorkflowPanelBody>
             ) : (
               <WorkflowPanelBody className="mt-4">
                 <WorkflowCard
-                  summary={handoverIntakeCopy.helperLocked}
-                  title={locale === "ar" ? "اعتماد التسليم ما زال مقفلاً" : "Handover approval is still locked"}
+                  summary={
+                    locale === "ar"
+                      ? "ينتهي الوتد الحالي عند جاهزية المستندات. أي مسار تسليم لاحق يبقى مؤجلاً حتى يثبت المنتج تحسن المؤشرات الأساسية على القنوات الحية."
+                      : "The current wedge stops at document readiness. Any downstream handover workflow stays deferred until the product proves core KPI improvement on live channels."
+                  }
+                  title={locale === "ar" ? "المسار التالي مؤجل حالياً" : "Downstream workflow is currently deferred"}
                   tone="warning"
                 >
                   <HighlightNotice tone="warning">
                     {locale === "ar"
-                      ? "يبقى هذا المسار مقفلاً حتى تصل كل المستندات المطلوبة إلى حالة مقبولة."
-                      : "This route stays locked until every required document reaches an accepted state."}
+                      ? "ركّز هذه الصفحة على ما ينقص الملف الآن: العناصر المطلوبة، والحالات المرفوضة، وما يمنع اكتمال الجاهزية."
+                      : "Keep this page focused on what blocks the case now: missing items, rejected submissions, and the work needed to reach readiness."}
                   </HighlightNotice>
                 </WorkflowCard>
               </WorkflowPanelBody>
@@ -169,7 +160,7 @@ export default async function DocumentsPage(props: PageProps) {
   return (
     <div className={pageStackClassName}>
       <ScreenIntro badge={caseItem.referenceCode} summary={messages.documents.summary} title={messages.documents.title} />
-      <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
+      <CaseRouteTabs caseId={caseItem.id} locale={locale} />
 
       <Panel title={messages.common.documents}>
         <WorkflowPanelBody className="mt-4">

@@ -9,6 +9,7 @@ function buildCase(caseId: string, overrides?: Partial<PersistedCaseSummary>) {
     automationHoldReason: null,
     automationStatus: "active",
     caseId,
+    channelSummary: null,
     createdAt: "2026-04-10T08:00:00.000Z",
     currentHandoverCustomerUpdateQaReview: null,
     currentQaReview: null,

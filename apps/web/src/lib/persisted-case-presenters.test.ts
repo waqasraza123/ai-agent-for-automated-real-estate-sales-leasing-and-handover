@@ -6,6 +6,8 @@ import {
   buildPersistedConversation,
   formatLatestManagerFollowUpSavedAt,
   formatLatestHumanReplySentAt,
+  getPersistedChannelStatusLabel,
+  getPersistedChannelStatusNote,
   getPersistedLatestManagerFollowUpLabel,
   getPersistedLatestManagerFollowUpNote,
   getPersistedLatestHumanReplyEscalationLabel,
@@ -25,6 +27,7 @@ function buildCaseDetail(auditEvents: PersistedCaseDetail["auditEvents"]): Persi
     automationStatus: "active",
     budget: null,
     caseId: "22222222-2222-4222-8222-222222222222",
+    channelSummary: null,
     createdAt: "2026-04-13T09:00:00.000Z",
     currentHandoverCustomerUpdateQaReview: null,
     latestHumanReply: null,
@@ -232,5 +235,28 @@ describe("buildPersistedConversation", () => {
         caseDetail.openInterventionsCount
       )
     ).toBe("Handed-off follow-up is overdue with an open intervention");
+  });
+
+  it("describes client-managed WhatsApp readiness when credentials are not configured yet", () => {
+    const caseDetail = buildCaseDetail([]);
+
+    caseDetail.channelSummary = {
+      channel: "whatsapp",
+      contactValue: "+966551234567",
+      lastInboundAt: null,
+      latestOutboundBlockReason: "client_credentials_pending",
+      latestOutboundFailureCode: "client_credentials_pending",
+      latestOutboundFailureDetail: "Meta WhatsApp send code is ready, but client credentials are not configured for this environment yet.",
+      latestOutboundMessage: "Hello from the configured reply path.",
+      latestOutboundProviderMessageId: null,
+      latestOutboundStatus: "blocked",
+      latestOutboundUpdatedAt: "2026-04-13T09:12:00.000Z",
+      provider: "meta_whatsapp_cloud"
+    };
+
+    expect(getPersistedChannelStatusLabel("en", caseDetail.channelSummary)).toBe("WhatsApp awaiting client credentials");
+    expect(getPersistedChannelStatusNote("en", caseDetail.channelSummary)).toBe(
+      "The WhatsApp code path is ready, but it is waiting for real client credentials before activation."
+    );
   });
 });

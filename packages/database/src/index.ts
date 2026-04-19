@@ -4,7 +4,9 @@ import { PGlite } from "@electric-sql/pglite";
 import type {
   ApproveHandoverCustomerUpdateInput,
   AutomationStatus,
+  CalendarProvider,
   CaseAutomationHoldReason,
+  CaseContactChannel,
   CaseStage,
   CaseQaPolicySignal,
   CaseQaReviewStatus,
@@ -44,7 +46,11 @@ import type {
   ManagerInterventionSeverity,
   ManagerInterventionStatus,
   ManagerInterventionType,
+  MessageDeliveryBlockReason,
+  MessageDeliveryStatus,
+  MessageProvider,
   ListGovernanceEventsQuery,
+  PersistedCaseChannelSummary,
   PersistedCaseQaReview,
   PersistedCaseDetail,
   PersistedCaseSummary,
@@ -83,14 +89,17 @@ import type {
   SendCaseReplyInput,
   StartHandoverExecutionInput,
   SupportedLocale,
+  PersistedVisitBooking,
   UpdateHandoverArchiveStatusInput,
   UpdateHandoverMilestoneInput,
   UpdateHandoverBlockerInput,
-  UpdateHandoverTaskStatusInput
+  UpdateHandoverTaskStatusInput,
+  VisitBookingStatus
 } from "@real-estate-ai/contracts";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { normalizePhoneNumber } from "@real-estate-ai/integrations";
 
 import {
   buildAutomaticQaSampleSummary,
@@ -117,6 +126,20 @@ const defaultHandoverCustomerUpdateTypes: HandoverCustomerUpdateType[] = [
   "appointment_confirmation"
 ];
 const followUpWatchJobType = "follow_up_watch";
+const whatsappCaseReplyJobType = "whatsapp_case_reply";
+const whatsappInitialReplyJobType = "whatsapp_initial_reply";
+
+function buildInitialWhatsAppReply(input: {
+  customerName: string;
+  preferredLocale: SupportedLocale;
+  projectInterest: string;
+}) {
+  if (input.preferredLocale === "ar") {
+    return `مرحباً ${input.customerName}، استلمنا اهتمامك بمشروع ${input.projectInterest}. سنراجع الحالة الآن ونرسل لك الخطوة التالية المناسبة قريباً.`;
+  }
+
+  return `Hi ${input.customerName}, we received your interest in ${input.projectInterest}. We're reviewing the case now and will send the next step shortly.`;
+}
 
 const leads = pgTable("leads", {
   budget: text("budget"),
@@ -125,6 +148,7 @@ const leads = pgTable("leads", {
   email: text("email").notNull(),
   id: uuid("id").primaryKey(),
   message: text("message").notNull(),
+  normalizedPhone: text("normalized_phone"),
   phone: text("phone"),
   preferredLocale: text("preferred_locale").notNull(),
   projectInterest: text("project_interest").notNull(),
@@ -167,6 +191,43 @@ const visits = pgTable("visits", {
   id: uuid("id").primaryKey(),
   location: text("location").notNull(),
   scheduledAt: timestamp("scheduled_at", { mode: "string", withTimezone: true }).notNull()
+});
+
+const visitBookings = pgTable("visit_bookings", {
+  confirmedAt: timestamp("confirmed_at", { mode: "string", withTimezone: true }),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  failureCode: text("failure_code"),
+  failureDetail: text("failure_detail"),
+  id: uuid("id").primaryKey(),
+  provider: text("provider"),
+  providerEventId: text("provider_event_id"),
+  status: text("status").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }),
+  visitId: uuid("visit_id")
+    .notNull()
+    .unique()
+    .references(() => visits.id, { onDelete: "cascade" })
+});
+
+const caseChannelStates = pgTable("case_channel_states", {
+  caseId: uuid("case_id")
+    .notNull()
+    .unique()
+    .references(() => cases.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  contactValue: text("contact_value"),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  id: uuid("id").primaryKey(),
+  lastInboundAt: timestamp("last_inbound_at", { mode: "string", withTimezone: true }),
+  latestOutboundBlockReason: text("latest_outbound_block_reason"),
+  latestOutboundFailureCode: text("latest_outbound_failure_code"),
+  latestOutboundFailureDetail: text("latest_outbound_failure_detail"),
+  latestOutboundMessage: text("latest_outbound_message"),
+  latestOutboundProviderMessageId: text("latest_outbound_provider_message_id"),
+  latestOutboundStatus: text("latest_outbound_status").notNull(),
+  latestOutboundUpdatedAt: timestamp("latest_outbound_updated_at", { mode: "string", withTimezone: true }),
+  provider: text("provider"),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const documentRequests = pgTable("document_requests", {
@@ -360,12 +421,14 @@ const caseQaReviews = pgTable("case_qa_reviews", {
 });
 
 const automationJobs = pgTable("automation_jobs", {
+  attempts: integer("attempts").notNull(),
   caseId: uuid("case_id")
     .notNull()
     .references(() => cases.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   id: uuid("id").primaryKey(),
   jobType: text("job_type").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   runAfter: timestamp("run_after", { mode: "string", withTimezone: true }).notNull(),
   status: text("status").notNull(),
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
@@ -387,6 +450,14 @@ export interface FollowUpCycleResult {
   touchedCaseIds: string[];
 }
 
+export interface DueAutomationJob {
+  attempts: number;
+  caseId: string;
+  jobId: string;
+  payload: Record<string, unknown>;
+  runAfter: string;
+}
+
 export interface LeadCaptureStore {
   applyQualification(
     caseId: string,
@@ -400,8 +471,60 @@ export interface LeadCaptureStore {
     input: CreateWebsiteLeadInput & {
       nextAction: string;
       nextActionDueAt: string;
+      source?: "website" | "whatsapp";
     }
   ): Promise<CreateWebsiteLeadResult>;
+  findCaseIdByNormalizedPhone(normalizedPhone: string): Promise<string | null>;
+  getDueAutomationJobs(input: {
+    jobType: string;
+    limit: number;
+    runAt: string;
+  }): Promise<DueAutomationJob[]>;
+  recordVisitBooking(
+    caseId: string,
+    visitId: string,
+    input: {
+      confirmedAt: string | null;
+      failureCode: string | null;
+      failureDetail: string | null;
+      provider: CalendarProvider | null;
+      providerEventId: string | null;
+      status: VisitBookingStatus;
+      updatedAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
+  recordWhatsAppDeliveryStatus(input: {
+    failureCode: string | null;
+    failureDetail: string | null;
+    normalizedPhone: string | null;
+    providerMessageId: string;
+    status: MessageDeliveryStatus;
+    updatedAt: string;
+  }): Promise<PersistedCaseDetail | null>;
+  recordWhatsAppInboundMessage(input: {
+    messageId: string;
+    normalizedPhone: string;
+    profileName: string | null;
+    receivedAt: string;
+    textBody: string;
+  }): Promise<PersistedCaseDetail | null>;
+  recordWhatsAppOutboundAttempt(
+    caseId: string,
+    input: {
+      blockReason: MessageDeliveryBlockReason | null;
+      failureCode: string | null;
+      failureDetail: string | null;
+      jobId: string;
+      messageBody: string;
+      origin: "manager" | "system";
+      provider: MessageProvider;
+      providerMessageId: string | null;
+      retryAfter: string | null;
+      sentByName: string | null;
+      status: MessageDeliveryStatus;
+      updatedAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
   prepareCaseReplyDraftQaReview(caseId: string, input: PrepareCaseReplyDraftQaReviewInput): Promise<PersistedCaseDetail | null>;
   requestCaseQaReview(caseId: string, input: RequestCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   resolveCaseQaReview(caseId: string, qaReviewId: string, input: ResolveCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
@@ -416,8 +539,14 @@ export interface LeadCaptureStore {
   getGovernanceSummary(): Promise<PersistedGovernanceSummary>;
   getHandoverCaseDetail(handoverCaseId: string): Promise<PersistedHandoverCaseDetail | null>;
   listCases(): Promise<PersistedCaseSummary[]>;
+  markAutomationJobCompleted(jobId: string, updatedAt: string): Promise<void>;
   manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail | null>;
   manageCaseFollowUpBulk(caseIds: string[], input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail[]>;
+  rescheduleAutomationJob(jobId: string, input: {
+    attempts: number;
+    runAfter: string;
+    updatedAt: string;
+  }): Promise<void>;
   createHandoverBlocker(
     handoverCaseId: string,
     input: CreateHandoverBlockerInput & {
@@ -614,6 +743,7 @@ export async function createAlphaLeadCaptureStore(options?: {
     schema: {
       auditEvents,
       automationJobs,
+      caseChannelStates,
       caseQaReviews,
       cases,
       documentRequests,
@@ -630,6 +760,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       leads,
       managerInterventions,
       qualificationSnapshots,
+      visitBookings,
       visits
     }
   });
@@ -641,12 +772,15 @@ export async function createAlphaLeadCaptureStore(options?: {
       customer_name text not null,
       email text not null,
       phone text,
+      normalized_phone text,
       preferred_locale text not null,
       project_interest text not null,
       budget text,
       message text not null,
       created_at timestamptz not null default now()
     );
+
+    alter table leads add column if not exists normalized_phone text;
 
     create table if not exists cases (
       id uuid primary key,
@@ -680,6 +814,56 @@ export async function createAlphaLeadCaptureStore(options?: {
       scheduled_at timestamptz not null,
       created_at timestamptz not null default now()
     );
+
+    create table if not exists visit_bookings (
+      id uuid primary key,
+      visit_id uuid not null unique references visits(id) on delete cascade,
+      provider text,
+      provider_event_id text,
+      status text not null,
+      failure_code text,
+      failure_detail text,
+      confirmed_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz
+    );
+
+    alter table visit_bookings add column if not exists provider text;
+    alter table visit_bookings add column if not exists provider_event_id text;
+    alter table visit_bookings add column if not exists status text not null default 'not_requested';
+    alter table visit_bookings add column if not exists failure_code text;
+    alter table visit_bookings add column if not exists failure_detail text;
+    alter table visit_bookings add column if not exists confirmed_at timestamptz;
+    alter table visit_bookings add column if not exists updated_at timestamptz;
+
+    create table if not exists case_channel_states (
+      id uuid primary key,
+      case_id uuid not null unique references cases(id) on delete cascade,
+      channel text not null,
+      provider text,
+      contact_value text,
+      latest_outbound_status text not null,
+      latest_outbound_block_reason text,
+      latest_outbound_failure_code text,
+      latest_outbound_failure_detail text,
+      latest_outbound_provider_message_id text,
+      latest_outbound_message text,
+      latest_outbound_updated_at timestamptz,
+      last_inbound_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    alter table case_channel_states add column if not exists provider text;
+    alter table case_channel_states add column if not exists contact_value text;
+    alter table case_channel_states add column if not exists latest_outbound_status text not null default 'not_started';
+    alter table case_channel_states add column if not exists latest_outbound_block_reason text;
+    alter table case_channel_states add column if not exists latest_outbound_failure_code text;
+    alter table case_channel_states add column if not exists latest_outbound_failure_detail text;
+    alter table case_channel_states add column if not exists latest_outbound_provider_message_id text;
+    alter table case_channel_states add column if not exists latest_outbound_message text;
+    alter table case_channel_states add column if not exists latest_outbound_updated_at timestamptz;
+    alter table case_channel_states add column if not exists last_inbound_at timestamptz;
 
     create table if not exists document_requests (
       id uuid primary key,
@@ -864,11 +1048,16 @@ export async function createAlphaLeadCaptureStore(options?: {
       id uuid primary key,
       case_id uuid not null references cases(id) on delete cascade,
       job_type text not null,
+      payload jsonb not null default '{}'::jsonb,
+      attempts integer not null default 0,
       run_after timestamptz not null,
       status text not null,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
+
+    alter table automation_jobs add column if not exists payload jsonb not null default '{}'::jsonb;
+    alter table automation_jobs add column if not exists attempts integer not null default 0;
 
     create table if not exists audit_events (
       id uuid primary key,
@@ -879,7 +1068,10 @@ export async function createAlphaLeadCaptureStore(options?: {
     );
 
     create index if not exists cases_created_at_idx on cases (created_at desc);
+    create index if not exists leads_normalized_phone_idx on leads (normalized_phone);
     create index if not exists visits_case_id_idx on visits (case_id, scheduled_at desc);
+    create index if not exists visit_bookings_visit_id_idx on visit_bookings (visit_id);
+    create index if not exists case_channel_states_case_id_idx on case_channel_states (case_id);
     create index if not exists document_requests_case_id_idx on document_requests (case_id, created_at asc);
     create index if not exists handover_tasks_case_id_idx on handover_tasks (handover_case_id, due_at asc);
     create index if not exists handover_blockers_case_id_idx on handover_blockers (handover_case_id, due_at asc);
@@ -1325,6 +1517,59 @@ export async function createAlphaLeadCaptureStore(options?: {
     return latestFollowUps;
   };
 
+  const listCaseChannelSummaries = async (caseIds: string[]) => {
+    const caseIdsWithValues = caseIds.filter(Boolean);
+
+    if (caseIdsWithValues.length === 0) {
+      return new Map<string, PersistedCaseChannelSummary>();
+    }
+
+    const records = await db
+      .select({
+        caseId: caseChannelStates.caseId,
+        channel: caseChannelStates.channel,
+        contactValue: caseChannelStates.contactValue,
+        lastInboundAt: caseChannelStates.lastInboundAt,
+        latestOutboundBlockReason: caseChannelStates.latestOutboundBlockReason,
+        latestOutboundFailureCode: caseChannelStates.latestOutboundFailureCode,
+        latestOutboundFailureDetail: caseChannelStates.latestOutboundFailureDetail,
+        latestOutboundMessage: caseChannelStates.latestOutboundMessage,
+        latestOutboundProviderMessageId: caseChannelStates.latestOutboundProviderMessageId,
+        latestOutboundStatus: caseChannelStates.latestOutboundStatus,
+        latestOutboundUpdatedAt: caseChannelStates.latestOutboundUpdatedAt,
+        provider: caseChannelStates.provider
+      })
+      .from(caseChannelStates)
+      .where(inArray(caseChannelStates.caseId, caseIdsWithValues));
+
+    return new Map(records.map((record) => [record.caseId, hydrateCaseChannelSummary(record)]));
+  };
+
+  const listVisitBookingsByCaseId = async (caseIds: string[]) => {
+    const caseIdsWithValues = caseIds.filter(Boolean);
+
+    if (caseIdsWithValues.length === 0) {
+      return new Map<string, PersistedVisitBooking>();
+    }
+
+    const records = await db
+      .select({
+        caseId: visits.caseId,
+        confirmedAt: visitBookings.confirmedAt,
+        failureCode: visitBookings.failureCode,
+        failureDetail: visitBookings.failureDetail,
+        provider: visitBookings.provider,
+        providerEventId: visitBookings.providerEventId,
+        status: visitBookings.status,
+        updatedAt: visitBookings.updatedAt
+      })
+      .from(visitBookings)
+      .innerJoin(visits, eq(visitBookings.visitId, visits.id))
+      .where(inArray(visits.caseId, caseIdsWithValues));
+
+    return new Map(records.map((record) => [record.caseId, hydrateVisitBooking(record)]));
+  };
+
   const listCurrentHandoverCustomerUpdateQaReviews = async (caseIds: string[]) => {
     const caseIdsWithValues = caseIds.filter(Boolean);
 
@@ -1717,9 +1962,11 @@ export async function createAlphaLeadCaptureStore(options?: {
       persistedDocumentRequests,
       persistedInterventions,
       persistedQaReviews,
+      channelSummaryMap,
       currentHandoverCustomerUpdateQaReviewMap,
       linkedHandoverCase,
-      handoverClosureMap
+      handoverClosureMap,
+      visitBookingMap
     ] = await Promise.all([
         db
           .select({
@@ -1797,6 +2044,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           .from(caseQaReviews)
           .where(eq(caseQaReviews.caseId, caseId))
           .orderBy(desc(caseQaReviews.createdAt), desc(caseQaReviews.updatedAt)),
+        listCaseChannelSummaries([caseId]),
         listCurrentHandoverCustomerUpdateQaReviews([caseId]),
         db
           .select({
@@ -1809,7 +2057,8 @@ export async function createAlphaLeadCaptureStore(options?: {
           .from(handoverCases)
           .where(eq(handoverCases.caseId, caseId))
           .limit(1),
-        listHandoverClosureSummaries([caseId])
+        listHandoverClosureSummaries([caseId]),
+        listVisitBookingsByCaseId([caseId])
       ]);
 
     const hydratedInterventions = persistedInterventions.map((intervention) => hydrateManagerIntervention(intervention));
@@ -1834,11 +2083,13 @@ export async function createAlphaLeadCaptureStore(options?: {
       automationStatus: toAutomationStatus(caseRecord.automationStatus),
       budget: caseRecord.budget,
       caseId: caseRecord.caseId,
+      channelSummary: channelSummaryMap.get(caseId) ?? null,
       createdAt: toIsoDateTimeString(caseRecord.createdAt),
       currentHandoverCustomerUpdateQaReview: currentHandoverCustomerUpdateQaReviewMap.get(caseId) ?? null,
       currentQaReview,
       currentVisit: currentVisit[0]
         ? {
+            booking: visitBookingMap.get(caseId) ?? null,
             createdAt: currentVisit[0].createdAt,
             location: currentVisit[0].location,
             scheduledAt: currentVisit[0].scheduledAt,
@@ -1952,12 +2203,214 @@ export async function createAlphaLeadCaptureStore(options?: {
     }
 
     await transaction.insert(automationJobs).values({
+      attempts: 0,
       caseId: input.caseId,
       createdAt: input.updatedAt,
       id: randomUUID(),
       jobType: followUpWatchJobType,
+      payload: {},
       runAfter: input.runAfter,
       status: "queued",
+      updatedAt: input.updatedAt
+    });
+  };
+
+  const upsertCaseChannelState = async (
+    transaction: AlphaTransaction,
+    input: {
+      caseId: string;
+      channel: CaseContactChannel;
+      contactValue: string | null;
+      lastInboundAt?: string | null;
+      latestOutboundBlockReason: MessageDeliveryBlockReason | null;
+      latestOutboundFailureCode: string | null;
+      latestOutboundFailureDetail: string | null;
+      latestOutboundMessage: string | null;
+      latestOutboundProviderMessageId: string | null;
+      latestOutboundStatus: MessageDeliveryStatus;
+      latestOutboundUpdatedAt: string | null;
+      provider: MessageProvider | null;
+      updatedAt: string;
+    }
+  ) => {
+    await transaction
+      .insert(caseChannelStates)
+      .values({
+        caseId: input.caseId,
+        channel: input.channel,
+        contactValue: input.contactValue,
+        createdAt: input.updatedAt,
+        id: randomUUID(),
+        lastInboundAt: input.lastInboundAt ?? null,
+        latestOutboundBlockReason: input.latestOutboundBlockReason,
+        latestOutboundFailureCode: input.latestOutboundFailureCode,
+        latestOutboundFailureDetail: input.latestOutboundFailureDetail,
+        latestOutboundMessage: input.latestOutboundMessage,
+        latestOutboundProviderMessageId: input.latestOutboundProviderMessageId,
+        latestOutboundStatus: input.latestOutboundStatus,
+        latestOutboundUpdatedAt: input.latestOutboundUpdatedAt,
+        provider: input.provider,
+        updatedAt: input.updatedAt
+      })
+      .onConflictDoUpdate({
+        set: {
+          channel: input.channel,
+          contactValue: input.contactValue,
+          lastInboundAt: input.lastInboundAt ?? null,
+          latestOutboundBlockReason: input.latestOutboundBlockReason,
+          latestOutboundFailureCode: input.latestOutboundFailureCode,
+          latestOutboundFailureDetail: input.latestOutboundFailureDetail,
+          latestOutboundMessage: input.latestOutboundMessage,
+          latestOutboundProviderMessageId: input.latestOutboundProviderMessageId,
+          latestOutboundStatus: input.latestOutboundStatus,
+          latestOutboundUpdatedAt: input.latestOutboundUpdatedAt,
+          provider: input.provider,
+          updatedAt: input.updatedAt
+        },
+        target: caseChannelStates.caseId
+      });
+  };
+
+  const queueWhatsAppOutboundJob = async (
+    transaction: AlphaTransaction,
+    input: {
+      caseId: string;
+      jobType: string;
+      messageBody: string;
+      normalizedPhone: string;
+      origin: "manager" | "system";
+      sentByName: string | null;
+      updatedAt: string;
+    }
+  ) => {
+    await transaction.insert(automationJobs).values({
+      attempts: 0,
+      caseId: input.caseId,
+      createdAt: input.updatedAt,
+      id: randomUUID(),
+      jobType: input.jobType,
+      payload: {
+        messageBody: input.messageBody,
+        normalizedPhone: input.normalizedPhone,
+        origin: input.origin,
+        sentByName: input.sentByName
+      },
+      runAfter: input.updatedAt,
+      status: "queued",
+      updatedAt: input.updatedAt
+    });
+  };
+
+  const syncWhatsAppInitialReplyJob = async (
+    transaction: AlphaTransaction,
+    input: {
+      automationHoldReason: CaseAutomationHoldReason | null;
+      automationStatus: AutomationStatus;
+      caseId: string;
+      contactValue: string | null;
+      customerName: string;
+      preferredLocale: SupportedLocale;
+      projectInterest: string;
+      source: "website" | "whatsapp";
+      updatedAt: string;
+    }
+  ) => {
+    await transaction
+      .update(automationJobs)
+      .set({
+        status: "cancelled",
+        updatedAt: input.updatedAt
+      })
+      .where(
+        and(
+          eq(automationJobs.caseId, input.caseId),
+          eq(automationJobs.jobType, whatsappInitialReplyJobType),
+          eq(automationJobs.status, "queued")
+        )
+      );
+
+    if (input.source !== "website") {
+      return;
+    }
+
+    const latestChannelState = await transaction
+      .select({
+        channel: caseChannelStates.channel,
+        contactValue: caseChannelStates.contactValue,
+        latestOutboundStatus: caseChannelStates.latestOutboundStatus
+      })
+      .from(caseChannelStates)
+      .where(eq(caseChannelStates.caseId, input.caseId))
+      .limit(1);
+
+    const currentChannelState = latestChannelState[0];
+    const channel = input.contactValue ? "whatsapp" : currentChannelState?.channel === "whatsapp" ? "whatsapp" : "website";
+    const latestOutboundStatus = currentChannelState ? toMessageDeliveryStatus(currentChannelState.latestOutboundStatus) : "not_started";
+
+    if (latestOutboundStatus === "sent" || latestOutboundStatus === "delivered") {
+      return;
+    }
+
+    if (!input.contactValue) {
+      await upsertCaseChannelState(transaction, {
+        caseId: input.caseId,
+        channel,
+        contactValue: null,
+        latestOutboundBlockReason: "missing_phone",
+        latestOutboundFailureCode: null,
+        latestOutboundFailureDetail: null,
+        latestOutboundMessage: null,
+        latestOutboundProviderMessageId: null,
+        latestOutboundStatus: "blocked",
+        latestOutboundUpdatedAt: input.updatedAt,
+        provider: null,
+        updatedAt: input.updatedAt
+      });
+      return;
+    }
+
+    if (input.automationStatus === "paused" || input.automationHoldReason !== null) {
+      await upsertCaseChannelState(transaction, {
+        caseId: input.caseId,
+        channel: "whatsapp",
+        contactValue: input.contactValue,
+        latestOutboundBlockReason: input.automationStatus === "paused" ? "automation_paused" : "qa_hold",
+        latestOutboundFailureCode: null,
+        latestOutboundFailureDetail: null,
+        latestOutboundMessage: buildInitialWhatsAppReply(input),
+        latestOutboundProviderMessageId: null,
+        latestOutboundStatus: "blocked",
+        latestOutboundUpdatedAt: input.updatedAt,
+        provider: "meta_whatsapp_cloud",
+        updatedAt: input.updatedAt
+      });
+      return;
+    }
+
+    const messageBody = buildInitialWhatsAppReply(input);
+
+    await upsertCaseChannelState(transaction, {
+      caseId: input.caseId,
+      channel: "whatsapp",
+      contactValue: input.contactValue,
+      latestOutboundBlockReason: null,
+      latestOutboundFailureCode: null,
+      latestOutboundFailureDetail: null,
+      latestOutboundMessage: messageBody,
+      latestOutboundProviderMessageId: null,
+      latestOutboundStatus: "queued",
+      latestOutboundUpdatedAt: input.updatedAt,
+      provider: "meta_whatsapp_cloud",
+      updatedAt: input.updatedAt
+    });
+
+    await queueWhatsAppOutboundJob(transaction, {
+      caseId: input.caseId,
+      jobType: whatsappInitialReplyJobType,
+      messageBody,
+      normalizedPhone: input.contactValue,
+      origin: "system",
+      sentByName: null,
       updatedAt: input.updatedAt
     });
   };
@@ -2099,6 +2552,8 @@ export async function createAlphaLeadCaptureStore(options?: {
       const createdAt = new Date().toISOString();
       const automaticQaMatches = detectQaPolicyMatches(input.message);
       const automaticQaReviewId = automaticQaMatches.length > 0 ? randomUUID() : null;
+      const normalizedPhone = normalizePhoneNumber(input.phone);
+      const source = input.source ?? "website";
 
       await db.transaction(async (transaction) => {
         await transaction.insert(leads).values({
@@ -2108,10 +2563,11 @@ export async function createAlphaLeadCaptureStore(options?: {
           email: input.email,
           id: createdLeadId,
           message: input.message,
+          normalizedPhone,
           phone: input.phone,
           preferredLocale: input.preferredLocale,
           projectInterest: input.projectInterest,
-          source: "website"
+          source
         });
 
         await transaction.insert(cases).values({
@@ -2135,7 +2591,7 @@ export async function createAlphaLeadCaptureStore(options?: {
             customerName: input.customerName,
             preferredLocale: input.preferredLocale,
             projectInterest: input.projectInterest,
-            source: "website"
+            source
           }
         });
 
@@ -2176,6 +2632,36 @@ export async function createAlphaLeadCaptureStore(options?: {
               triggerEvidence: automaticQaMatches.map((match) => match.evidence),
               triggerSource: "policy_rule"
             }
+          });
+        }
+
+        if (source === "whatsapp") {
+          await upsertCaseChannelState(transaction, {
+            caseId: createdCaseId,
+            channel: "whatsapp",
+            contactValue: normalizedPhone,
+            lastInboundAt: createdAt,
+            latestOutboundBlockReason: null,
+            latestOutboundFailureCode: null,
+            latestOutboundFailureDetail: null,
+            latestOutboundMessage: null,
+            latestOutboundProviderMessageId: null,
+            latestOutboundStatus: "not_started",
+            latestOutboundUpdatedAt: null,
+            provider: "meta_whatsapp_cloud",
+            updatedAt: createdAt
+          });
+        } else {
+          await syncWhatsAppInitialReplyJob(transaction, {
+            automationHoldReason: automaticQaReviewId ? "qa_pending_review" : null,
+            automationStatus: "active",
+            caseId: createdCaseId,
+            contactValue: normalizedPhone,
+            customerName: input.customerName,
+            preferredLocale: input.preferredLocale,
+            projectInterest: input.projectInterest,
+            source,
+            updatedAt: createdAt
           });
         }
 
@@ -2225,6 +2711,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         automationHoldReason: getCaseAutomationHoldReason(currentQaReview),
         automationStatus: toAutomationStatus(createdCase.automationStatus),
         caseId: createdCase.caseId,
+        channelSummary: (await listCaseChannelSummaries([createdCase.caseId])).get(createdCase.caseId) ?? null,
         createdAt: toIsoDateTimeString(createdCase.createdAt),
         currentHandoverCustomerUpdateQaReview: null,
         currentQaReview,
@@ -2300,6 +2787,18 @@ export async function createAlphaLeadCaptureStore(options?: {
           runAfter: caseRecord.nextActionDueAt,
           updatedAt: createdAt
         });
+
+        await syncWhatsAppInitialReplyJob(transaction, {
+          automationHoldReason: "qa_pending_review",
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          contactValue: normalizePhoneNumber(caseRecord.phone),
+          customerName: caseRecord.customerName,
+          preferredLocale: caseRecord.preferredLocale,
+          projectInterest: caseRecord.projectInterest,
+          source: caseRecord.source,
+          updatedAt: createdAt
+        });
       });
 
       return getPersistedCaseDetail(caseId);
@@ -2362,6 +2861,18 @@ export async function createAlphaLeadCaptureStore(options?: {
           automationHoldReason: "qa_pending_review",
           caseId,
           runAfter: caseRecord.nextActionDueAt,
+          updatedAt: createdAt
+        });
+
+        await syncWhatsAppInitialReplyJob(transaction, {
+          automationHoldReason: "qa_pending_review",
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          contactValue: normalizePhoneNumber(caseRecord.phone),
+          customerName: caseRecord.customerName,
+          preferredLocale: caseRecord.preferredLocale,
+          projectInterest: caseRecord.projectInterest,
+          source: caseRecord.source,
           updatedAt: createdAt
         });
       });
@@ -2442,6 +2953,18 @@ export async function createAlphaLeadCaptureStore(options?: {
           runAfter: caseRecord.nextActionDueAt,
           updatedAt
         });
+
+        await syncWhatsAppInitialReplyJob(transaction, {
+          automationHoldReason: getCaseAutomationHoldReasonFromStatus(input.status),
+          automationStatus: caseRecord.automationStatus,
+          caseId,
+          contactValue: normalizePhoneNumber(caseRecord.phone),
+          customerName: caseRecord.customerName,
+          preferredLocale: caseRecord.preferredLocale,
+          projectInterest: caseRecord.projectInterest,
+          source: caseRecord.source,
+          updatedAt
+        });
       });
 
       return getPersistedCaseDetail(caseId);
@@ -2454,6 +2977,8 @@ export async function createAlphaLeadCaptureStore(options?: {
       }
 
       const createdAt = new Date().toISOString();
+      const normalizedPhone = caseRecord.channelSummary?.contactValue ?? normalizePhoneNumber(caseRecord.phone);
+      const sentByName = input.sentByName ?? caseRecord.ownerName;
 
       await db.transaction(async (transaction) => {
         await transaction
@@ -2481,9 +3006,53 @@ export async function createAlphaLeadCaptureStore(options?: {
             message: input.message,
             nextAction: input.nextAction,
             nextActionDueAt: input.nextActionDueAt,
-            sentByName: input.sentByName ?? caseRecord.ownerName
+            sentByName
           }
         });
+
+        if (normalizedPhone) {
+          await upsertCaseChannelState(transaction, {
+            caseId,
+            channel: "whatsapp",
+            contactValue: normalizedPhone,
+            lastInboundAt: caseRecord.channelSummary?.lastInboundAt ?? null,
+            latestOutboundBlockReason: null,
+            latestOutboundFailureCode: null,
+            latestOutboundFailureDetail: null,
+            latestOutboundMessage: input.message,
+            latestOutboundProviderMessageId: null,
+            latestOutboundStatus: "queued",
+            latestOutboundUpdatedAt: createdAt,
+            provider: "meta_whatsapp_cloud",
+            updatedAt: createdAt
+          });
+
+          await queueWhatsAppOutboundJob(transaction, {
+            caseId,
+            jobType: whatsappCaseReplyJobType,
+            messageBody: input.message,
+            normalizedPhone,
+            origin: "manager",
+            sentByName,
+            updatedAt: createdAt
+          });
+        } else {
+          await upsertCaseChannelState(transaction, {
+            caseId,
+            channel: caseRecord.channelSummary?.channel ?? "website",
+            contactValue: null,
+            lastInboundAt: caseRecord.channelSummary?.lastInboundAt ?? null,
+            latestOutboundBlockReason: "missing_phone",
+            latestOutboundFailureCode: null,
+            latestOutboundFailureDetail: null,
+            latestOutboundMessage: input.message,
+            latestOutboundProviderMessageId: null,
+            latestOutboundStatus: "blocked",
+            latestOutboundUpdatedAt: createdAt,
+            provider: caseRecord.channelSummary?.provider ?? null,
+            updatedAt: createdAt
+          });
+        }
 
         await syncFollowUpJob(transaction, {
           automationStatus: caseRecord.automationStatus,
@@ -2531,6 +3100,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       const caseIds = persistedCases.map((caseRecord) => caseRecord.caseId);
       const [
         openInterventionCounts,
+        channelSummaries,
         currentQaReviews,
         currentHandoverCustomerUpdateQaReviews,
         latestCaseReplies,
@@ -2540,6 +3110,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       ] =
         await Promise.all([
         listOpenInterventionCounts(caseIds),
+        listCaseChannelSummaries(caseIds),
         listCurrentQaReviews(caseIds),
         listCurrentHandoverCustomerUpdateQaReviews(caseIds),
         listLatestCaseReplies(caseIds),
@@ -2552,6 +3123,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         automationHoldReason: getCaseAutomationHoldReason(currentQaReviews.get(caseRecord.caseId)),
         automationStatus: toAutomationStatus(caseRecord.automationStatus),
         caseId: caseRecord.caseId,
+        channelSummary: channelSummaries.get(caseRecord.caseId) ?? null,
         createdAt: toIsoDateTimeString(caseRecord.createdAt),
         currentHandoverCustomerUpdateQaReview: currentHandoverCustomerUpdateQaReviews.get(caseRecord.caseId) ?? null,
         currentQaReview: currentQaReviews.get(caseRecord.caseId) ?? null,
@@ -2571,6 +3143,294 @@ export async function createAlphaLeadCaptureStore(options?: {
         stage: toCaseStage(caseRecord.stage),
         updatedAt: toIsoDateTimeString(caseRecord.updatedAt)
       }));
+    },
+    async findCaseIdByNormalizedPhone(normalizedPhone) {
+      const matchedLead = await db
+        .select({
+          caseId: cases.id
+        })
+        .from(leads)
+        .innerJoin(cases, eq(cases.leadId, leads.id))
+        .where(eq(leads.normalizedPhone, normalizedPhone))
+        .orderBy(desc(cases.createdAt))
+        .limit(1);
+
+      return matchedLead[0]?.caseId ?? null;
+    },
+    async getDueAutomationJobs(input) {
+      const dueJobs = await db
+        .select({
+          attempts: automationJobs.attempts,
+          caseId: automationJobs.caseId,
+          jobId: automationJobs.id,
+          payload: automationJobs.payload,
+          runAfter: automationJobs.runAfter
+        })
+        .from(automationJobs)
+        .where(and(eq(automationJobs.jobType, input.jobType), eq(automationJobs.status, "queued")))
+        .orderBy(asc(automationJobs.runAfter))
+        .limit(input.limit);
+
+      const dueTimestamp = new Date(input.runAt).getTime();
+
+      return dueJobs.filter((job) => new Date(job.runAfter).getTime() <= dueTimestamp);
+    },
+    async markAutomationJobCompleted(jobId, updatedAt) {
+      await db
+        .update(automationJobs)
+        .set({
+          status: "completed",
+          updatedAt
+        })
+        .where(eq(automationJobs.id, jobId));
+    },
+    async rescheduleAutomationJob(jobId, input) {
+      await db
+        .update(automationJobs)
+        .set({
+          attempts: input.attempts,
+          runAfter: input.runAfter,
+          updatedAt: input.updatedAt
+        })
+        .where(eq(automationJobs.id, jobId));
+    },
+    async recordVisitBooking(caseId, visitId, input) {
+      await db.transaction(async (transaction) => {
+        await transaction
+          .insert(visitBookings)
+          .values({
+            confirmedAt: input.confirmedAt,
+            createdAt: input.updatedAt,
+            failureCode: input.failureCode,
+            failureDetail: input.failureDetail,
+            id: randomUUID(),
+            provider: input.provider,
+            providerEventId: input.providerEventId,
+            status: input.status,
+            updatedAt: input.updatedAt,
+            visitId
+          })
+          .onConflictDoUpdate({
+            set: {
+              confirmedAt: input.confirmedAt,
+              failureCode: input.failureCode,
+              failureDetail: input.failureDetail,
+              provider: input.provider,
+              providerEventId: input.providerEventId,
+              status: input.status,
+              updatedAt: input.updatedAt
+            },
+            target: visitBookings.visitId
+          });
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType: input.status === "confirmed" ? "calendar_booking_confirmed" : "calendar_booking_failed",
+          id: randomUUID(),
+          payload: {
+            failureCode: input.failureCode,
+            failureDetail: input.failureDetail,
+            provider: input.provider,
+            providerEventId: input.providerEventId,
+            status: input.status,
+            visitId
+          }
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async recordWhatsAppDeliveryStatus(input) {
+      const store = this as LeadCaptureStore;
+      const caseIdByPhone = input.normalizedPhone ? await store.findCaseIdByNormalizedPhone(input.normalizedPhone) : null;
+      const matchedChannelState =
+        caseIdByPhone === null
+          ? await db
+              .select({
+                caseId: caseChannelStates.caseId
+              })
+              .from(caseChannelStates)
+              .where(eq(caseChannelStates.latestOutboundProviderMessageId, input.providerMessageId))
+              .limit(1)
+          : [];
+      const caseId = caseIdByPhone ?? matchedChannelState[0]?.caseId ?? null;
+
+      if (!caseId) {
+        return null;
+      }
+
+      await db.transaction(async (transaction) => {
+        const existingChannelState = await transaction
+          .select({
+            channel: caseChannelStates.channel,
+            contactValue: caseChannelStates.contactValue,
+            latestOutboundMessage: caseChannelStates.latestOutboundMessage
+          })
+          .from(caseChannelStates)
+          .where(eq(caseChannelStates.caseId, caseId))
+          .limit(1);
+
+        await upsertCaseChannelState(transaction, {
+          caseId,
+          channel: existingChannelState[0]?.channel ? toCaseContactChannel(existingChannelState[0].channel) : "whatsapp",
+          contactValue: input.normalizedPhone ?? existingChannelState[0]?.contactValue ?? null,
+          latestOutboundBlockReason: null,
+          latestOutboundFailureCode: input.failureCode,
+          latestOutboundFailureDetail: input.failureDetail,
+          latestOutboundMessage: existingChannelState[0]?.latestOutboundMessage ?? null,
+          latestOutboundProviderMessageId: input.providerMessageId,
+          latestOutboundStatus: input.status,
+          latestOutboundUpdatedAt: input.updatedAt,
+          provider: "meta_whatsapp_cloud",
+          updatedAt: input.updatedAt
+        });
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType:
+            input.status === "delivered"
+              ? "whatsapp_message_delivered"
+              : input.status === "sent"
+                ? "whatsapp_message_sent"
+                : "whatsapp_message_failed",
+          id: randomUUID(),
+          payload: {
+            failureCode: input.failureCode,
+            failureDetail: input.failureDetail,
+            messageBody: existingChannelState[0]?.latestOutboundMessage ?? null,
+            normalizedPhone: input.normalizedPhone,
+            providerMessageId: input.providerMessageId,
+            status: input.status
+          }
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async recordWhatsAppInboundMessage(input) {
+      const store = this as LeadCaptureStore;
+      const existingCaseId = await store.findCaseIdByNormalizedPhone(input.normalizedPhone);
+      const matchedCaseId =
+        existingCaseId ??
+        (
+          await store.createWebsiteLeadCase({
+            customerName: input.profileName ?? "WhatsApp Lead",
+            email: `${input.normalizedPhone.replace(/[^\d]/g, "")}@whatsapp.local`,
+            message: input.textBody,
+            nextAction: "Review inbound WhatsApp inquiry and continue qualification",
+            nextActionDueAt: input.receivedAt,
+            phone: input.normalizedPhone,
+            preferredLocale: "en",
+            projectInterest: "WhatsApp inquiry",
+            source: "whatsapp"
+          })
+        ).caseId;
+
+      await db.transaction(async (transaction) => {
+        const existingChannelState = await transaction
+          .select({
+            latestOutboundBlockReason: caseChannelStates.latestOutboundBlockReason,
+            latestOutboundFailureCode: caseChannelStates.latestOutboundFailureCode,
+            latestOutboundFailureDetail: caseChannelStates.latestOutboundFailureDetail,
+            latestOutboundMessage: caseChannelStates.latestOutboundMessage,
+            latestOutboundProviderMessageId: caseChannelStates.latestOutboundProviderMessageId,
+            latestOutboundStatus: caseChannelStates.latestOutboundStatus,
+            latestOutboundUpdatedAt: caseChannelStates.latestOutboundUpdatedAt,
+            provider: caseChannelStates.provider
+          })
+          .from(caseChannelStates)
+          .where(eq(caseChannelStates.caseId, matchedCaseId))
+          .limit(1);
+
+        await upsertCaseChannelState(transaction, {
+          caseId: matchedCaseId,
+          channel: "whatsapp",
+          contactValue: input.normalizedPhone,
+          lastInboundAt: input.receivedAt,
+          latestOutboundBlockReason: existingChannelState[0]?.latestOutboundBlockReason
+            ? toMessageDeliveryBlockReason(existingChannelState[0].latestOutboundBlockReason)
+            : null,
+          latestOutboundFailureCode: existingChannelState[0]?.latestOutboundFailureCode ?? null,
+          latestOutboundFailureDetail: existingChannelState[0]?.latestOutboundFailureDetail ?? null,
+          latestOutboundMessage: existingChannelState[0]?.latestOutboundMessage ?? null,
+          latestOutboundProviderMessageId: existingChannelState[0]?.latestOutboundProviderMessageId ?? null,
+          latestOutboundStatus: existingChannelState[0]?.latestOutboundStatus
+            ? toMessageDeliveryStatus(existingChannelState[0].latestOutboundStatus)
+            : "not_started",
+          latestOutboundUpdatedAt: existingChannelState[0]?.latestOutboundUpdatedAt ?? null,
+          provider: existingChannelState[0]?.provider ? toMessageProvider(existingChannelState[0].provider) : "meta_whatsapp_cloud",
+          updatedAt: input.receivedAt
+        });
+
+        await transaction.insert(auditEvents).values({
+          caseId: matchedCaseId,
+          createdAt: input.receivedAt,
+          eventType: "whatsapp_inbound_received",
+          id: randomUUID(),
+          payload: {
+            messageId: input.messageId,
+            normalizedPhone: input.normalizedPhone,
+            profileName: input.profileName,
+            textBody: input.textBody
+          }
+        });
+      });
+
+      return getPersistedCaseDetail(matchedCaseId);
+    },
+    async recordWhatsAppOutboundAttempt(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      await db.transaction(async (transaction) => {
+        await upsertCaseChannelState(transaction, {
+          caseId,
+          channel: caseRecord.channelSummary?.channel ?? "whatsapp",
+          contactValue: caseRecord.channelSummary?.contactValue ?? normalizePhoneNumber(caseRecord.phone),
+          lastInboundAt: caseRecord.channelSummary?.lastInboundAt ?? null,
+          latestOutboundBlockReason: input.blockReason,
+          latestOutboundFailureCode: input.failureCode,
+          latestOutboundFailureDetail: input.failureDetail,
+          latestOutboundMessage: input.messageBody,
+          latestOutboundProviderMessageId: input.providerMessageId,
+          latestOutboundStatus: input.status,
+          latestOutboundUpdatedAt: input.updatedAt,
+          provider: input.provider,
+          updatedAt: input.updatedAt
+        });
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType:
+            input.status === "sent" || input.status === "sending"
+              ? "whatsapp_message_sent"
+              : input.status === "queued"
+                ? "whatsapp_message_send_requested"
+                : "whatsapp_message_failed",
+          id: randomUUID(),
+          payload: {
+            blockReason: input.blockReason,
+            failureCode: input.failureCode,
+            failureDetail: input.failureDetail,
+            jobId: input.jobId,
+            messageBody: input.messageBody,
+            origin: input.origin,
+            provider: input.provider,
+            providerMessageId: input.providerMessageId,
+            retryAfter: input.retryAfter,
+            sentByName: input.sentByName,
+            status: input.status
+          }
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
     },
     async manageCaseFollowUp(caseId, input) {
       const caseRecord = await getPersistedCaseDetail(caseId);
@@ -2927,6 +3787,18 @@ export async function createAlphaLeadCaptureStore(options?: {
           automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
           caseId,
           runAfter: caseRecord.nextActionDueAt,
+          updatedAt
+        });
+
+        await syncWhatsAppInitialReplyJob(transaction, {
+          automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
+          automationStatus: input.status,
+          caseId,
+          contactValue: normalizePhoneNumber(caseRecord.phone),
+          customerName: caseRecord.customerName,
+          preferredLocale: caseRecord.preferredLocale,
+          projectInterest: caseRecord.projectInterest,
+          source: caseRecord.source,
           updatedAt
         });
       });
@@ -5150,6 +6022,54 @@ function hydrateLinkedHandoverCase(value: {
   };
 }
 
+function hydrateCaseChannelSummary(value: {
+  channel: string;
+  contactValue: string | null;
+  lastInboundAt: string | null;
+  latestOutboundBlockReason: string | null;
+  latestOutboundFailureCode: string | null;
+  latestOutboundFailureDetail: string | null;
+  latestOutboundMessage: string | null;
+  latestOutboundProviderMessageId: string | null;
+  latestOutboundStatus: string;
+  latestOutboundUpdatedAt: string | null;
+  provider: string | null;
+}): PersistedCaseChannelSummary {
+  return {
+    channel: toCaseContactChannel(value.channel),
+    contactValue: value.contactValue,
+    lastInboundAt: value.lastInboundAt,
+    latestOutboundBlockReason: value.latestOutboundBlockReason ? toMessageDeliveryBlockReason(value.latestOutboundBlockReason) : null,
+    latestOutboundFailureCode: value.latestOutboundFailureCode,
+    latestOutboundFailureDetail: value.latestOutboundFailureDetail,
+    latestOutboundMessage: value.latestOutboundMessage,
+    latestOutboundProviderMessageId: value.latestOutboundProviderMessageId,
+    latestOutboundStatus: toMessageDeliveryStatus(value.latestOutboundStatus),
+    latestOutboundUpdatedAt: value.latestOutboundUpdatedAt,
+    provider: value.provider ? toMessageProvider(value.provider) : null
+  };
+}
+
+function hydrateVisitBooking(value: {
+  confirmedAt: string | null;
+  failureCode: string | null;
+  failureDetail: string | null;
+  provider: string | null;
+  providerEventId: string | null;
+  status: string;
+  updatedAt: string | null;
+}): PersistedVisitBooking {
+  return {
+    confirmedAt: value.confirmedAt,
+    failureCode: value.failureCode,
+    failureDetail: value.failureDetail,
+    provider: value.provider ? toCalendarProvider(value.provider) : null,
+    providerEventId: value.providerEventId,
+    status: toVisitBookingStatus(value.status),
+    updatedAt: value.updatedAt
+  };
+}
+
 function hydrateManagerIntervention(value: {
   createdAt: string;
   interventionId: string;
@@ -5660,12 +6580,60 @@ function toHandoverPostCompletionFollowUpStatus(value: string) {
   throw new Error(`unsupported_handover_post_completion_follow_up_status:${value}`);
 }
 
-function toLeadSource(value: string): "website" {
-  if (value !== "website") {
+function toLeadSource(value: string): "website" | "whatsapp" {
+  if (value !== "website" && value !== "whatsapp") {
     throw new Error(`unsupported_lead_source:${value}`);
   }
 
   return value;
+}
+
+function toCaseContactChannel(value: string): CaseContactChannel {
+  if (value === "website" || value === "whatsapp") {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_contact_channel:${value}`);
+}
+
+function toMessageProvider(value: string): MessageProvider {
+  if (value === "meta_whatsapp_cloud") {
+    return value;
+  }
+
+  throw new Error(`unsupported_message_provider:${value}`);
+}
+
+function toMessageDeliveryStatus(value: string): MessageDeliveryStatus {
+  if (value === "not_started" || value === "blocked" || value === "queued" || value === "sending" || value === "sent" || value === "delivered" || value === "failed") {
+    return value;
+  }
+
+  throw new Error(`unsupported_message_delivery_status:${value}`);
+}
+
+function toMessageDeliveryBlockReason(value: string): MessageDeliveryBlockReason {
+  if (value === "missing_phone" || value === "qa_hold" || value === "automation_paused" || value === "client_credentials_pending") {
+    return value;
+  }
+
+  throw new Error(`unsupported_message_delivery_block_reason:${value}`);
+}
+
+function toCalendarProvider(value: string): CalendarProvider {
+  if (value === "google_calendar") {
+    return value;
+  }
+
+  throw new Error(`unsupported_calendar_provider:${value}`);
+}
+
+function toVisitBookingStatus(value: string): VisitBookingStatus {
+  if (value === "not_requested" || value === "pending" || value === "confirmed" || value === "blocked" || value === "failed") {
+    return value;
+  }
+
+  throw new Error(`unsupported_visit_booking_status:${value}`);
 }
 
 function toManagerInterventionSeverity(value: string): ManagerInterventionSeverity {

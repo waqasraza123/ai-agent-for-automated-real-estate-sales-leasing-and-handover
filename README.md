@@ -1,6 +1,6 @@
 # AI Agent for Automated Real Estate Sales, Leasing & Handover
 
-Premium bilingual real-estate operations software for AI-assisted lead response, qualification, visit scheduling, document readiness, manager oversight, and handover coordination.
+Premium bilingual real-estate operations software for AI-assisted lead response, WhatsApp follow-up, visit scheduling, document readiness, and manager oversight.
 
 <p align="left">
   <img alt="Premium real-estate ops" src="https://img.shields.io/badge/Premium-Real_Estate_Ops-111111?style=for-the-badge" />
@@ -20,31 +20,27 @@ Premium bilingual real-estate operations software for AI-assisted lead response,
 
 ## Overview
 
-This repository contains the product and implementation foundation for a premium real-estate operating layer designed for:
+This repository currently focuses on a narrower wedge:
 
-- real-estate developers
-- brokerages
-- sales teams
-- leasing teams
-- handover teams
-- operations and admin teams
-- managers and executive stakeholders
+- Saudi real-estate developer sales and leasing teams
+- bilingual Arabic and English lead response
+- WhatsApp as the main live customer communication layer
+- manager-visible follow-up, delivery, booking, and document-readiness control
 
-The product is designed for the United States and Saudi Arabia, with English and Arabic as first-class languages. Arabic is treated as a true RTL product experience, not a translated afterthought.
+Arabic remains a true RTL product experience, not a translated afterthought.
 
 ## Product Outcomes
 
-- unify inbound leads across channels
-- respond instantly in English and Arabic
-- improve qualification quality and follow-up discipline
-- increase visit booking throughput
+- capture inbound leads into one queue
+- respond quickly in Arabic and English
+- keep WhatsApp delivery, inbound replies, and follow-up status visible
+- improve qualification quality and visit-booking discipline
 - track document readiness and blockers
-- give managers better visibility into performance and stalled cases
-- make handover execution visible, structured, and auditable
+- give managers better visibility into stalled or failed cases
 
 ## Current Repository State
 
-The repository is past bootstrap and currently contains a production-grade Phase 1 demo foundation:
+The repository is past bootstrap and currently contains a working local alpha foundation:
 
 - TypeScript monorepo with `pnpm` workspaces and `turbo`
 - Next.js App Router web shell in `apps/web`
@@ -53,19 +49,19 @@ The repository is past bootstrap and currently contains a production-grade Phase
 - shared `domain`, `i18n`, `ui`, and `testing` packages
 - English and Arabic locale routing with RTL-aware rendering
 - hybrid web routes that fall back to premium seeded demo data when the API is unavailable
-- live alpha workflow for website lead intake, qualification, visit scheduling, document tracking, and manager review
+- live alpha workflow for website lead intake, WhatsApp-first reply orchestration, qualification, visit scheduling, document tracking, and manager review
 - Playwright smoke tests and opt-in visual regression baselines
-- integration-tested website lead capture, qualification, visit scheduling, document updates, and manager-readable persisted case APIs
+- integration-tested website lead capture, WhatsApp webhook handling, qualification, visit scheduling, document updates, and manager-readable persisted case APIs
 - versioned safe-push verification via `.githooks/pre-push`
 
 Not implemented yet:
 
-- workers and background jobs
 - full production PostgreSQL deployment wiring
 - authentication and authorization
-- provider integrations
-- real AI execution and workflow automation
-- persisted handover lifecycle beyond the demo shell
+- CRM export and sync
+- document upload and storage
+- production deployment automation around provider secrets and hosting
+- broader handover packaging beyond the current local implementation
 
 ## Product Positioning
 
@@ -78,7 +74,7 @@ The product promise is operational excellence:
 - better qualification consistency
 - clearer document readiness
 - stronger manager visibility
-- better handover coordination
+- clearer WhatsApp delivery and follow-up control
 
 ## Tech Foundation
 
@@ -86,7 +82,8 @@ The product promise is operational excellence:
 - Frontend: Next.js App Router + React + TypeScript
 - Shared packages: domain, UI, i18n, testing
 - Quality gates: ESLint, Vitest, Playwright, safe-push verification
-- Planned direction: Fastify API, BullMQ workers, PostgreSQL with Drizzle
+- Current direction: Fastify API, local persisted worker loop, PGlite + Drizzle for alpha development
+- Planned direction: production PostgreSQL, hardened provider deployment, and broader integration coverage
 
 ## Repository Layout
 
@@ -148,7 +145,15 @@ pnpm dev
 pnpm dev:api
 ```
 
+### Run The Worker
+
+```bash
+pnpm dev:worker
+```
+
 For the live alpha path, run both the web app and the API. When `apps/api` is not running, the web app keeps falling back to the seeded premium demo routes.
+
+For the real-channel alpha path, run the worker as well. The API receives website leads and provider webhooks; the worker is responsible for outbound WhatsApp sends and retries.
 
 Default local route examples:
 
@@ -156,6 +161,49 @@ Default local route examples:
 - `http://localhost:3000/ar`
 - `http://localhost:3000/en/dashboard`
 - `http://localhost:3000/en/leads`
+
+## Provider Rollout
+
+Copy `.env.example` into your local environment source and set only the variables you actually need.
+
+This repository is intentionally designed for client-managed integrations:
+
+- you do not need our own Meta or Google production credentials to finish the product implementation
+- the code path is already in place for WhatsApp and Google Calendar
+- when credentials are absent, the UI and persisted case state now show that the integration is waiting on client credentials instead of pretending the provider is broken
+
+Meta WhatsApp deployment split:
+
+- API owns webhook verification and callback ingestion
+- Worker owns outbound WhatsApp sends and retry behavior
+- Both services should point at the same persisted store
+
+Recommended Meta configuration:
+
+- `API_META_WHATSAPP_WEBHOOK_VERIFY_TOKEN`: used for the Meta subscription handshake
+- `API_META_WHATSAPP_APP_SECRET`: used to validate `x-hub-signature-256` on inbound webhook POSTs
+- `WORKER_META_WHATSAPP_ACCESS_TOKEN`: used for outbound sends
+- `WORKER_META_WHATSAPP_PHONE_NUMBER_ID`: used for outbound sends
+- `WORKER_META_WHATSAPP_API_VERSION`: defaults to `v20.0`
+
+Google Calendar configuration:
+
+- `API_GOOGLE_CALENDAR_ACCESS_TOKEN`
+- `API_GOOGLE_CALENDAR_ID`
+
+Rollout sequence:
+
+1. Set API and worker environment variables from `.env.example`.
+2. Point the Meta webhook to `POST /v1/integrations/meta/whatsapp/webhook`.
+3. Use the same URL for the Meta webhook verification handshake on `GET /v1/integrations/meta/whatsapp/webhook`.
+4. Keep `API_META_WHATSAPP_APP_SECRET` set in deployed environments so spoofed callbacks are rejected.
+5. Run the worker anywhere outbound sends are expected; without it, cases will queue but WhatsApp replies will not leave the system.
+
+Local or sales-demo mode:
+
+- leave the client-managed provider variables unset
+- website lead capture, case progression, QA, documents, and manager visibility still work
+- WhatsApp and calendar surfaces will stay truthful by showing that live delivery or sync is awaiting client credentials
 
 ## Verification
 
@@ -188,12 +236,11 @@ pnpm safe-push -- origin main
 
 ## Roadmap Snapshot
 
-- Phase 1A: flagship demo core
-- Phase 1B: demo hardening for state quality, responsiveness, and visual coverage
-- Phase 2: first persisted workflow for lead capture through manager review
-- Phase 3: leasing and document workflows
-- Phase 4: handover command center
-- Phase 5: enterprise controls and hardening
+- Phase 1: narrowed product focus around inbox, timeline, manager queue, and documents
+- Phase 2: operational MVP with website intake, WhatsApp, qualification, scheduling, and manager visibility
+- Phase 3: document workflow depth and storage
+- Phase 4: wedge-supporting controls and reporting
+- Phase 5: handover as a later add-on
 
 ## Non-Negotiables
 
@@ -202,4 +249,4 @@ pnpm safe-push -- origin main
 - Arabic must remain a true RTL experience
 - testing matters from the beginning
 - the codebase must stay modular, typed, maintainable, and production-grade
-- the current demo shell must not be mistaken for real workflow automation
+- provider success must never be implied without confirmation from the provider callback path

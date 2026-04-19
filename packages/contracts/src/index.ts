@@ -24,7 +24,7 @@ export const operatorSessionPayloadSchema = z.object({
   role: operatorRoleSchema,
   version: z.literal(1)
 });
-export const leadSourceSchema = z.enum(["website"]);
+export const leadSourceSchema = z.enum(["website", "whatsapp"]);
 export const caseStageSchema = z.enum(["new", "qualified", "visit_scheduled", "documents_in_progress", "handover_initiated"]);
 export const followUpStatusSchema = z.enum(["on_track", "attention"]);
 export const qualificationReadinessSchema = z.enum(["watch", "medium", "high"]);
@@ -32,6 +32,12 @@ export const documentRequestTypeSchema = z.enum(["government_id", "proof_of_fund
 export const documentRequestStatusSchema = z.enum(["requested", "under_review", "accepted", "rejected"]);
 export const automationStatusSchema = z.enum(["active", "paused"]);
 export const caseAutomationHoldReasonSchema = z.enum(["qa_pending_review", "qa_follow_up_required"]);
+export const caseContactChannelSchema = z.enum(["website", "whatsapp"]);
+export const messageProviderSchema = z.enum(["meta_whatsapp_cloud"]);
+export const messageDeliveryStatusSchema = z.enum(["not_started", "blocked", "queued", "sending", "sent", "delivered", "failed"]);
+export const messageDeliveryBlockReasonSchema = z.enum(["missing_phone", "qa_hold", "automation_paused", "client_credentials_pending"]);
+export const calendarProviderSchema = z.enum(["google_calendar"]);
+export const visitBookingStatusSchema = z.enum(["not_requested", "pending", "confirmed", "blocked", "failed"]);
 export const managerInterventionTypeSchema = z.enum(["follow_up_overdue"]);
 export const managerInterventionSeveritySchema = z.enum(["warning", "critical"]);
 export const managerInterventionStatusSchema = z.enum(["open", "resolved"]);
@@ -276,7 +282,32 @@ export const persistedQualificationSnapshotSchema = z.object({
   updatedAt: z.iso.datetime()
 });
 
+export const persistedCaseChannelSummarySchema = z.object({
+  channel: caseContactChannelSchema,
+  contactValue: z.string().nullable(),
+  lastInboundAt: z.iso.datetime().nullable(),
+  latestOutboundBlockReason: messageDeliveryBlockReasonSchema.nullable(),
+  latestOutboundFailureCode: z.string().nullable(),
+  latestOutboundFailureDetail: z.string().nullable(),
+  latestOutboundMessage: z.string().nullable(),
+  latestOutboundProviderMessageId: z.string().nullable(),
+  latestOutboundStatus: messageDeliveryStatusSchema,
+  latestOutboundUpdatedAt: z.iso.datetime().nullable(),
+  provider: messageProviderSchema.nullable()
+});
+
+export const persistedVisitBookingSchema = z.object({
+  confirmedAt: z.iso.datetime().nullable(),
+  failureCode: z.string().nullable(),
+  failureDetail: z.string().nullable(),
+  provider: calendarProviderSchema.nullable(),
+  providerEventId: z.string().nullable(),
+  status: visitBookingStatusSchema,
+  updatedAt: z.iso.datetime().nullable()
+});
+
 export const persistedVisitSchema = z.object({
+  booking: persistedVisitBookingSchema.nullable(),
   createdAt: z.iso.datetime(),
   location: z.string(),
   scheduledAt: z.iso.datetime(),
@@ -582,6 +613,7 @@ export const persistedCaseSummarySchema = z.object({
   automationHoldReason: caseAutomationHoldReasonSchema.nullable(),
   automationStatus: automationStatusSchema,
   caseId: z.uuid(),
+  channelSummary: persistedCaseChannelSummarySchema.nullable(),
   createdAt: z.iso.datetime(),
   currentHandoverCustomerUpdateQaReview: persistedCurrentHandoverCustomerUpdateQaReviewSchema.nullable(),
   latestManagerFollowUp: persistedLatestManagerFollowUpSchema.nullable(),
@@ -647,7 +679,9 @@ export const manageBulkCaseFollowUpResultSchema = z.object({
 
 export type ApproveHandoverCustomerUpdateInput = z.infer<typeof approveHandoverCustomerUpdateInputSchema>;
 export type AutomationStatus = z.infer<typeof automationStatusSchema>;
+export type CalendarProvider = z.infer<typeof calendarProviderSchema>;
 export type CaseAutomationHoldReason = z.infer<typeof caseAutomationHoldReasonSchema>;
+export type CaseContactChannel = z.infer<typeof caseContactChannelSchema>;
 export type CaseStage = z.infer<typeof caseStageSchema>;
 export type CaseQaReviewStatus = z.infer<typeof caseQaReviewStatusSchema>;
 export type CaseQaPolicySignal = z.infer<typeof caseQaPolicySignalSchema>;
@@ -702,6 +736,7 @@ export type ListGovernanceEventsQuery = z.infer<typeof listGovernanceEventsQuery
 export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseQaReview = z.infer<typeof persistedCaseQaReviewSchema>;
 export type PersistedBulkManagerFollowUp = z.infer<typeof persistedBulkManagerFollowUpSchema>;
+export type PersistedCaseChannelSummary = z.infer<typeof persistedCaseChannelSummarySchema>;
 export type PersistedLatestCaseReply = z.infer<typeof persistedLatestCaseReplySchema>;
 export type PersistedLatestManagerFollowUp = z.infer<typeof persistedLatestManagerFollowUpSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
@@ -727,6 +762,7 @@ export type PersistedHandoverTask = z.infer<typeof persistedHandoverTaskSchema>;
 export type PersistedLinkedHandoverCase = z.infer<typeof persistedLinkedHandoverCaseSchema>;
 export type PersistedManagerIntervention = z.infer<typeof persistedManagerInterventionSchema>;
 export type PersistedQualificationSnapshot = z.infer<typeof persistedQualificationSnapshotSchema>;
+export type PersistedVisitBooking = z.infer<typeof persistedVisitBookingSchema>;
 export type PersistedVisit = z.infer<typeof persistedVisitSchema>;
 export type PlanHandoverAppointmentInput = z.infer<typeof planHandoverAppointmentInputSchema>;
 export type PrepareHandoverCustomerUpdateDeliveryInput = z.infer<typeof prepareHandoverCustomerUpdateDeliveryInputSchema>;
@@ -741,6 +777,9 @@ export type SaveHandoverReviewInput = z.infer<typeof saveHandoverReviewInputSche
 export type ScheduleVisitInput = z.infer<typeof scheduleVisitInputSchema>;
 export type SendCaseReplyInput = z.infer<typeof sendCaseReplyInputSchema>;
 export type StartHandoverExecutionInput = z.infer<typeof startHandoverExecutionInputSchema>;
+export type MessageDeliveryBlockReason = z.infer<typeof messageDeliveryBlockReasonSchema>;
+export type MessageDeliveryStatus = z.infer<typeof messageDeliveryStatusSchema>;
+export type MessageProvider = z.infer<typeof messageProviderSchema>;
 export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
 export type UpdateHandoverMilestoneInput = z.infer<typeof updateHandoverMilestoneInputSchema>;
 export type UpdateAutomationStatusInput = z.infer<typeof updateAutomationStatusInputSchema>;
@@ -748,6 +787,7 @@ export type UpdateDocumentRequestInput = z.infer<typeof updateDocumentRequestInp
 export type UpdateHandoverArchiveStatusInput = z.infer<typeof updateHandoverArchiveStatusInputSchema>;
 export type UpdateHandoverBlockerInput = z.infer<typeof updateHandoverBlockerInputSchema>;
 export type UpdateHandoverTaskStatusInput = z.infer<typeof updateHandoverTaskStatusInputSchema>;
+export type VisitBookingStatus = z.infer<typeof visitBookingStatusSchema>;
 export type InsufficientRoleError = z.infer<typeof insufficientRoleErrorSchema>;
 export type InsufficientWorkspaceError = z.infer<typeof insufficientWorkspaceErrorSchema>;
 

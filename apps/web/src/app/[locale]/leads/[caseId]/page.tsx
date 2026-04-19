@@ -47,6 +47,8 @@ import {
   getPersistedAutomationHoldReasonLabel,
   getPersistedAutomationHoldReasonNote,
   getPersistedCaseStageLabel,
+  getPersistedChannelStatusLabel,
+  getPersistedChannelStatusNote,
   getPersistedFollowUpLabel,
   getPersistedHandoverStatusLabel,
   getPersistedInterventionDisplay,
@@ -85,8 +87,8 @@ export default async function LeadProfilePage(props: PageProps) {
           operatorRole={currentOperatorRole}
           summary={
             locale === "ar"
-              ? "ملفات العملاء الحية تظل ضمن مساحة المبيعات المحلية. يمكن لدورك الحالي متابعة العمل عبر مركز القيادة أو سجل التسليم المرتبط."
-              : "Live lead profiles remain inside the local sales workspace. Your current role can continue through the command center or the linked handover record instead."
+              ? "ملفات العملاء الحية تظل ضمن مساحة المبيعات المحلية. يمكن لدورك الحالي متابعة العمل عبر طابور المدير أو أي سطح مسموح آخر."
+              : "Live lead profiles remain inside the local sales workspace. Your current role can continue through the manager queue or another allowed surface instead."
           }
           title={locale === "ar" ? "ملف العميل غير متاح لهذا الدور" : "Lead profile unavailable for this role"}
           workspace="sales"
@@ -140,11 +142,31 @@ export default async function LeadProfilePage(props: PageProps) {
       persistedCase.followUpStatus,
       persistedCase.openInterventionsCount
     );
+    const channelStatusLabel = getPersistedChannelStatusLabel(locale, persistedCase.channelSummary);
+    const channelStatusNote = getPersistedChannelStatusNote(locale, persistedCase.channelSummary);
+    const bookingStatusLabel =
+      persistedCase.currentVisit?.booking?.status === "confirmed"
+        ? locale === "ar"
+          ? "حجز التقويم مؤكد"
+          : "Calendar confirmed"
+        : persistedCase.currentVisit?.booking?.status === "blocked"
+          ? locale === "ar"
+            ? "التقويم ينتظر بيانات عميل التكامل"
+            : "Calendar awaiting client credentials"
+        : persistedCase.currentVisit?.booking?.status === "failed"
+          ? locale === "ar"
+            ? "حجز التقويم فشل"
+            : "Calendar failed"
+          : persistedCase.currentVisit?.booking?.status === "pending"
+            ? locale === "ar"
+              ? "حجز التقويم قيد الانتظار"
+              : "Calendar pending"
+            : null;
 
     return (
       <div className={pageStackClassName}>
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={persistedCase.message} title={messages.profile.title} />
-        <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
+        <CaseRouteTabs caseId={persistedCase.caseId} locale={locale} />
 
         <div className={twoColumnGridClassName}>
           <Panel title={persistedCase.customerName}>
@@ -156,6 +178,7 @@ export default async function LeadProfilePage(props: PageProps) {
                 <DetailItem label={locale === "ar" ? "موعد المتابعة" : "Follow-up due"} value={formatDueAt(persistedCase, locale)} />
                 <DetailItem label={messages.common.lastChange} value={formatCaseLastChange(persistedCase, locale)} />
                 <DetailItem label={locale === "ar" ? "مصدر الحالة" : "Lead source"} value={getPersistedSourceLabel(locale)} />
+                <DetailItem label={locale === "ar" ? "القناة الحية" : "Live channel"} value={channelStatusLabel} />
               </DetailGrid>
               <div className={statusRowWrapClassName}>
                 <StatusBadge tone={persistedCase.followUpStatus === "attention" ? "critical" : "success"}>
@@ -181,7 +204,9 @@ export default async function LeadProfilePage(props: PageProps) {
                 <DetailListItem label={locale === "ar" ? "الهاتف" : "Phone"} value={persistedCase.phone ?? "—"} />
                 <DetailListItem label={locale === "ar" ? "المشروع المطلوب" : "Project interest"} value={persistedCase.projectInterest} />
                 <DetailListItem label={locale === "ar" ? "لغة العميل" : "Customer language"} value={persistedCase.preferredLocale === "ar" ? "العربية" : "English"} />
+                <DetailListItem label={locale === "ar" ? "قيمة القناة" : "Channel contact"} value={persistedCase.channelSummary?.contactValue ?? "—"} />
               </dl>
+              {channelStatusNote ? <p className={caseMetaClassName}>{channelStatusNote}</p> : null}
             </WorkflowPanelBody>
           </Panel>
         </div>
@@ -232,6 +257,49 @@ export default async function LeadProfilePage(props: PageProps) {
         </div>
 
         <div className={twoColumnGridClassName}>
+          <Panel title={locale === "ar" ? "حالة القناة والزيارة" : "Channel and booking state"}>
+            <WorkflowPanelBody className="mt-4">
+              <WorkflowCard
+                badges={
+                  <>
+                    <StatusBadge>{channelStatusLabel}</StatusBadge>
+                    {bookingStatusLabel ? (
+                      <StatusBadge
+                        tone={
+                          persistedCase.currentVisit?.booking?.status === "failed"
+                            ? "critical"
+                            : persistedCase.currentVisit?.booking?.status === "blocked"
+                              ? "warning"
+                              : "success"
+                        }
+                      >
+                        {bookingStatusLabel}
+                      </StatusBadge>
+                    ) : null}
+                  </>
+                }
+                summary={
+                  channelStatusNote ??
+                  (locale === "ar"
+                    ? "تظهر هذه البطاقة آخر حالة فعلية لقناة واتساب ونتيجة ربط الزيارة بالتقويم."
+                    : "This card shows the latest live WhatsApp state and the calendar outcome for the current visit.")
+                }
+                title={locale === "ar" ? "تشغيل القنوات" : "Channel operations"}
+              >
+                {persistedCase.currentVisit?.booking?.failureCode === "client_credentials_pending" ? (
+                  <p className={caseMetaClassName}>
+                    {locale === "ar"
+                      ? "يمكن تشغيل مزامنة Google Calendar لاحقاً عند إدخال بيانات العميل الفعلية."
+                      : "Google Calendar sync can be activated later when the client provides real credentials."}
+                  </p>
+                ) : null}
+                {persistedCase.currentVisit?.booking?.failureDetail ? (
+                  <p className={caseMetaClassName}>{persistedCase.currentVisit.booking.failureDetail}</p>
+                ) : null}
+              </WorkflowCard>
+            </WorkflowPanelBody>
+          </Panel>
+
           <Panel title={locale === "ar" ? "آخر رد بشري" : "Latest human reply"}>
             {persistedCase.latestHumanReply ? (
               <WorkflowPanelBody className="mt-4">
@@ -330,7 +398,7 @@ export default async function LeadProfilePage(props: PageProps) {
         </div>
 
         {persistedCase.handoverCase ? (
-          <Panel title={locale === "ar" ? "حالة التسليم المرتبطة" : "Linked handover record"}>
+          <Panel title={locale === "ar" ? "مرجع تسليم لاحق" : "Downstream handover reference"}>
             <WorkflowPanelBody className="mt-4">
               <WorkflowCard
                 actions={
@@ -342,7 +410,11 @@ export default async function LeadProfilePage(props: PageProps) {
                 }
                 badges={<StatusBadge tone="success">{getPersistedHandoverStatusLabel(locale, persistedCase.handoverCase)}</StatusBadge>}
                 meta={<p className={caseMetaClassName}>{buildCaseReferenceCode(persistedCase.handoverCase.handoverCaseId)}</p>}
-                summary={locale === "ar" ? "سجل التسليم المرتبط متاح الآن من هذا الملف." : "The linked handover record is now available from this profile."}
+                summary={
+                  locale === "ar"
+                    ? "يوجد سجل تسليم مرتبط بالفعل، لكنه يظل خارج المسار الأساسي الحالي ويظهر هنا كمرجع لاحق فقط."
+                    : "A linked handover record already exists, but it remains outside the current core workflow and appears here only as downstream reference."
+                }
                 title={persistedCase.handoverCase.ownerName}
                 tone="success"
               />
@@ -455,7 +527,7 @@ export default async function LeadProfilePage(props: PageProps) {
   return (
     <div className={pageStackClassName}>
       <ScreenIntro badge={caseItem.referenceCode} summary={getLocalizedText(caseItem.summary, locale)} title={messages.profile.title} />
-      <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
+      <CaseRouteTabs caseId={caseItem.id} locale={locale} />
 
       <div className={twoColumnGridClassName}>
         <Panel title={caseItem.customerName}>

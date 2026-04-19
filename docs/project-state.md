@@ -2,10 +2,11 @@
 
 ## Product
 - Product name: AI Agent for Automated Real Estate Sales, Leasing & Handover
-- Primary markets: United States and Saudi Arabia
+- Primary market: Saudi Arabia
+- Secondary expansion market: United States after the core wedge is proven
 - Primary languages: English and Arabic
 - Product truth lives in `docs/product-spec.md`
-- Product positioning is now defined as a premium bilingual operating layer for sales, leasing, and handover operations
+- Product positioning is now defined as a bilingual real-estate operations system focused first on lead response, follow-up discipline, qualification, document readiness, and manager visibility for Saudi developer sales and leasing teams
 
 ## Current Architecture
 - Implemented architecture now includes a TypeScript monorepo foundation with `apps/web`, `apps/api`, and `apps/worker`
@@ -14,9 +15,16 @@
 - The web application is now a hybrid Next.js App Router shell: premium seeded Phase 1 surfaces remain available, while the lead intake, lead detail, scheduling, documents, and manager routes can use persisted alpha data from `apps/api`
 - The web shell now resolves Arabic as the default locale on first entry, keeps locale-prefixed routes under `app/[locale]`, and persists explicit language choice through the `rea_locale` cookie instead of defaulting anonymous traffic to English
 - The API application is a Fastify service with schema-validated website lead intake, qualification, visit scheduling, follow-up-plan mutation, automation control, document state mutation, manager-readable case list and case detail endpoints, and persisted handover intake, milestone-planning, customer-update-boundary, and readiness-task endpoints
-- The worker application is a narrow background follow-up processor that polls the local alpha queue, opens overdue manager interventions, and respects both manual automation pause state and derived QA-driven automation holds
+- The worker application now processes both overdue follow-up watches and queued WhatsApp initial-reply jobs, with bounded retry handling and explicit failed-delivery state when provider sends do not complete
 - The current persisted alpha store uses Drizzle over local `PGlite` for safe Phase 2 and early Phase 3 development without introducing remote infrastructure
-- `integrations`, `analytics`, and `config` remain planned and unimplemented
+- A shared `packages/integrations` layer is now live for Meta WhatsApp Cloud API send contracts, Meta webhook parsing, Google Calendar booking contracts, and shared phone normalization
+- The API now exposes Meta WhatsApp webhook endpoints plus provider-aware Google Calendar booking persistence, and the persisted store now tracks normalized lead phone numbers, case channel state, delivery status, and visit booking status
+- Meta WhatsApp webhook POST handling now supports optional `x-hub-signature-256` validation through the app secret path, so deployed environments can reject spoofed callbacks instead of trusting payload shape alone
+- Human operator replies now also queue into the same WhatsApp delivery pipeline as the automated first reply, so the case timeline, channel summary, and worker retry model stay aligned around WhatsApp as the primary live customer channel
+- `analytics` and broader config management remain planned, while the first real integration slice is now partially implemented locally
+- The codebase currently contains broader handover and governance slices than the updated product wedge; those slices remain implemented locally, but the near-term product plan is now intentionally narrower and should prioritize real-channel operational proof before more breadth
+- The web shell, landing page, and overview copy now explicitly present the product as a WhatsApp-first operating layer, with website intake, delivery visibility, and manager intervention framed around one live communication channel rather than a generic channel mix
+- Provider integration ownership is now explicitly client-managed: the WhatsApp and Google Calendar code paths are implemented, but absent credentials are represented as pending client configuration in runtime state and UI copy instead of being treated as opaque provider failure
 - Durable memory is kept in `docs/project-state.md`
 - Local working memory is kept in `docs/_local/current-session.md` and must remain uncommitted
 - Shared localization now lives behind typed domain resources in `packages/i18n`, with Arabic as the authored default, English as the secondary locale, and shared helpers for locale direction, labels, and formatter locale selection
@@ -34,23 +42,14 @@
 - Keep commit messages under 140 characters
 
 ## Current Roadmap
-- Phase 1A: Flagship Demo Core covering the bilingual web shell, seeded data, dashboard, inbox, conversation console, scheduling, document, handover, and manager views
-- Phase 1B: Demo hardening for motion, state quality, responsive refinement, and stronger visual coverage
-- Phase 2: functional alpha covering lead capture to qualification to visit scheduling to follow-up to manager review
-- Core Phase 2 is now live locally through the website lead -> qualification -> visit scheduling -> manager review path
-- Phase 3: leasing and document workflows
-- Early Phase 3 is now live locally through persisted document request tracking, queue-backed follow-up interventions, automation pause or resume controls, and manager follow-up reset actions
-- Phase 4: handover command center
-- The first persisted Phase 4 intake boundary is now live locally: manager-approved promotion from document-complete cases into handover intake with readiness-task tracking
-- The next persisted Phase 4 planning boundary is now live locally: manager-visible milestone planning and approval-only customer-update readiness states on each handover record
-- The next persisted Phase 4 scheduling boundary is now live locally: appointment planning and internal confirmation on each handover record behind explicit customer-update approvals
-- The next persisted Phase 4 outbound-preparation boundary is now live locally: appointment-confirmation delivery preparation and dispatch-ready promotion into a scheduled handover state without provider sending
-- The next persisted Phase 4 execution-readiness boundary is now live locally: scheduled handover blockers and snag tracking with visible owner, severity, due time, and audit history
-- The next persisted Phase 4 execution-day boundary is now live locally: scheduled handover records can move into a real in-progress state and then close through a controlled completion summary without provider callbacks
-- The next persisted Phase 4 aftercare boundary is now live locally: completed handover records can capture a manager review and one explicit post-handover follow-up boundary with owner, due time, and resolution summary
-- The next persisted Phase 4 admin-closure boundary is now live locally: completed handover records can capture an archive review plus manual held, ready-to-archive, and archived statuses without external archive automation
-- The next persisted Phase 4 manager-visibility boundary is now live locally: manager workspace and lead-list surfaces now expose derived handover closure signals for closure review required, aftercare open, held, ready-to-archive, and archived states
-- Phase 5: hardening and enterprise controls
+- Phase 1: focus reset and MVP narrowing around Saudi developer sales and leasing teams, with the near-term product limited to lead inbox, case timeline/conversation, manager SLA queue, and document checklist
+- Phase 2: operational MVP with real channels covering website lead capture, WhatsApp messaging, qualification, scheduling, follow-up visibility, and manager review
+- Core workflow coverage is now partially live locally through the persisted website lead -> queued WhatsApp initial reply -> webhook-backed channel updates -> visit scheduling -> Google Calendar booking state -> manager-visible follow-up path
+- Phase 3: document workflow depth with upload/storage, checklist visibility, rejection handling, and blocked-case management
+- Early document workflow coverage is already live locally through persisted document request tracking, queue-backed follow-up interventions, automation pause or resume controls, and manager follow-up reset actions
+- Phase 4: wedge-supporting controls and reporting tied directly to the live operational flow
+- Phase 5: handover as an add-on workflow after the core wedge is proven with real integrations and KPI movement
+- Existing Phase 4 and Phase 5 handover/governance slices remain implemented locally, but they are no longer the near-term product priority
 - The first persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect post-completion review, aftercare follow-up, and archive mutations behind local handover-manager or admin control
 - The next persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect manager follow-up, automation, execution blockers, and execution-day transitions with visible UI guardrails and API-enforced permissions
 - The next persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect milestone planning, appointment planning or confirmation, and customer-update approval or delivery boundaries with shared permissions and visible UI guardrails
@@ -102,6 +101,8 @@
 - Extended the persisted alpha slice across the web app with live website lead submission, persisted lead detail routes, qualification updates, visit scheduling, and manager review
 - Added the first persisted document workflow slice with seeded document requirements, status updates, audit events, and live document-center rendering
 - Added `apps/worker` plus queue-backed overdue follow-up processing, persisted manager interventions, automation pause or resume controls, and manager follow-up reset actions
+- Added the first real integration slice with `packages/integrations`, persisted case-channel and visit-booking state, website-lead-triggered WhatsApp reply queueing, Meta webhook ingestion, Google Calendar booking persistence, core lead-surface visibility for delivery/booking status, and passing fast plus integration verification
+- Tightened the real integration slice so human case replies now update WhatsApp channel state, queue provider-backed outbound delivery through the worker, and keep the case synced to one primary communication layer instead of splitting initial automation and later human replies into separate paths
 - Added the first persisted handover slice with manager-approved intake creation, seeded readiness tasks, handover audit events, and live handover-task status updates
 - Added the next persisted handover slice with milestone planning, customer-update approval boundaries, linked audit events, and live handover milestone/customer-boundary controls
 - Added the next persisted handover slice with appointment planning, internal confirmation, linked audit events, and live handover appointment controls
@@ -169,6 +170,7 @@
 - The first persisted Phase 2 slice uses local `PGlite` with Drizzle for safe local development while keeping PostgreSQL as the production persistence target
 - Website lead intake is the first persistence-backed workflow boundary before qualification, scheduling, or follow-up automation are introduced
 - The first background-automation slice uses a local `PGlite` queue model in `apps/worker` before Redis or BullMQ are introduced
+- Real provider boundaries must fail closed when configuration is absent: cases stay visible, but outbound WhatsApp and calendar booking state must persist as blocked or failed rather than silently succeeding
 - The web app intentionally falls back to seeded demo data when `apps/api` is unavailable so the premium shell remains buildable and demo-safe
 - The first persisted handover boundary starts only from document-complete cases and now includes milestone planning, approval-only customer-update readiness, internal appointment planning or confirmation, and dispatch-ready preparation, while provider sending and completion automation remain deferred
 - Handover appointment planning is gated by approved scheduling readiness and internal confirmation is gated by a separate approved confirmation boundary

@@ -42,12 +42,12 @@ import {
   sidebarLinkSummaryClassName,
   sidebarLinkTitleClassName,
   sidebarStackClassName,
-  skipLinkClassName
+  skipLinkClassName,
+  StatusBadge
 } from "@real-estate-ai/ui";
 
 import { OperatorRoleSwitcher } from "@/components/operator-role-switcher";
 import { replacePathLocale } from "@/lib/locale";
-import { getQaWorkspaceCopy } from "@/lib/qa-workspace";
 
 export function AppChrome(props: {
   children: ReactNode;
@@ -56,30 +56,55 @@ export function AppChrome(props: {
   messages: AppMessages;
 }) {
   const pathname = usePathname();
-  const qaWorkspaceCopy = getQaWorkspaceCopy(props.locale);
-  const navigation = [
+  const navigationSummary = {
+    dashboard:
+      props.locale === "ar"
+        ? "لقطة سريعة لصحة واتساب، الإشارات المتأخرة، والحجز."
+        : "Quick snapshot of WhatsApp health, overdue signals, and booking state.",
+    landing:
+      props.locale === "ar"
+        ? "التقاط من الموقع إلى محادثة واتساب واحدة واضحة."
+        : "Website capture into one clear WhatsApp thread.",
+    leads:
+      props.locale === "ar"
+        ? "صندوق واتساب الحي مع آخر وارد، حالة التسليم، والخطوة التالية."
+        : "Live WhatsApp inbox with inbound activity, delivery state, and the next action.",
+    manager:
+      props.locale === "ar"
+        ? "تعثر الإرسال، صمت العميل، وفشل الحجز في طابور تدخل واحد."
+        : "Delivery failures, customer silence, and booking breakdowns in one intervention queue.",
+    qa:
+      props.locale === "ar"
+        ? "مراجعة الحدود الحساسة وتعليق الإرسال المؤتمت عند الحاجة."
+        : "Review sensitive boundaries and hold automated sends when needed."
+  };
+  const contextSignals =
+    props.locale === "ar"
+      ? ["واتساب أولاً", "الموقع إلى المحادثة", "متابعة المدير ظاهرة"]
+      : ["WhatsApp first", "Website to thread", "Manager follow-up visible"];
+  const navigationItems = [
     {
       href: `/${props.locale}`,
       label: props.messages.navigation.landing,
-      summary: props.messages.landing.summary,
+      summary: navigationSummary.landing,
       visible: true
     },
     {
       href: `/${props.locale}/dashboard`,
       label: props.messages.navigation.dashboard,
-      summary: props.messages.dashboard.title,
-      visible: true
+      summary: navigationSummary.dashboard,
+      visible: false
     },
     {
       href: `/${props.locale}/leads`,
       label: props.messages.navigation.leads,
-      summary: props.messages.leads.title,
+      summary: navigationSummary.leads,
       visible: canOperatorRoleAccessWorkspace("sales", props.currentOperatorRole)
     },
     {
       href: `/${props.locale}/manager`,
       label: props.messages.navigation.manager,
-      summary: props.messages.manager.title,
+      summary: navigationSummary.manager,
       visible:
         canOperatorRoleAccessWorkspace("manager_revenue", props.currentOperatorRole) ||
         canOperatorRoleAccessWorkspace("manager_handover", props.currentOperatorRole)
@@ -87,14 +112,19 @@ export function AppChrome(props: {
     {
       href: `/${props.locale}/qa`,
       label: props.messages.navigation.qa,
-      summary: qaWorkspaceCopy.title,
-      visible: canOperatorRoleAccessWorkspace("qa", props.currentOperatorRole)
+      summary: navigationSummary.qa,
+      visible:
+        canOperatorRoleAccessWorkspace("qa", props.currentOperatorRole) &&
+        !canOperatorRoleAccessWorkspace("sales", props.currentOperatorRole) &&
+        !canOperatorRoleAccessWorkspace("manager_revenue", props.currentOperatorRole) &&
+        !canOperatorRoleAccessWorkspace("manager_handover", props.currentOperatorRole)
     }
-  ].filter((item) => item.visible);
+  ];
+  const navigation = navigationItems.filter((item) => item.visible);
   const isActiveNavigationItem = (href: string) => pathname === href || (href !== `/${props.locale}` && pathname.startsWith(`${href}/`));
   const activeNavigationItem =
-    navigation.find((item) => isActiveNavigationItem(item.href)) ??
-    navigation.find((item) => item.href === `/${props.locale}`) ??
+    navigationItems.find((item) => isActiveNavigationItem(item.href)) ??
+    navigationItems.find((item) => item.href === `/${props.locale}`) ??
     navigation[0];
 
   return (
@@ -113,7 +143,13 @@ export function AppChrome(props: {
                 {activeNavigationItem ? <span className={chromeWorkspaceBadgeClassName}>{activeNavigationItem.label}</span> : null}
               </div>
               <strong className={chromeBrandTitleClassName}>{props.messages.app.name}</strong>
-              <p className={chromeBrandCopyClassName}>{props.messages.app.shellNote}</p>
+              <p className={chromeBrandCopyClassName}>
+                {props.messages.app.shellNote}
+                {" "}
+                {props.locale === "ar"
+                  ? "واتساب هو طبقة التواصل الحية الافتراضية عبر الصندوق، المتابعة، والتصعيد."
+                  : "WhatsApp is the default live communication layer across inbox, follow-up, and escalation."}
+              </p>
             </div>
 
             <div className={chromeActionsClassName}>
@@ -150,6 +186,13 @@ export function AppChrome(props: {
 
           {activeNavigationItem ? (
             <div className={chromeContextBarClassName}>
+              <div className="flex flex-wrap items-center gap-2">
+                {contextSignals.map((signal, index) => (
+                  <StatusBadge key={signal} tone={index === contextSignals.length - 1 ? "success" : "neutral"}>
+                    {signal}
+                  </StatusBadge>
+                ))}
+              </div>
               <p className={chromeContextTitleClassName}>{activeNavigationItem.label}</p>
               <p className={chromeContextSummaryClassName}>{activeNavigationItem.summary}</p>
             </div>

@@ -62,10 +62,30 @@ export default async function SchedulePage(props: PageProps) {
   const persistedCase = await tryGetPersistedCaseDetail(caseId);
 
   if (persistedCase) {
+    const booking = persistedCase.currentVisit?.booking ?? null;
+    const bookingStatusLabel =
+      booking?.status === "confirmed"
+        ? locale === "ar"
+          ? "مؤكد في تقويم Google"
+          : "Confirmed in Google Calendar"
+        : booking?.status === "blocked"
+          ? locale === "ar"
+            ? "ينتظر بيانات عميل Google Calendar"
+            : "Awaiting client Google Calendar credentials"
+        : booking?.status === "failed"
+          ? locale === "ar"
+            ? "فشل ربط تقويم Google"
+            : "Google Calendar failed"
+          : booking?.status === "pending"
+            ? locale === "ar"
+              ? "بانتظار تقويم Google"
+              : "Google Calendar pending"
+            : null;
+
     return (
       <div className={pageStackClassName}>
         <ScreenIntro badge={buildCaseReferenceCode(persistedCase.caseId)} summary={messages.schedule.summary} title={messages.schedule.title} />
-        <CaseRouteTabs caseId={persistedCase.caseId} handoverCaseId={persistedCase.handoverCase?.handoverCaseId} locale={locale} />
+        <CaseRouteTabs caseId={persistedCase.caseId} locale={locale} />
 
         <div className={twoColumnGridClassName}>
           <Panel title={messages.common.visitReadiness}>
@@ -79,7 +99,21 @@ export default async function SchedulePage(props: PageProps) {
                       : "The case now has a persisted visit that managers can inspect directly from the live alpha workflow."
                   }
                   title={persistedCase.currentVisit.location}
-                />
+                >
+                  {bookingStatusLabel ? (
+                    <HighlightNotice tone={booking?.status === "failed" ? "warning" : booking?.status === "blocked" ? "ai" : "brand"}>
+                      {bookingStatusLabel}
+                    </HighlightNotice>
+                  ) : null}
+                  {booking?.failureCode === "client_credentials_pending" ? (
+                    <p className={detailLabelClassName}>
+                      {locale === "ar"
+                        ? "تم تنفيذ مسار الربط البرمجي بالكامل، لكنه سيبقى في وضع الانتظار إلى أن يضيف العميل بيانات Google Calendar الخاصة به."
+                        : "The booking integration path is implemented, but it stays in waiting mode until the client adds their Google Calendar credentials."}
+                    </p>
+                  ) : null}
+                  {booking?.failureDetail ? <p className={detailLabelClassName}>{booking.failureDetail}</p> : null}
+                </WorkflowCard>
               </WorkflowPanelBody>
             ) : (
               <WorkflowPanelBody
@@ -111,7 +145,7 @@ export default async function SchedulePage(props: PageProps) {
   return (
     <div className={pageStackClassName}>
       <ScreenIntro badge={caseItem.referenceCode} summary={messages.schedule.summary} title={messages.schedule.title} />
-      <CaseRouteTabs caseId={caseItem.id} handoverCaseId={caseItem.handoverCaseId} locale={locale} />
+      <CaseRouteTabs caseId={caseItem.id} locale={locale} />
 
       <div className={twoColumnGridClassName}>
         <Panel title={messages.common.visitReadiness}>

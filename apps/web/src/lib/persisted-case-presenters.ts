@@ -165,6 +165,78 @@ export function buildPersistedConversation(caseDetail: PersistedCaseDetail, loca
     });
   }
 
+  for (const event of caseDetail.auditEvents.filter((auditEvent) => auditEvent.eventType.startsWith("whatsapp_"))) {
+    if (event.eventType === "whatsapp_inbound_received") {
+      const textBody = typeof event.payload?.textBody === "string" ? event.payload.textBody : null;
+
+      if (!textBody) {
+        continue;
+      }
+
+      conversation.push({
+        body: {
+          ar: textBody,
+          en: textBody
+        },
+        id: `${caseDetail.caseId}-${event.createdAt}-whatsapp-inbound`,
+        sender: "customer",
+        state: {
+          ar: "رسالة واردة عبر واتساب",
+          en: "Inbound WhatsApp message"
+        },
+        timestamp: formatTimestamp(event.createdAt, locale)
+      });
+      continue;
+    }
+
+    const messageBody = typeof event.payload?.messageBody === "string" ? event.payload.messageBody : null;
+    const sender = event.payload?.origin === "manager" ? "manager" : "automation";
+    const senderName = typeof event.payload?.sentByName === "string" ? event.payload.sentByName : null;
+
+    if (!messageBody) {
+      continue;
+    }
+
+    const state =
+      event.eventType === "whatsapp_message_sent"
+        ? sender === "manager"
+          ? {
+              ar: "تم إرسال رد واتساب من المسؤول",
+              en: "Manager WhatsApp reply sent"
+            }
+          : {
+              ar: "أرسل النظام رسالة واتساب",
+              en: "System sent a WhatsApp message"
+            }
+        : event.eventType === "whatsapp_message_delivered"
+          ? {
+              ar: "تم تسليم رسالة واتساب",
+              en: "WhatsApp message delivered"
+            }
+          : {
+              ar: "فشل إرسال رسالة واتساب",
+              en: "WhatsApp message failed"
+            };
+
+    conversation.push({
+      body: {
+        ar: messageBody,
+        en: messageBody
+      },
+      id: `${caseDetail.caseId}-${event.createdAt}-${event.eventType}`,
+      sender,
+      state,
+      timestamp: formatTimestamp(event.createdAt, locale)
+    });
+
+    if (sender === "manager" && senderName) {
+      conversation[conversation.length - 1]!.state = {
+        ar: `${conversation[conversation.length - 1]!.state?.ar ?? ""} · ${senderName}`,
+        en: `${conversation[conversation.length - 1]!.state?.en ?? ""} · ${senderName}`
+      };
+    }
+  }
+
   return conversation;
 }
 
@@ -753,6 +825,82 @@ export function getPersistedSourceLabel(locale: SupportedLocale) {
   return getSourceLabel(locale);
 }
 
+export function getPersistedChannelStatusLabel(
+  locale: SupportedLocale,
+  channelSummary: PersistedCaseDetail["channelSummary"] | PersistedCaseSummary["channelSummary"]
+) {
+  if (!channelSummary) {
+    return locale === "ar" ? "لا توجد قناة مباشرة بعد" : "No live channel yet";
+  }
+
+  if (channelSummary.latestOutboundStatus === "delivered") {
+    return locale === "ar" ? "واتساب تم تسليمه" : "WhatsApp delivered";
+  }
+
+  if (channelSummary.latestOutboundStatus === "sent") {
+    return locale === "ar" ? "واتساب مرسل" : "WhatsApp sent";
+  }
+
+  if (channelSummary.latestOutboundStatus === "queued" || channelSummary.latestOutboundStatus === "sending") {
+    return locale === "ar" ? "واتساب قيد المعالجة" : "WhatsApp pending";
+  }
+
+  if (channelSummary.latestOutboundStatus === "failed") {
+    return locale === "ar" ? "فشل واتساب" : "WhatsApp failed";
+  }
+
+  if (channelSummary.latestOutboundStatus === "blocked") {
+    return channelSummary.latestOutboundBlockReason === "missing_phone"
+      ? locale === "ar"
+        ? "واتساب متوقف بسبب غياب الرقم"
+        : "WhatsApp blocked by missing phone"
+      : channelSummary.latestOutboundBlockReason === "client_credentials_pending"
+        ? locale === "ar"
+          ? "واتساب ينتظر بيانات عميل التكامل"
+          : "WhatsApp awaiting client credentials"
+      : channelSummary.latestOutboundBlockReason === "qa_hold"
+        ? locale === "ar"
+          ? "واتساب متوقف بانتظار الجودة"
+          : "WhatsApp blocked by QA"
+        : locale === "ar"
+          ? "واتساب متوقف لأن الأتمتة موقوفة"
+          : "WhatsApp blocked while automation is paused";
+  }
+
+  return locale === "ar" ? "قناة الويب فقط" : "Website only";
+}
+
+export function getPersistedChannelStatusNote(
+  locale: SupportedLocale,
+  channelSummary: PersistedCaseDetail["channelSummary"] | PersistedCaseSummary["channelSummary"]
+) {
+  if (!channelSummary) {
+    return null;
+  }
+
+  if (channelSummary.latestOutboundFailureDetail) {
+    if (channelSummary.latestOutboundFailureCode === "client_credentials_pending") {
+      return locale === "ar"
+        ? "المسار البرمجي لواتساب جاهز، لكنه ينتظر بيانات العميل الفعلية للتفعيل."
+        : "The WhatsApp code path is ready, but it is waiting for real client credentials before activation.";
+    }
+
+    return channelSummary.latestOutboundFailureDetail;
+  }
+
+  if (channelSummary.lastInboundAt) {
+    return locale === "ar"
+      ? `آخر رسالة واردة ${formatDateTime(channelSummary.lastInboundAt, locale)}`
+      : `Last inbound message ${formatDateTime(channelSummary.lastInboundAt, locale)}`;
+  }
+
+  if (channelSummary.contactValue) {
+    return channelSummary.contactValue;
+  }
+
+  return null;
+}
+
 export function getPersistedFollowUpLabel(locale: SupportedLocale, caseSummary: PersistedCaseDetail | PersistedCaseSummary) {
   return getFollowUpStatusLabel(locale, caseSummary.followUpStatus);
 }
@@ -958,6 +1106,26 @@ function describeAuditEvent(
         detail: "تم حفظ قرار مراجعة الجودة وإبقاء النتيجة ظاهرة في سجل الحالة.",
         title: "إغلاق مراجعة الجودة"
       },
+      whatsapp_inbound_received: {
+        detail: "تمت مزامنة رسالة واتساب واردة مع هذه الحالة عبر رقم الهاتف المطابق.",
+        title: "رسالة واتساب واردة"
+      },
+      whatsapp_message_delivered: {
+        detail: "أكد مزود واتساب أن الرسالة الأخيرة وصلت إلى العميل.",
+        title: "تسليم واتساب مؤكد"
+      },
+      whatsapp_message_failed: {
+        detail: "فشل إرسال أو تسليم آخر رسالة واتساب وبقيت الحالة بحاجة إلى متابعة تشغيلية.",
+        title: "فشل رسالة واتساب"
+      },
+      whatsapp_message_send_requested: {
+        detail: "تم تجهيز رسالة واتساب جديدة لهذه الحالة وإدخالها في مسار الإرسال الحي.",
+        title: "طلب إرسال واتساب"
+      },
+      whatsapp_message_sent: {
+        detail: "قبل مزود واتساب آخر رسالة صادرة لهذه الحالة وتنتظر الآن التسليم النهائي أو الرد الوارد.",
+        title: "إرسال واتساب"
+      },
       visit_scheduled: {
         detail: "تم ربط الحالة بموعد زيارة فعلي مع الموقع المحدد.",
         title: "موعد زيارة محفوظ"
@@ -1083,6 +1251,26 @@ function describeAuditEvent(
       qa_review_resolved: {
         detail: "The QA decision was saved and kept visible on the live case record.",
         title: "QA review resolved"
+      },
+      whatsapp_inbound_received: {
+        detail: "An inbound WhatsApp message was synchronized onto this case using the matched phone number.",
+        title: "Inbound WhatsApp message"
+      },
+      whatsapp_message_delivered: {
+        detail: "WhatsApp confirmed that the latest outbound message reached the customer.",
+        title: "WhatsApp delivered"
+      },
+      whatsapp_message_failed: {
+        detail: "The latest WhatsApp message failed to send or deliver and the case still needs operational follow-up.",
+        title: "WhatsApp failed"
+      },
+      whatsapp_message_send_requested: {
+        detail: "A new WhatsApp message was prepared for this case and queued into the live delivery pipeline.",
+        title: "WhatsApp queued"
+      },
+      whatsapp_message_sent: {
+        detail: "WhatsApp accepted the latest outbound message for this case and it is now waiting on delivery or customer response.",
+        title: "WhatsApp sent"
       },
       visit_scheduled: {
         detail: "The case now has a scheduled visit with a saved location and time.",

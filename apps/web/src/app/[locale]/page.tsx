@@ -36,6 +36,48 @@ export default async function LandingPage(props: PageProps) {
   const messages = getMessages(locale);
   const persistedCases = await tryListPersistedCases();
   const highlightedCases = persistedCases.slice(0, 3);
+  const whatsappSignals =
+    locale === "ar"
+      ? [
+          {
+            detail: "من نموذج الموقع إلى أول رد واتساب خلال نفس المسار التشغيلي.",
+            label: "أول رد واتساب"
+          },
+          {
+            detail: "حالة الإرسال والتسليم والفشل تظهر بوضوح قبل أن يتوه العميل من الفريق.",
+            label: "وضوح حالة التسليم"
+          },
+          {
+            detail: "الزيارة والتأهيل والمستندات تبقى مرتبطة بنفس الخط الزمني ونفس المالك.",
+            label: "ارتباط كامل للحالة"
+          }
+        ]
+      : [
+          {
+            detail: "Website intake opens the case and triggers the first WhatsApp reply on the same operating path.",
+            label: "WhatsApp first reply"
+          },
+          {
+            detail: "Queued, sent, delivered, and failed states stay visible before the customer falls through the cracks.",
+            label: "Delivery-state proof"
+          },
+          {
+            detail: "Visit booking, qualification, and documents stay correlated to one timeline and one owner.",
+            label: "Correlated case flow"
+          }
+        ];
+  const spotlightBadges =
+    locale === "ar"
+      ? ["واتساب هو القناة الأساسية", "تزامن تقويم جوجل", "تصعيد المدير ظاهر"]
+      : ["WhatsApp is primary", "Google Calendar synced", "Manager escalation visible"];
+  const liveAlphaSummary =
+    locale === "ar"
+      ? "أرسل عميلاً من الموقع لترى الحالة تدخل مباشرة إلى مسار واتساب الحي مع متابعة، وجدولة، وإشارات تدخل إدارية واضحة."
+      : "Submit a website lead and watch it enter the live WhatsApp operating path with follow-up, scheduling, and explicit manager intervention signals.";
+  const inboxSummary =
+    locale === "ar"
+      ? "هذا الصندوق ليس قائمة أسماء فقط. إنه سطح واتساب الحي: حالة الإرسال، آخر رد وارد، الخطوة التالية، والجاهزية قبل الزيارة."
+      : "This inbox is not just a lead list. It is the live WhatsApp operating surface: delivery state, latest inbound reply, next action, and readiness before the visit.";
 
   return (
     <div className={pageStackClassName}>
@@ -54,45 +96,21 @@ export default async function LandingPage(props: PageProps) {
 
             <div className="space-y-5">
               <div className={heroActionsClassName}>
-                <Link className={primaryLinkClassName} href={`/${locale}/dashboard`}>
+                <Link className={primaryLinkClassName} href={`/${locale}/leads`}>
                   {messages.landing.primaryAction}
                 </Link>
-                <Link className={secondaryLinkClassName} href={`/${locale}/leads`}>
+                <Link className={secondaryLinkClassName} href={`/${locale}/manager`}>
                   {messages.landing.secondaryAction}
                 </Link>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-4xl border border-white/70 bg-white/85 p-4 shadow-panel">
-                  <p className="text-xs font-semibold tracking-[0.18em] text-sand-700">
-                    {locale === "ar" ? "استجابة متعددة القنوات" : "Multi-channel response"}
-                  </p>
-                  <p className="mt-2 text-sm leading-7 text-ink-soft">
-                    {locale === "ar"
-                      ? "من الموقع، واتساب، والبريد إلى مسار موحد للرد والمتابعة."
-                      : "Website, WhatsApp, and email converge into one trusted response and follow-up flow."}
-                  </p>
-                </div>
-                <div className="rounded-4xl border border-white/70 bg-white/85 p-4 shadow-panel">
-                  <p className="text-xs font-semibold tracking-[0.18em] text-sand-700">
-                    {locale === "ar" ? "حوكمة بشرية واضحة" : "Visible human governance"}
-                  </p>
-                  <p className="mt-2 text-sm leading-7 text-ink-soft">
-                    {locale === "ar"
-                      ? "الجودة، الموافقات، والتدخلات تظل صريحة وقابلة للتدقيق."
-                      : "QA, approvals, and interventions stay explicit and auditable."}
-                  </p>
-                </div>
-                <div className="rounded-4xl border border-white/70 bg-white/85 p-4 shadow-panel">
-                  <p className="text-xs font-semibold tracking-[0.18em] text-sand-700">
-                    {locale === "ar" ? "تشغيل جاهز للسوق السعودي" : "Saudi-ready operations"}
-                  </p>
-                  <p className="mt-2 text-sm leading-7 text-ink-soft">
-                    {locale === "ar"
-                      ? "تجربة عربية أولاً مع واجهة ثنائية اللغة جاهزة للفرق التشغيلية."
-                      : "Arabic-first UX with bilingual control surfaces ready for daily operations."}
-                  </p>
-                </div>
+                {whatsappSignals.map((signal) => (
+                  <div key={signal.label} className="rounded-4xl border border-white/70 bg-white/85 p-4 shadow-panel">
+                    <p className="text-xs font-semibold tracking-[0.18em] text-sand-700">{signal.label}</p>
+                    <p className="mt-2 text-sm leading-7 text-ink-soft">{signal.detail}</p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -107,8 +125,11 @@ export default async function LandingPage(props: PageProps) {
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge tone="warning">{messages.common.demoState}</StatusBadge>
-                <StatusBadge>{locale === "ar" ? "تشغيل عربي أولاً" : "Arabic-first operations"}</StatusBadge>
-                <StatusBadge tone="success">{locale === "ar" ? "واجهة موثوقة" : "Trusted operator UX"}</StatusBadge>
+                {spotlightBadges.map((badge, index) => (
+                  <StatusBadge key={badge} tone={index === spotlightBadges.length - 1 ? "success" : "neutral"}>
+                    {badge}
+                  </StatusBadge>
+                ))}
               </div>
               <div className={metricGridCompactClassName}>
                 {demoDataset.dashboardMetrics.map((metric) => (
@@ -130,14 +151,22 @@ export default async function LandingPage(props: PageProps) {
       <div className={twoColumnGridClassName}>
         <Panel title={messages.landing.liveAlphaTitle}>
           <div className="mt-4 space-y-5">
-            <p className={panelSummaryClassName}>{messages.landing.liveAlphaSummary}</p>
+            <p className={panelSummaryClassName}>{liveAlphaSummary}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge tone="success">{locale === "ar" ? "بدء محادثة واتساب" : "Start WhatsApp thread"}</StatusBadge>
+              <StatusBadge>{locale === "ar" ? "التقاط من الموقع" : "Website capture"}</StatusBadge>
+            </div>
             <LeadCaptureForm locale={locale} />
           </div>
         </Panel>
 
         <Panel title={messages.leads.title}>
           <div className="mt-4 space-y-5">
-            <p className={panelSummaryClassName}>{messages.leads.summary}</p>
+            <p className={panelSummaryClassName}>{inboxSummary}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge>{locale === "ar" ? "آخر رد واتساب" : "Latest WhatsApp reply"}</StatusBadge>
+              <StatusBadge tone="warning">{locale === "ar" ? "تعثر التسليم ظاهر" : "Delivery failures visible"}</StatusBadge>
+            </div>
             {highlightedCases.length > 0 ? (
               <StatefulStack
                 emptySummary={messages.states.emptyCasesSummary}

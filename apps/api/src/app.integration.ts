@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { operatorSessionHeaderName, type OperatorRole } from "@real-estate-ai/contracts";
 import { createOperatorSessionToken } from "@real-estate-ai/contracts/operator-session";
+import { createMetaWhatsAppWebhookSignature } from "@real-estate-ai/integrations";
 
 import { buildApiApp } from "./app";
 
@@ -52,6 +53,8 @@ describe("lead capture api", () => {
 
     expect(createdCase.stage).toBe("new");
     expect(createdCase.source).toBe("website");
+    expect(createdCase.channelSummary?.latestOutboundStatus).toBe("queued");
+    expect(createdCase.channelSummary?.channel).toBe("whatsapp");
     expect(createdCase.ownerName).toBe("Revenue Ops Queue");
     expect(createdCase.followUpStatus).toBe("on_track");
     expect(createdCase.automationStatus).toBe("active");
@@ -68,6 +71,132 @@ describe("lead capture api", () => {
     expect(detailResponse.json().documentRequests).toHaveLength(3);
     expect(detailResponse.json().managerInterventions).toHaveLength(0);
     expect(detailResponse.json().handoverCase).toBeNull();
+    expect(detailResponse.json().channelSummary?.contactValue).toBe("+15550100");
+  });
+
+  it("persists Google Calendar confirmation state after scheduling a visit", async () => {
+    const calendarApp = buildApiApp({
+      calendarClient: {
+        createBooking: async () => ({
+          confirmedAt: "2026-04-19T10:00:00.000Z",
+          kind: "confirmed",
+          providerEventId: "google-event-1"
+        })
+      },
+      store
+    });
+
+    const createResponse = await calendarApp.inject({
+      method: "POST",
+      payload: {
+        customerName: "Sara Malik",
+        email: "sara@example.com",
+        message: "Please share the next visit slot for the waterfront units.",
+        phone: "+966 55 123 4567",
+        preferredLocale: "en",
+        projectInterest: "Waterfront Towers"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const createdCase = createResponse.json();
+    const visitResponse = await calendarApp.inject({
+      method: "POST",
+      payload: {
+        location: "Sales Gallery",
+        scheduledAt: "2026-04-20T09:00:00.000Z"
+      },
+      url: `/v1/cases/${createdCase.caseId}/visits`
+    });
+
+    expect(visitResponse.statusCode).toBe(200);
+    expect(visitResponse.json().currentVisit?.booking?.status).toBe("confirmed");
+    expect(visitResponse.json().currentVisit?.booking?.provider).toBe("google_calendar");
+    expect(visitResponse.json().currentVisit?.booking?.providerEventId).toBe("google-event-1");
+
+    await calendarApp.close();
+  });
+
+  it("marks visit booking as blocked when client calendar credentials are not configured yet", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      payload: {
+        customerName: "Mariam Saleh",
+        email: "mariam@example.com",
+        message: "Please lock the earliest viewing slot for this week.",
+        phone: "+966 55 765 4321",
+        preferredLocale: "en",
+        projectInterest: "Palm Courtyard"
+      },
+      url: "/v1/website-leads"
+    });
+
+    const createdCase = createResponse.json();
+    const visitResponse = await app.inject({
+      method: "POST",
+      payload: {
+        location: "Experience Center",
+        scheduledAt: "2026-04-20T11:00:00.000Z"
+      },
+      url: `/v1/cases/${createdCase.caseId}/visits`
+    });
+
+    expect(visitResponse.statusCode).toBe(200);
+    expect(visitResponse.json().currentVisit?.booking?.status).toBe("blocked");
+    expect(visitResponse.json().currentVisit?.booking?.failureCode).toBe("client_credentials_pending");
+  });
+
+  it("accepts a signed Meta WhatsApp webhook callback when an app secret is configured", async () => {
+    const signedWebhookApp = buildApiApp({
+      store,
+      whatsappWebhookAppSecret: "meta-app-secret"
+    });
+    const payload = JSON.stringify({
+      entry: []
+    });
+    const response = await signedWebhookApp.inject({
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": createMetaWhatsAppWebhookSignature({
+          appSecret: "meta-app-secret",
+          rawBody: payload
+        })
+      },
+      method: "POST",
+      payload,
+      url: "/v1/integrations/meta/whatsapp/webhook"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      received: true
+    });
+
+    await signedWebhookApp.close();
+  });
+
+  it("rejects an unsigned or invalid Meta WhatsApp webhook callback when an app secret is configured", async () => {
+    const signedWebhookApp = buildApiApp({
+      store,
+      whatsappWebhookAppSecret: "meta-app-secret"
+    });
+    const payload = JSON.stringify({
+      entry: []
+    });
+    const response = await signedWebhookApp.inject({
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": "sha256=invalid"
+      },
+      method: "POST",
+      payload,
+      url: "/v1/integrations/meta/whatsapp/webhook"
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json().error).toBe("webhook_signature_invalid");
+
+    await signedWebhookApp.close();
   });
 
   it("automatically opens a QA review when the inbound message matches policy triggers", async () => {
@@ -389,6 +518,7 @@ describe("lead capture api", () => {
         customerName: "Hadiya Noor",
         email: "hadiya@example.com",
         message: "Please confirm the reservation process and next payment step.",
+        phone: "+966551234567",
         preferredLocale: "en",
         projectInterest: "Canal Heights"
       },
@@ -455,6 +585,9 @@ describe("lead capture api", () => {
     expect(sendResponse.statusCode).toBe(200);
     expect(sendResponse.json().nextAction).toBe(nextAction);
     expect(sendResponse.json().nextActionDueAt).toBe(nextActionDueAt);
+    expect(sendResponse.json().channelSummary?.channel).toBe("whatsapp");
+    expect(sendResponse.json().channelSummary?.latestOutboundStatus).toBe("queued");
+    expect(sendResponse.json().channelSummary?.latestOutboundMessage).toBe(approvedDraftMessage);
     expect(sendResponse.json().latestHumanReply).toEqual({
       approvedFromQa: true,
       message: approvedDraftMessage,
@@ -470,6 +603,8 @@ describe("lead capture api", () => {
     });
 
     expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json().channelSummary?.latestOutboundStatus).toBe("queued");
+    expect(detailResponse.json().channelSummary?.latestOutboundMessage).toBe(approvedDraftMessage);
     expect(detailResponse.json().latestHumanReply).toEqual({
       approvedFromQa: true,
       message: approvedDraftMessage,

@@ -2,124 +2,148 @@
 
 ## Purpose
 
-Translate the product specification into a realistic sequence of implementation phases that can be executed cleanly from this empty repository.
+Translate the product specification into a realistic execution sequence that proves one commercially useful wedge before broadening the platform.
 
 ## Planning Assumptions
 
-- Start narrow and ship a polished first slice
-- Avoid real provider integrations until the product shell and workflow language are stable
-- Use the demo phase to lock UX, route structure, domain vocabulary, and testing habits
-- Treat bilingual quality and auditability as first-order concerns from the start
+- start with one ICP and one narrow workflow
+- prioritize real operational value over broad surface coverage
+- prove the product with real channels before expanding workflow depth
+- treat bilingual Arabic and English quality as a first-order product advantage
+- keep handover in the long-term vision but out of the near-term critical path
 
-## Exact First Implementation Phase
+## Exact Next Product Phase
 
-### Phase 1A: Flagship Demo Core
+### Phase 1: Focus Reset And MVP Narrowing
 
-This is the first implementation phase.
+This is the immediate next product phase.
 
-Its job is to create a polished, bilingual, fixture-backed product shell that proves the visual story, route structure, and core workflow vocabulary without claiming real automation or production integrations.
+Its job is to lock the product around the primary ICP and freeze the near-term MVP so future work is judged against the core wedge instead of broad platform ambition.
 
-## Phase 1A In Scope
+## Phase 1 In Scope
 
-- Monorepo foundation for the first buildable packages and apps
-- Next.js web app with English and Arabic routing
-- Premium shared UI system tuned for dashboard, inbox, timeline, document, and handover views
-- Seeded fixture data representing realistic leads, visits, document blockers, and handover states
-- Route-level experience for:
-  - home dashboard
+- rewrite the product story around Saudi developer sales and leasing teams
+- narrow the near-term MVP to:
   - lead inbox
-  - lead or prospect profile
-  - conversation console
-  - scheduling view
-  - document center
-  - handover workspace
-  - manager command center
-- Human takeover states and visible automation status states in the UI
-- Responsive desktop and laptop layouts with usable tablet fallbacks
-- Playwright smoke coverage for the primary demo journeys
-- Basic accessibility, visual regression, and bilingual rendering checks for top-tier pages
+  - case timeline and conversation console
+  - manager SLA and risk queue
+  - document checklist
+- demote broad handover, executive, and governance surfaces from near-term roadmap priority
+- align product copy, route priorities, and design decisions with the core operational wedge
+- define the KPI proof set:
+  - first-response time
+  - 15-minute contact rate
+  - qualified-to-visit rate
+  - overdue follow-up rate
+  - average document completion time
 
-## Phase 1A Out Of Scope
+## Phase 1 Out Of Scope
 
-- Real authentication and organization management
-- Real database persistence
-- Real API and worker services
-- Real omnichannel ingestion
-- Real WhatsApp, email, SMS, calendar, storage, or CRM integrations
-- Real AI inference, live qualification scoring, or automated follow-up execution
-- Production approval engine
-- Full leasing workflow enforcement
-- Real document uploads
-- Multi-office enterprise controls
+- expanding the number of target buyer categories
+- treating the United States as a co-equal primary market
+- deeper handover execution workflow work
+- broader reporting suites beyond what supports the core wedge
+- new internal complexity justified only by the many-agent narrative
 
-## Phase 1A Exit Criteria
+## Phase 1 Exit Criteria
 
-- A high-quality demo can be run locally with convincing seeded data
-- English and Arabic routes both look intentional and stable
-- Core product surfaces feel coherent and premium
-- Navigation, page states, and key interaction patterns are set well enough that later backend work will not force a major redesign
-- Browser automation catches obvious regressions on the demo path
+- the source spec and roadmap clearly describe one primary ICP
+- the MVP is explicitly limited to the four core surfaces
+- non-core surfaces are clearly marked as deferred or secondary
+- KPI proof is defined and becomes the basis for roadmap decisions
 
-## Phase 1B: Demo Hardening
-
-- Improve motion, loading states, empty states, and responsive quality
-- Expand seeded analytics and state variants
-- Add higher-confidence visual regression coverage
-- Tighten design-system consistency before real backend work expands
-
-## Phase 2: Functional Alpha
+## Phase 2: Operational MVP With Real Channels
 
 ### Goal
 
-Make one workflow real end to end:
+Make the core workflow real end to end:
 
-`lead capture -> qualification -> visit scheduling -> follow-up visibility -> manager review`
+`lead capture -> bilingual response -> qualification -> scheduling -> follow-up visibility -> manager review`
 
 ### Scope
 
-- Introduce `apps/api`, `apps/worker`, `packages/contracts`, `packages/database`, and `packages/workflows`
-- Persist cases, conversations, visits, tasks, and audit events in PostgreSQL
-- Implement one ingestion path first, ideally website lead capture
-- Implement queue-backed follow-up and SLA checks
-- Add manager-visible state transitions and audit history
+- real website lead capture
+- real WhatsApp inbound and outbound messaging
+- case creation and ownership rules
+- qualification state capture
+- calendar-backed visit or call scheduling
+- follow-up rules, overdue detection, and manager queue visibility
+- audit trail for automated and human actions
 
 ### Exit Criteria
 
-- A new inbound lead can become a persisted case
-- Qualification data can be captured and reviewed
-- A visit can be scheduled and reflected in the case timeline
-- Overdue follow-up appears in manager views
-- Playwright and integration coverage protect the core alpha flow
+- a real inbound lead can become a persisted case through a live channel
+- the system can respond in Arabic or English through a real channel
+- a visit or call can be scheduled through a real calendar path
+- overdue follow-up appears in manager views with actionable context
+- core end-to-end tests protect the live workflow
 
-## Phase 3: Leasing And Document Workflows
+## Phase 3: Document Workflow Depth
 
-- Add leasing-specific qualification rules
-- Add document request and completeness tracking
-- Add rejection reasons and blocked-case visibility
-- Add Arabic-first leasing scenarios to test coverage
+### Goal
 
-## Phase 4: Handover Command Center
+Add the minimum document workflow needed to support the proven wedge.
 
-- Add handover case creation from upstream deal state
-- Add milestones, dependencies, blockers, and customer update flows
-- Add manager risk visibility for handover readiness
+### Scope
 
-## Phase 5: Enterprise Controls And Hardening
+- document request tracking
+- document upload and storage
+- requirement status visibility
+- rejection reasons and re-request handling
+- blocked-case visibility in case and manager views
 
-- Add stronger role and permission enforcement
-- Add QA sampling and approval rules
-- Add deeper analytics and reporting
-- Add provider adapters and operational retry tooling
-- Add stronger observability and release gates
+### Exit Criteria
+
+- required documents are visible from one checklist
+- missing, received, rejected, and complete states are manager-readable
+- document delays can be tied to owner, due date, and current blocker
+
+## Phase 4: Wedge-Supporting Controls And Reporting
+
+### Goal
+
+Add only the controls and analytics that directly improve the live operating workflow.
+
+### Scope
+
+- manager KPI reporting for the five proof metrics
+- minimal QA and escalation controls on risky automated paths
+- role and permission hardening on the live workflow
+- operational retry and failure visibility for live channels
+
+### Exit Criteria
+
+- design partners can see whether the product is improving the core KPIs
+- risky automated interactions can be paused, reviewed, and overridden safely
+- production debugging is practical for message, scheduling, and document failures
+
+## Phase 5: Handover Add-On
+
+### Goal
+
+Expand into handover only after the core sales and leasing operating wedge is proven.
+
+### Scope
+
+- handover case creation from upstream approved cases
+- milestones, dependencies, blockers, and customer update flows
+- manager readiness and risk visibility
+
+### Entry Rule
+
+Do not prioritize this phase until the core workflow is live with real integrations and the primary KPI set shows credible improvement for at least one design-partner deployment.
 
 ## Sequence Rules
 
-- Do not start provider integrations before Phase 2 core state and auditability are in place
-- Do not start heavy enterprise controls before the core operating flow is credible
-- Do not start payment, escrow, or financing layers in the initial roadmap
+- do not broaden ICP before proving the primary one
+- do not build deep handover workflow before real channel integrations exist
+- do not add broad governance and analytics suites before the core workflow is live
+- do not let internal multi-agent decomposition drive roadmap scope
+- do not start payment, escrow, or financing layers in the initial roadmap
 
 ## Recommended Delivery Rhythm
 
-- One narrow implementation phase at a time
-- Keep route structure and domain terms stable before broadening backend scope
-- Expand test coverage with every phase rather than deferring test discipline
+- one narrow product decision at a time
+- one commercially meaningful workflow at a time
+- one real-channel milestone before broader workflow depth
+- expand test coverage with each phase rather than deferring proof
