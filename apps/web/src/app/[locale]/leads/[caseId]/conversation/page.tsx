@@ -28,6 +28,9 @@ import { getPreferredOperatorSurfacePath } from "@/lib/operator-role";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import {
   buildCaseReferenceCode,
+  getPersistedAgentActionLabel,
+  getPersistedAgentStateNote,
+  getPersistedAgentStatusLabel,
   buildPersistedConversation,
   getPersistedChannelStatusLabel,
   getPersistedChannelStatusNote,
@@ -111,6 +114,9 @@ export default async function ConversationPage(props: PageProps) {
         : "A human reply cannot be saved while the current QA review is still open or requires follow-up.";
     const channelStatusLabel = getPersistedChannelStatusLabel(locale, persistedCase.channelSummary);
     const channelStatusNote = getPersistedChannelStatusNote(locale, persistedCase.channelSummary);
+    const agentStatusLabel = getPersistedAgentStatusLabel(locale, persistedCase.agentState);
+    const agentActionLabel = getPersistedAgentActionLabel(locale, persistedCase.agentState);
+    const agentStateNote = getPersistedAgentStateNote(locale, persistedCase.agentState);
 
     return (
       <div className={pageStackClassName}>
@@ -154,6 +160,25 @@ export default async function ConversationPage(props: PageProps) {
             ) : null}
           </WorkflowPanelBody>
         </Panel>
+
+        {agentStatusLabel || agentStateNote ? (
+          <Panel title={locale === "ar" ? "قرار الوكيل الأخير" : "Latest agent decision"}>
+            <WorkflowPanelBody className="mt-4">
+              <p className="text-sm leading-7 text-ink-soft">
+                {agentStatusLabel}
+                {agentActionLabel ? ` · ${agentActionLabel}` : ""}
+              </p>
+              {agentStateNote ? <p className={caseMetaClassName}>{agentStateNote}</p> : null}
+              {persistedCase.agentState?.nextWakeUpAt ? (
+                <p className={caseMetaClassName}>
+                  {locale === "ar" ? "الاستيقاظ التالي" : "Next wake-up"}
+                  {" · "}
+                  {persistedCase.agentState.nextWakeUpAt}
+                </p>
+              ) : null}
+            </WorkflowPanelBody>
+          </Panel>
+        ) : null}
 
         <div className={twoColumnGridClassName}>
           <Panel title={manualReplyCopy.title}>

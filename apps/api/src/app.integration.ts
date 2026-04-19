@@ -787,7 +787,7 @@ describe("lead capture api", () => {
       runAt: "2026-04-12T12:00:00.000Z"
     });
 
-    expect(followUpCycle.openedInterventions).toBe(1);
+    expect(followUpCycle.processedJobs).toBe(1);
 
     const sendResponse = await app.inject({
       headers: withOperatorSession("sales_manager"),

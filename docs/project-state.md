@@ -16,6 +16,7 @@
 - The web shell now resolves Arabic as the default locale on first entry, keeps locale-prefixed routes under `app/[locale]`, and persists explicit language choice through the `rea_locale` cookie instead of defaulting anonymous traffic to English
 - The API application is a Fastify service with schema-validated website lead intake, qualification, visit scheduling, follow-up-plan mutation, automation control, document state mutation, manager-readable case list and case detail endpoints, and persisted handover intake, milestone-planning, customer-update-boundary, and readiness-task endpoints
 - The worker application now processes both overdue follow-up watches and queued WhatsApp initial-reply jobs, with bounded retry handling and explicit failed-delivery state when provider sends do not complete
+- The worker now also runs a persisted `CaseAgentOrchestrator` loop for `new_lead`, `no_response_follow_up`, and `document_missing` triggers, with typed run records, compact case-agent memory, explicit manager-escalation boundaries, and WhatsApp transport delegated through the lower-level outbound queue
 - The current persisted alpha store uses Drizzle over local `PGlite` for safe Phase 2 and early Phase 3 development without introducing remote infrastructure
 - A shared `packages/integrations` layer is now live for Meta WhatsApp Cloud API send contracts, Meta webhook parsing, Google Calendar booking contracts, and shared phone normalization
 - The API now exposes Meta WhatsApp webhook endpoints plus provider-aware Google Calendar booking persistence, and the persisted store now tracks normalized lead phone numbers, case channel state, delivery status, and visit booking status
@@ -25,6 +26,7 @@
 - The codebase currently contains broader handover and governance slices than the updated product wedge; those slices remain implemented locally, but the near-term product plan is now intentionally narrower and should prioritize real-channel operational proof before more breadth
 - The web shell, landing page, and overview copy now explicitly present the product as a WhatsApp-first operating layer, with website intake, delivery visibility, and manager intervention framed around one live communication channel rather than a generic channel mix
 - Provider integration ownership is now explicitly client-managed: the WhatsApp and Google Calendar code paths are implemented, but absent credentials are represented as pending client configuration in runtime state and UI copy instead of being treated as opaque provider failure
+- Revenue case summaries and details now expose `agentState`, `agentRuns`, and `agentMemory`, and manager plus lead surfaces now render the latest agent status, recommended action, note, and next wake-up inside the narrowed four-surface MVP
 - Durable memory is kept in `docs/project-state.md`
 - Local working memory is kept in `docs/_local/current-session.md` and must remain uncommitted
 - Shared localization now lives behind typed domain resources in `packages/i18n`, with Arabic as the authored default, English as the secondary locale, and shared helpers for locale direction, labels, and formatter locale selection
@@ -48,6 +50,7 @@
 - Phase 3: document workflow depth with upload/storage, checklist visibility, rejection handling, and blocked-case management
 - Early document workflow coverage is already live locally through persisted document request tracking, queue-backed follow-up interventions, automation pause or resume controls, and manager follow-up reset actions
 - Phase 4: wedge-supporting controls and reporting tied directly to the live operational flow
+- The first production-style agent runtime is now live locally for the core wedge, so the next step should be improving the decision model and evaluation harness rather than adding another parallel rules engine
 - Phase 5: handover as an add-on workflow after the core wedge is proven with real integrations and KPI movement
 - Existing Phase 4 and Phase 5 handover/governance slices remain implemented locally, but they are no longer the near-term product priority
 - The first persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect post-completion review, aftercare follow-up, and archive mutations behind local handover-manager or admin control
@@ -226,6 +229,7 @@
 - Live revenue export recommendation carryover also remains a download-time web-layer concern, so forwarded-file rationale and owner-handoff context are derived from the active scope and filters rather than persisted as a second export artifact
 - Historical governance export packaging also remains a download-time web-layer concern, so audience framing, review focus, and activity summaries are derived from the current report filters and returned event list rather than stored as a separate reporting record
 - Shared export-summary primitives now remain a web-layer contract used by both live revenue and historical governance CSV paths, so common preamble rows and final CSV assembly stay aligned without introducing a persisted export-record model
+- Case-agent persistence now lives in `case_agent_memories` and `case_agent_runs`, while `automation_jobs` now carries resumable `case_agent_trigger` jobs alongside the lower-level follow-up watch and WhatsApp transport jobs
 - Export recipient variants now remain a web-layer concern layered onto that shared summary contract, so revenue and governance downloads can switch between manager, operations, and QA framing through query-scoped packaging rather than separate persisted export artifacts
 - Manager surfaces now expose explicit recipient-specific export choices for both historical governance CSVs and scoped live revenue batch CSVs, so operators can intentionally pick manager, operations, or QA packaging from the UI instead of relying only on context-driven defaults
 - Governance route state now preserves the selected export recipient across filter changes and operational-risk views, and live risk-export links now reuse that same selected recipient by default instead of resetting packaging intent between report-level and batch-level actions

@@ -1,5 +1,10 @@
 import type {
   ApproveHandoverCustomerUpdateInput,
+  CaseAgentActionType,
+  CaseAgentRiskLevel,
+  CaseAgentRunStatus,
+  CaseAgentToolExecutionStatus,
+  CaseAgentTriggerType,
   CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
   CreateHandoverBlockerInput,
@@ -20,6 +25,7 @@ import type {
   PersistedGovernanceEventList,
   PersistedGovernanceSummary,
   PersistedHandoverCaseDetail,
+  SupportedLocale,
   QualifyCaseInput,
   ResolveCaseQaReviewInput,
   ResolveHandoverCustomerUpdateQaReviewInput,
@@ -40,6 +46,7 @@ import type {
 import {
   deriveCustomerUpdateStatusFromMilestone,
   buildHandoverCustomerUpdateQaSampleSummary,
+  type CaseAgentCycleResult,
   detectHandoverCustomerUpdateQaPolicyMatches,
   deriveDocumentWorkflowNextAction,
   deriveHandoverCaseStatus,
@@ -260,6 +267,167 @@ export async function runPersistedFollowUpCycle(
     limit: input?.limit ?? 25,
     runAt: input?.runAt ?? new Date().toISOString()
   });
+}
+
+interface CaseAgentDecision {
+  actionType: CaseAgentActionType;
+  blockedReason: string | null;
+  confidence: number;
+  escalationReason: string | null;
+  proposedMessage: string | null;
+  proposedNextAction: string;
+  proposedNextActionDueAt: string;
+  rationaleSummary: string;
+  riskLevel: CaseAgentRiskLevel;
+  status: CaseAgentRunStatus;
+  toolExecutionStatus: CaseAgentToolExecutionStatus | null;
+  triggerType: CaseAgentTriggerType;
+}
+
+export async function runPersistedCaseAgentCycle(
+  store: LeadCaptureStore,
+  input?: {
+    canSendWhatsApp?: boolean;
+    limit?: number;
+    runAt?: string;
+  }
+): Promise<CaseAgentCycleResult> {
+  const runAt = input?.runAt ?? new Date().toISOString();
+  const dueJobs = await store.getDueAutomationJobs({
+    jobType: "case_agent_trigger",
+    limit: input?.limit ?? 25,
+    runAt
+  });
+
+  let blockedRuns = 0;
+  let escalatedRuns = 0;
+  let processedJobs = 0;
+  const touchedCaseIds = new Set<string>();
+
+  for (const job of dueJobs) {
+    processedJobs += 1;
+    touchedCaseIds.add(job.caseId);
+
+    const triggerType = readCaseAgentTriggerType(job.payload?.triggerType);
+    const caseDetail = await store.getCaseDetail(job.caseId);
+
+    await store.markAutomationJobCompleted(job.jobId, runAt);
+
+    if (!caseDetail || !triggerType) {
+      continue;
+    }
+
+    const startedAt = runAt;
+    const decision = decideCaseAgentAction(caseDetail, {
+      canSendWhatsApp: input?.canSendWhatsApp ?? false,
+      now: runAt,
+      triggerType
+    });
+
+    if (decision.status === "blocked") {
+      blockedRuns += 1;
+    }
+
+    if (decision.status === "escalated") {
+      escalatedRuns += 1;
+    }
+
+    if (decision.actionType === "send_whatsapp_message" && decision.proposedMessage) {
+      if (decision.toolExecutionStatus === "blocked") {
+        await store.recordWhatsAppOutboundAttempt(job.caseId, {
+          blockReason:
+            decision.blockedReason === "missing_phone"
+              ? "missing_phone"
+              : decision.blockedReason === "automation_paused"
+                ? "automation_paused"
+                : decision.blockedReason === "qa_hold"
+                  ? "qa_hold"
+                  : "client_credentials_pending",
+          failureCode: decision.blockedReason,
+          failureDetail: decision.rationaleSummary,
+          jobId: job.jobId,
+          messageBody: decision.proposedMessage,
+          origin: "system",
+          provider: "meta_whatsapp_cloud",
+          providerMessageId: null,
+          retryAfter: null,
+          sentByName: null,
+          status: "blocked",
+          updatedAt: runAt
+        });
+      } else {
+        await store.queueCaseAgentReply(job.caseId, {
+          agentRunId: job.jobId,
+          messageBody: decision.proposedMessage,
+          nextAction: decision.proposedNextAction,
+          nextActionDueAt: decision.proposedNextActionDueAt,
+          triggerType,
+          updatedAt: runAt
+        });
+      }
+    } else if (decision.actionType === "request_document_follow_up" || decision.actionType === "save_follow_up_plan") {
+      await store.saveCaseAgentFollowUp(job.caseId, {
+        agentRunId: job.jobId,
+        nextAction: decision.proposedNextAction,
+        nextActionDueAt: decision.proposedNextActionDueAt,
+        summary: decision.rationaleSummary,
+        triggerType,
+        updatedAt: runAt
+      });
+    } else if (decision.actionType === "create_reply_draft" && decision.proposedMessage) {
+      await store.createCaseAgentReplyDraft(job.caseId, {
+        agentRunId: job.jobId,
+        messageBody: decision.proposedMessage,
+        nextAction: decision.proposedNextAction,
+        nextActionDueAt: decision.proposedNextActionDueAt,
+        summary: decision.rationaleSummary,
+        triggerType,
+        updatedAt: runAt
+      });
+    }
+
+    if (decision.status === "escalated" || decision.actionType === "request_manager_intervention") {
+      await store.openCaseManagerIntervention(job.caseId, {
+        agentRunId: job.jobId,
+        severity: decision.riskLevel === "high" ? "critical" : "warning",
+        summary: decision.escalationReason ?? decision.rationaleSummary,
+        triggerType,
+        updatedAt: runAt
+      });
+    }
+
+    await store.upsertCaseAgentMemory(job.caseId, buildCaseAgentMemorySnapshot(caseDetail, {
+      decisionSummary: decision.rationaleSummary,
+      now: runAt
+    }));
+
+    await store.createCaseAgentRun(job.caseId, {
+      actionType: decision.actionType,
+      agentRunId: job.jobId,
+      blockedReason: decision.blockedReason,
+      confidence: decision.confidence,
+      escalationReason: decision.escalationReason,
+      finishedAt: runAt,
+      modelMode: "deterministic_v1",
+      proposedMessage: decision.proposedMessage,
+      proposedNextAction: decision.proposedNextAction,
+      proposedNextActionDueAt: decision.proposedNextActionDueAt,
+      rationaleSummary: decision.rationaleSummary,
+      riskLevel: decision.riskLevel,
+      startedAt,
+      status: decision.status,
+      toolExecutionStatus: decision.toolExecutionStatus,
+      triggerType,
+      updatedAt: runAt
+    });
+  }
+
+  return {
+    blockedRuns,
+    escalatedRuns,
+    processedJobs,
+    touchedCaseIds: Array.from(touchedCaseIds)
+  };
 }
 
 export async function schedulePersistedVisit(
@@ -1386,6 +1554,386 @@ export async function markPersistedHandoverCustomerUpdateDispatchReady(
     ),
     nextHandoverStatus
   });
+}
+
+function buildCaseAgentMemorySnapshot(
+  caseDetail: PersistedCaseDetail,
+  input: {
+    decisionSummary: string;
+    now: string;
+  }
+) {
+  const latestInboundEvent = [...caseDetail.auditEvents]
+    .reverse()
+    .find((event) => event.eventType === "whatsapp_inbound_received");
+  const latestIntentSummary =
+    typeof latestInboundEvent?.payload?.textBody === "string"
+      ? latestInboundEvent.payload.textBody.slice(0, 280)
+      : caseDetail.message.slice(0, 280);
+  const lastObjectionSummary = extractRiskFlagSummary(caseDetail);
+  const qualificationSummary = caseDetail.qualificationSnapshot
+    ? `${caseDetail.qualificationSnapshot.readiness} | ${caseDetail.qualificationSnapshot.budgetBand} | ${caseDetail.qualificationSnapshot.moveInTimeline}`
+    : null;
+  const documentGapSummary = summarizeDocumentGaps(caseDetail, caseDetail.preferredLocale);
+
+  return {
+    activeRiskFlags: buildRiskFlags(caseDetail),
+    documentGapSummary,
+    lastDecisionSummary: input.decisionSummary,
+    lastInboundAt: caseDetail.channelSummary?.lastInboundAt ?? caseDetail.agentMemory?.lastInboundAt ?? null,
+    lastObjectionSummary,
+    lastSuccessfulOutboundAt:
+      caseDetail.channelSummary?.latestOutboundStatus === "sent" || caseDetail.channelSummary?.latestOutboundStatus === "delivered"
+        ? caseDetail.channelSummary.latestOutboundUpdatedAt
+        : caseDetail.agentMemory?.lastSuccessfulOutboundAt ?? null,
+    latestIntentSummary,
+    qualificationSummary,
+    updatedAt: input.now
+  };
+}
+
+function decideCaseAgentAction(
+  caseDetail: PersistedCaseDetail,
+  input: {
+    canSendWhatsApp: boolean;
+    now: string;
+    triggerType: CaseAgentTriggerType;
+  }
+): CaseAgentDecision {
+  const baseBlockedReason = getCaseAgentBlockedReason(caseDetail, input.canSendWhatsApp);
+  const riskFlags = buildRiskFlags(caseDetail);
+  const documentGapSummary = summarizeDocumentGaps(caseDetail, caseDetail.preferredLocale);
+  const repeatedTriggerCount = (caseDetail.agentRuns ?? []).filter((run) => run.triggerType === input.triggerType).length;
+
+  if (baseBlockedReason) {
+    return {
+      actionType: "send_whatsapp_message",
+      blockedReason: baseBlockedReason,
+      confidence: 0.99,
+      escalationReason: null,
+      proposedMessage: buildTriggerMessage(input.triggerType, caseDetail, documentGapSummary),
+      proposedNextAction: buildBlockedNextAction(caseDetail.preferredLocale, baseBlockedReason),
+      proposedNextActionDueAt: createFutureTimestamp(baseBlockedReason === "client_credentials_pending" ? 24 : 4),
+      rationaleSummary: buildBlockedRationale(caseDetail.preferredLocale, baseBlockedReason),
+      riskLevel: "medium",
+      status: "blocked",
+      toolExecutionStatus: "blocked",
+      triggerType: input.triggerType
+    };
+  }
+
+  if (input.triggerType === "new_lead") {
+    if (riskFlags.includes("policy_sensitive_lead")) {
+      return {
+        actionType: "request_manager_intervention",
+        blockedReason: null,
+        confidence: 0.88,
+        escalationReason:
+          caseDetail.preferredLocale === "ar"
+            ? "الحالة تحتوي على إشارة حساسة وتحتاج قراراً بشرياً قبل أي رد تلقائي."
+            : "The lead contains a sensitive signal and needs a human decision before any automated reply.",
+        proposedMessage: null,
+        proposedNextAction:
+          caseDetail.preferredLocale === "ar" ? "تحويل الحالة إلى المدير لمراجعة الرد الأول" : "Route the case to a manager for first-reply review",
+        proposedNextActionDueAt: createFutureTimestamp(1),
+        rationaleSummary:
+          caseDetail.preferredLocale === "ar"
+            ? "تم تصعيد الحالة لأن محتوى العميل يتجاوز حدود الرد الآلي الآمن."
+            : "Escalated because the customer message exceeds the safe automated-response boundary.",
+        riskLevel: "high",
+        status: "escalated",
+        toolExecutionStatus: "executed",
+        triggerType: input.triggerType
+      };
+    }
+
+    return {
+      actionType: "send_whatsapp_message",
+      blockedReason: null,
+      confidence: 0.94,
+      escalationReason: null,
+      proposedMessage: buildTriggerMessage("new_lead", caseDetail, documentGapSummary),
+      proposedNextAction:
+        caseDetail.preferredLocale === "ar"
+          ? "انتظار رد العميل ومتابعة التأهيل إذا عاد على واتساب"
+          : "Wait for the customer reply and continue qualification on WhatsApp",
+      proposedNextActionDueAt: createFutureTimestamp(4),
+      rationaleSummary:
+        caseDetail.preferredLocale === "ar"
+          ? "العميل جديد والمحتوى منخفض المخاطر، لذلك يمكن إرسال أول رد تلقائي آمن."
+          : "The lead is new and low-risk, so the first reply can be sent automatically.",
+      riskLevel: "low",
+      status: "completed",
+      toolExecutionStatus: "queued",
+      triggerType: input.triggerType
+    };
+  }
+
+  if (input.triggerType === "document_missing") {
+    if (repeatedTriggerCount >= 1) {
+      return {
+        actionType: "request_manager_intervention",
+        blockedReason: null,
+        confidence: 0.82,
+        escalationReason:
+          caseDetail.preferredLocale === "ar"
+            ? "المستندات ما زالت ناقصة بعد متابعة سابقة وتحتاج تدخلاً بشرياً."
+            : "Documents are still missing after a prior follow-up and now need human intervention.",
+        proposedMessage: null,
+        proposedNextAction:
+          caseDetail.preferredLocale === "ar"
+            ? "راجع التعثر مع العميل وحدد ما إذا كان يجب إعادة التعيين أو الإغلاق"
+            : "Review the stall with the customer and decide whether to reassign or close the case",
+        proposedNextActionDueAt: createFutureTimestamp(6),
+        rationaleSummary:
+          caseDetail.preferredLocale === "ar"
+            ? "تم التصعيد لأن الحالة عالقة في المستندات بعد أكثر من دورة متابعة."
+            : "Escalated because the case remains stuck in document collection after more than one cycle.",
+        riskLevel: "medium",
+        status: "escalated",
+        toolExecutionStatus: "executed",
+        triggerType: input.triggerType
+      };
+    }
+
+    return {
+      actionType: "send_whatsapp_message",
+      blockedReason: null,
+      confidence: 0.9,
+      escalationReason: null,
+      proposedMessage: buildTriggerMessage("document_missing", caseDetail, documentGapSummary),
+      proposedNextAction:
+        caseDetail.preferredLocale === "ar"
+          ? "تحقق من استلام المستندات المطلوبة أو صعد الحالة إذا استمر الغياب"
+          : "Check for the required documents or escalate if they remain missing",
+      proposedNextActionDueAt: createFutureTimestamp(24),
+      rationaleSummary:
+        caseDetail.preferredLocale === "ar"
+          ? "الحالة في مرحلة المستندات وما زالت هناك عناصر ناقصة، لذا أرسل متابعة وثائق واضحة."
+          : "The case is in document collection with outstanding items, so a document chase message is appropriate.",
+      riskLevel: "low",
+      status: "completed",
+      toolExecutionStatus: "queued",
+      triggerType: input.triggerType
+    };
+  }
+
+  if (repeatedTriggerCount >= 1 || caseDetail.openInterventionsCount > 0) {
+    return {
+      actionType: "request_manager_intervention",
+      blockedReason: null,
+      confidence: 0.85,
+      escalationReason:
+        caseDetail.preferredLocale === "ar"
+          ? "العميل ما زال صامتاً بعد متابعة سابقة ويحتاج تدخلاً من المدير."
+          : "The customer is still silent after a prior follow-up and needs manager intervention.",
+      proposedMessage: null,
+      proposedNextAction:
+        caseDetail.preferredLocale === "ar"
+          ? "قرر التصعيد أو إعادة التعيين أو الإغلاق بناءً على صمت العميل"
+          : "Decide whether to escalate, reassign, or close based on the continued silence",
+      proposedNextActionDueAt: createFutureTimestamp(6),
+      rationaleSummary:
+        caseDetail.preferredLocale === "ar"
+          ? "تم التصعيد لأن المتابعة السابقة لم تستعد التفاعل."
+          : "Escalated because the prior follow-up did not recover engagement.",
+      riskLevel: "medium",
+      status: "escalated",
+      toolExecutionStatus: "executed",
+      triggerType: input.triggerType
+    };
+  }
+
+  return {
+    actionType: "send_whatsapp_message",
+    blockedReason: null,
+    confidence: 0.89,
+    escalationReason: null,
+    proposedMessage: buildTriggerMessage("no_response_follow_up", caseDetail, documentGapSummary),
+    proposedNextAction:
+      caseDetail.preferredLocale === "ar"
+        ? "انتظر الرد التالي أو صعد الحالة إذا استمر الصمت"
+        : "Wait for the next reply or escalate if the customer stays silent",
+    proposedNextActionDueAt: createFutureTimestamp(24),
+    rationaleSummary:
+      caseDetail.preferredLocale === "ar"
+        ? "المتابعة مستحقة والعميل لم يرد بعد، لذلك أرسل متابعة واتساب قصيرة وآمنة."
+        : "The follow-up is due and the customer has not replied, so a short safe WhatsApp nudge is appropriate.",
+    riskLevel: "low",
+    status: "completed",
+    toolExecutionStatus: "queued",
+    triggerType: input.triggerType
+  };
+}
+
+function getCaseAgentBlockedReason(
+  caseDetail: PersistedCaseDetail,
+  canSendWhatsApp: boolean
+): "missing_phone" | "automation_paused" | "qa_hold" | "client_credentials_pending" | null {
+  if (!caseDetail.channelSummary?.contactValue && !caseDetail.phone) {
+    return "missing_phone";
+  }
+
+  if (caseDetail.automationStatus === "paused") {
+    return "automation_paused";
+  }
+
+  if (caseDetail.automationHoldReason !== null) {
+    return "qa_hold";
+  }
+
+  if (!canSendWhatsApp) {
+    return "client_credentials_pending";
+  }
+
+  return null;
+}
+
+function buildTriggerMessage(
+  triggerType: CaseAgentTriggerType,
+  caseDetail: PersistedCaseDetail,
+  documentGapSummary: string | null
+) {
+  if (triggerType === "new_lead") {
+    return caseDetail.preferredLocale === "ar"
+      ? `مرحباً ${caseDetail.customerName}، استلمنا اهتمامك بمشروع ${caseDetail.projectInterest}. يمكننا متابعة التفاصيل المناسبة لك هنا على واتساب متى كان ذلك مناسباً.`
+      : `Hi ${caseDetail.customerName}, we received your interest in ${caseDetail.projectInterest}. We can continue the next suitable details with you here on WhatsApp whenever you're ready.`;
+  }
+
+  if (triggerType === "document_missing") {
+    return caseDetail.preferredLocale === "ar"
+      ? `مرحباً ${caseDetail.customerName}، ما زلنا ننتظر بعض المستندات لإكمال الحالة${documentGapSummary ? `: ${documentGapSummary}` : ""}. أرسل ما هو متاح وسنتابع معك مباشرة.`
+      : `Hi ${caseDetail.customerName}, we are still waiting on a few documents to keep the case moving${documentGapSummary ? `: ${documentGapSummary}` : ""}. Send what is available and we will continue from there.`;
+  }
+
+  return caseDetail.preferredLocale === "ar"
+    ? `مرحباً ${caseDetail.customerName}، أتابع معك بخصوص ${caseDetail.projectInterest}. إذا ما زلت مهتماً يمكننا إكمال الخطوة التالية معك هنا على واتساب.`
+    : `Hi ${caseDetail.customerName}, following up with you about ${caseDetail.projectInterest}. If you are still interested, we can complete the next step with you here on WhatsApp.`;
+}
+
+function buildBlockedNextAction(
+  locale: SupportedLocale,
+  blockedReason: "missing_phone" | "automation_paused" | "qa_hold" | "client_credentials_pending"
+) {
+  if (blockedReason === "missing_phone") {
+    return locale === "ar" ? "احصل على رقم واتساب صالح قبل متابعة الأتمتة" : "Obtain a valid WhatsApp number before continuing automation";
+  }
+
+  if (blockedReason === "automation_paused") {
+    return locale === "ar" ? "استأنف الأتمتة قبل تشغيل المتابعة الآلية" : "Resume automation before allowing the agent to act";
+  }
+
+  if (blockedReason === "qa_hold") {
+    return locale === "ar" ? "انتظر قرار الجودة قبل أي رد آلي" : "Wait for QA before any automated reply";
+  }
+
+  return locale === "ar" ? "أكمل تهيئة بيانات مزود واتساب للعميل" : "Complete the client's WhatsApp provider setup";
+}
+
+function buildBlockedRationale(
+  locale: SupportedLocale,
+  blockedReason: "missing_phone" | "automation_paused" | "qa_hold" | "client_credentials_pending"
+) {
+  if (blockedReason === "missing_phone") {
+    return locale === "ar"
+      ? "تم حظر الإرسال لأن الحالة لا تحتوي على رقم واتساب صالح."
+      : "The send was blocked because the case does not have a valid WhatsApp number.";
+  }
+
+  if (blockedReason === "automation_paused") {
+    return locale === "ar"
+      ? "تم حظر الإرسال لأن الأتمتة متوقفة على هذه الحالة."
+      : "The send was blocked because automation is paused for this case.";
+  }
+
+  if (blockedReason === "qa_hold") {
+    return locale === "ar"
+      ? "تم حظر الإرسال لأن الحالة تقع تحت بوابة جودة مفتوحة."
+      : "The send was blocked because the case is under an active QA hold.";
+  }
+
+  return locale === "ar"
+    ? "تم حظر الإرسال لأن مفاتيح مزود واتساب لم تُفعّل بعد لهذا العميل."
+    : "The send was blocked because the client's WhatsApp provider credentials are not configured yet.";
+}
+
+function summarizeDocumentGaps(caseDetail: PersistedCaseDetail, locale: SupportedLocale) {
+  const missingTypes = caseDetail.documentRequests
+    .filter((documentRequest) => documentRequest.status !== "accepted")
+    .map((documentRequest) => {
+      if (locale === "ar") {
+        if (documentRequest.type === "government_id") {
+          return "الهوية";
+        }
+        if (documentRequest.type === "proof_of_funds") {
+          return "إثبات القدرة المالية";
+        }
+        return "خطاب العمل";
+      }
+
+      if (documentRequest.type === "government_id") {
+        return "government ID";
+      }
+      if (documentRequest.type === "proof_of_funds") {
+        return "proof of funds";
+      }
+      return "employment letter";
+    });
+
+  return missingTypes.length > 0 ? missingTypes.join(locale === "ar" ? "، " : ", ") : null;
+}
+
+function buildRiskFlags(caseDetail: PersistedCaseDetail) {
+  const flags = new Set<string>();
+  const textCorpus = [
+    caseDetail.message,
+    ...caseDetail.auditEvents
+      .filter((event) => event.eventType === "whatsapp_inbound_received")
+      .map((event) => (typeof event.payload?.textBody === "string" ? event.payload.textBody : ""))
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (caseDetail.currentQaReview?.status === "pending_review" || caseDetail.currentQaReview?.status === "follow_up_required") {
+    flags.add("qa_hold");
+  }
+
+  if (
+    textCorpus.includes("lawyer") ||
+    textCorpus.includes("legal") ||
+    textCorpus.includes("guarantee") ||
+    textCorpus.includes("special approval") ||
+    textCorpus.includes("discount") ||
+    textCorpus.includes("محامي") ||
+    textCorpus.includes("قانون") ||
+    textCorpus.includes("ضمان") ||
+    textCorpus.includes("استثناء")
+  ) {
+    flags.add("policy_sensitive_lead");
+  }
+
+  if (caseDetail.openInterventionsCount > 0) {
+    flags.add("existing_manager_intervention");
+  }
+
+  if (caseDetail.channelSummary?.latestOutboundStatus === "failed") {
+    flags.add("delivery_failure");
+  }
+
+  return Array.from(flags);
+}
+
+function extractRiskFlagSummary(caseDetail: PersistedCaseDetail) {
+  const riskFlags = buildRiskFlags(caseDetail);
+  return riskFlags.length > 0 ? riskFlags.join(", ") : null;
+}
+
+function readCaseAgentTriggerType(value: unknown): CaseAgentTriggerType | null {
+  if (value === "new_lead" || value === "no_response_follow_up" || value === "document_missing") {
+    return value;
+  }
+
+  return null;
 }
 
 function createFutureTimestamp(hoursFromNow: number) {

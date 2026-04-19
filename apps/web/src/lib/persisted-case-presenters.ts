@@ -442,6 +442,80 @@ export function getPersistedCaseStageLabel(locale: SupportedLocale, caseStage: P
   return getCaseStageLabel(locale, caseStage);
 }
 
+export function getPersistedAgentStatusLabel(
+  locale: SupportedLocale,
+  agentState: PersistedCaseDetail["agentState"] | PersistedCaseSummary["agentState"]
+) {
+  if (!agentState) {
+    return null;
+  }
+
+  const labels = {
+    ar: {
+      blocked: "محظور",
+      completed: "تم",
+      escalated: "مصعد",
+      failed: "فشل",
+      waiting: "بانتظار"
+    },
+    en: {
+      blocked: "Blocked",
+      completed: "Completed",
+      escalated: "Escalated",
+      failed: "Failed",
+      waiting: "Waiting"
+    }
+  } as const;
+
+  return labels[locale][agentState.latestRunStatus];
+}
+
+export function getPersistedAgentActionLabel(
+  locale: SupportedLocale,
+  agentState: PersistedCaseDetail["agentState"] | PersistedCaseSummary["agentState"]
+) {
+  if (!agentState?.latestRecommendedAction) {
+    return null;
+  }
+
+  const labels = {
+    ar: {
+      create_reply_draft: "مسودة رد",
+      pause_automation: "إيقاف الأتمتة",
+      request_document_follow_up: "متابعة مستندات",
+      request_manager_intervention: "تدخل مدير",
+      save_follow_up_plan: "حفظ خطة متابعة",
+      send_whatsapp_message: "إرسال واتساب"
+    },
+    en: {
+      create_reply_draft: "Draft reply",
+      pause_automation: "Pause automation",
+      request_document_follow_up: "Document follow-up",
+      request_manager_intervention: "Manager intervention",
+      save_follow_up_plan: "Save follow-up plan",
+      send_whatsapp_message: "Send WhatsApp"
+    }
+  } as const;
+
+  return labels[locale][agentState.latestRecommendedAction];
+}
+
+export function getPersistedAgentStateNote(
+  locale: SupportedLocale,
+  agentState: PersistedCaseDetail["agentState"] | PersistedCaseSummary["agentState"]
+) {
+  if (!agentState) {
+    return null;
+  }
+
+  return (
+    agentState.latestBlockedReason ??
+    agentState.latestEscalationReason ??
+    agentState.latestDecisionSummary ??
+    (locale === "ar" ? "لا توجد ملاحظات وكيل حديثة." : "No recent agent note.")
+  );
+}
+
 export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.documentRequests.map((documentRequest) => ({
     detail: getDocumentRequestDetail(locale, documentRequest.type),

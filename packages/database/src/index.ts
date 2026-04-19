@@ -5,6 +5,11 @@ import type {
   ApproveHandoverCustomerUpdateInput,
   AutomationStatus,
   CalendarProvider,
+  CaseAgentActionType,
+  CaseAgentRiskLevel,
+  CaseAgentRunStatus,
+  CaseAgentToolExecutionStatus,
+  CaseAgentTriggerType,
   CaseAutomationHoldReason,
   CaseContactChannel,
   CaseStage,
@@ -50,6 +55,9 @@ import type {
   MessageDeliveryStatus,
   MessageProvider,
   ListGovernanceEventsQuery,
+  PersistedCaseAgentMemory,
+  PersistedCaseAgentRun,
+  PersistedCaseAgentState,
   PersistedCaseChannelSummary,
   PersistedCaseQaReview,
   PersistedCaseDetail,
@@ -126,20 +134,9 @@ const defaultHandoverCustomerUpdateTypes: HandoverCustomerUpdateType[] = [
   "appointment_confirmation"
 ];
 const followUpWatchJobType = "follow_up_watch";
+const caseAgentJobType = "case_agent_trigger";
+const whatsappAgentReplyJobType = "whatsapp_agent_reply";
 const whatsappCaseReplyJobType = "whatsapp_case_reply";
-const whatsappInitialReplyJobType = "whatsapp_initial_reply";
-
-function buildInitialWhatsAppReply(input: {
-  customerName: string;
-  preferredLocale: SupportedLocale;
-  projectInterest: string;
-}) {
-  if (input.preferredLocale === "ar") {
-    return `مرحباً ${input.customerName}، استلمنا اهتمامك بمشروع ${input.projectInterest}. سنراجع الحالة الآن ونرسل لك الخطوة التالية المناسبة قريباً.`;
-  }
-
-  return `Hi ${input.customerName}, we received your interest in ${input.projectInterest}. We're reviewing the case now and will send the next step shortly.`;
-}
 
 const leads = pgTable("leads", {
   budget: text("budget"),
@@ -166,6 +163,46 @@ const cases = pgTable("cases", {
   nextActionDueAt: timestamp("next_action_due_at", { mode: "string", withTimezone: true }).notNull(),
   ownerName: text("owner_name").notNull(),
   stage: text("stage").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const caseAgentMemories = pgTable("case_agent_memories", {
+  activeRiskFlags: jsonb("active_risk_flags").$type<string[]>().notNull(),
+  caseId: uuid("case_id")
+    .notNull()
+    .references(() => cases.id, { onDelete: "cascade" })
+    .unique(),
+  documentGapSummary: text("document_gap_summary"),
+  lastDecisionSummary: text("last_decision_summary"),
+  lastInboundAt: timestamp("last_inbound_at", { mode: "string", withTimezone: true }),
+  lastObjectionSummary: text("last_objection_summary"),
+  lastSuccessfulOutboundAt: timestamp("last_successful_outbound_at", { mode: "string", withTimezone: true }),
+  latestIntentSummary: text("latest_intent_summary"),
+  qualificationSummary: text("qualification_summary"),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const caseAgentRuns = pgTable("case_agent_runs", {
+  actionType: text("action_type"),
+  blockedReason: text("blocked_reason"),
+  caseId: uuid("case_id")
+    .notNull()
+    .references(() => cases.id, { onDelete: "cascade" }),
+  confidencePercent: integer("confidence_percent").notNull(),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  escalationReason: text("escalation_reason"),
+  finishedAt: timestamp("finished_at", { mode: "string", withTimezone: true }).notNull(),
+  id: uuid("id").primaryKey(),
+  modelMode: text("model_mode").notNull(),
+  proposedMessage: text("proposed_message"),
+  proposedNextAction: text("proposed_next_action"),
+  proposedNextActionDueAt: timestamp("proposed_next_action_due_at", { mode: "string", withTimezone: true }),
+  rationaleSummary: text("rationale_summary").notNull(),
+  riskLevel: text("risk_level").notNull(),
+  startedAt: timestamp("started_at", { mode: "string", withTimezone: true }).notNull(),
+  status: text("status").notNull(),
+  toolExecutionStatus: text("tool_execution_status"),
+  triggerType: text("trigger_type").notNull(),
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
@@ -450,6 +487,13 @@ export interface FollowUpCycleResult {
   touchedCaseIds: string[];
 }
 
+export interface CaseAgentCycleResult {
+  blockedRuns: number;
+  escalatedRuns: number;
+  processedJobs: number;
+  touchedCaseIds: string[];
+}
+
 export interface DueAutomationJob {
   attempts: number;
   caseId: string;
@@ -475,6 +519,40 @@ export interface LeadCaptureStore {
     }
   ): Promise<CreateWebsiteLeadResult>;
   findCaseIdByNormalizedPhone(normalizedPhone: string): Promise<string | null>;
+  createCaseAgentReplyDraft(
+    caseId: string,
+    input: {
+      agentRunId: string;
+      messageBody: string;
+      nextAction: string;
+      nextActionDueAt: string;
+      summary: string;
+      triggerType: CaseAgentTriggerType;
+      updatedAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
+  createCaseAgentRun(
+    caseId: string,
+    input: {
+      actionType: CaseAgentActionType | null;
+      agentRunId: string;
+      blockedReason: string | null;
+      confidence: number;
+      escalationReason: string | null;
+      finishedAt: string;
+      modelMode: string;
+      proposedMessage: string | null;
+      proposedNextAction: string | null;
+      proposedNextActionDueAt: string | null;
+      rationaleSummary: string;
+      riskLevel: CaseAgentRiskLevel;
+      startedAt: string;
+      status: CaseAgentRunStatus;
+      toolExecutionStatus: CaseAgentToolExecutionStatus | null;
+      triggerType: CaseAgentTriggerType;
+      updatedAt: string;
+    }
+  ): Promise<void>;
   getDueAutomationJobs(input: {
     jobType: string;
     limit: number;
@@ -542,11 +620,52 @@ export interface LeadCaptureStore {
   markAutomationJobCompleted(jobId: string, updatedAt: string): Promise<void>;
   manageCaseFollowUp(caseId: string, input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail | null>;
   manageCaseFollowUpBulk(caseIds: string[], input: ManageCaseFollowUpInput): Promise<PersistedCaseDetail[]>;
+  openCaseManagerIntervention(
+    caseId: string,
+    input: {
+      agentRunId: string;
+      severity: ManagerInterventionSeverity;
+      summary: string;
+      triggerType: CaseAgentTriggerType;
+      updatedAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
+  queueCaseAgentReply(
+    caseId: string,
+    input: {
+      agentRunId: string;
+      messageBody: string;
+      nextAction: string;
+      nextActionDueAt: string;
+      triggerType: CaseAgentTriggerType;
+      updatedAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
+  queueCaseAgentTrigger(
+    caseId: string,
+    input: {
+      payload?: Record<string, unknown>;
+      runAfter: string;
+      triggerType: CaseAgentTriggerType;
+      updatedAt: string;
+    }
+  ): Promise<void>;
   rescheduleAutomationJob(jobId: string, input: {
     attempts: number;
     runAfter: string;
     updatedAt: string;
   }): Promise<void>;
+  saveCaseAgentFollowUp(
+    caseId: string,
+    input: {
+      agentRunId: string;
+      nextAction: string;
+      nextActionDueAt: string;
+      summary: string;
+      triggerType: CaseAgentTriggerType;
+      updatedAt: string;
+    }
+  ): Promise<PersistedCaseDetail | null>;
   createHandoverBlocker(
     handoverCaseId: string,
     input: CreateHandoverBlockerInput & {
@@ -604,6 +723,12 @@ export interface LeadCaptureStore {
       status: AutomationStatus;
     }
   ): Promise<PersistedCaseDetail | null>;
+  upsertCaseAgentMemory(
+    caseId: string,
+    input: Omit<PersistedCaseAgentMemory, "updatedAt"> & {
+      updatedAt: string;
+    }
+  ): Promise<void>;
   startHandoverIntake(
     caseId: string,
     input: CreateHandoverIntakeInput & {
@@ -743,6 +868,8 @@ export async function createAlphaLeadCaptureStore(options?: {
     schema: {
       auditEvents,
       automationJobs,
+      caseAgentMemories,
+      caseAgentRuns,
       caseChannelStates,
       caseQaReviews,
       cases,
@@ -795,6 +922,69 @@ export async function createAlphaLeadCaptureStore(options?: {
     );
 
     alter table cases add column if not exists automation_status text not null default 'active';
+
+    create table if not exists case_agent_memories (
+      case_id uuid not null unique references cases(id) on delete cascade,
+      latest_intent_summary text,
+      qualification_summary text,
+      last_objection_summary text,
+      document_gap_summary text,
+      last_decision_summary text,
+      last_inbound_at timestamptz,
+      last_successful_outbound_at timestamptz,
+      active_risk_flags jsonb not null default '[]'::jsonb,
+      updated_at timestamptz not null default now()
+    );
+
+    alter table case_agent_memories add column if not exists latest_intent_summary text;
+    alter table case_agent_memories add column if not exists qualification_summary text;
+    alter table case_agent_memories add column if not exists last_objection_summary text;
+    alter table case_agent_memories add column if not exists document_gap_summary text;
+    alter table case_agent_memories add column if not exists last_decision_summary text;
+    alter table case_agent_memories add column if not exists last_inbound_at timestamptz;
+    alter table case_agent_memories add column if not exists last_successful_outbound_at timestamptz;
+    alter table case_agent_memories add column if not exists active_risk_flags jsonb not null default '[]'::jsonb;
+    alter table case_agent_memories add column if not exists updated_at timestamptz not null default now();
+
+    create table if not exists case_agent_runs (
+      id uuid primary key,
+      case_id uuid not null references cases(id) on delete cascade,
+      trigger_type text not null,
+      status text not null,
+      risk_level text not null,
+      confidence_percent integer not null default 0,
+      action_type text,
+      tool_execution_status text,
+      blocked_reason text,
+      escalation_reason text,
+      rationale_summary text not null,
+      proposed_message text,
+      proposed_next_action text,
+      proposed_next_action_due_at timestamptz,
+      model_mode text not null,
+      started_at timestamptz not null,
+      finished_at timestamptz not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    alter table case_agent_runs add column if not exists trigger_type text not null default 'new_lead';
+    alter table case_agent_runs add column if not exists status text not null default 'completed';
+    alter table case_agent_runs add column if not exists risk_level text not null default 'low';
+    alter table case_agent_runs add column if not exists confidence_percent integer not null default 0;
+    alter table case_agent_runs add column if not exists action_type text;
+    alter table case_agent_runs add column if not exists tool_execution_status text;
+    alter table case_agent_runs add column if not exists blocked_reason text;
+    alter table case_agent_runs add column if not exists escalation_reason text;
+    alter table case_agent_runs add column if not exists rationale_summary text not null default '';
+    alter table case_agent_runs add column if not exists proposed_message text;
+    alter table case_agent_runs add column if not exists proposed_next_action text;
+    alter table case_agent_runs add column if not exists proposed_next_action_due_at timestamptz;
+    alter table case_agent_runs add column if not exists model_mode text not null default 'deterministic_v1';
+    alter table case_agent_runs add column if not exists started_at timestamptz not null default now();
+    alter table case_agent_runs add column if not exists finished_at timestamptz not null default now();
+    alter table case_agent_runs add column if not exists created_at timestamptz not null default now();
+    alter table case_agent_runs add column if not exists updated_at timestamptz not null default now();
 
     create table if not exists qualification_snapshots (
       id uuid primary key,
@@ -1068,6 +1258,8 @@ export async function createAlphaLeadCaptureStore(options?: {
     );
 
     create index if not exists cases_created_at_idx on cases (created_at desc);
+    create index if not exists case_agent_memories_case_id_idx on case_agent_memories (case_id);
+    create index if not exists case_agent_runs_case_id_idx on case_agent_runs (case_id, created_at desc);
     create index if not exists leads_normalized_phone_idx on leads (normalized_phone);
     create index if not exists visits_case_id_idx on visits (case_id, scheduled_at desc);
     create index if not exists visit_bookings_visit_id_idx on visit_bookings (visit_id);
@@ -1570,6 +1762,83 @@ export async function createAlphaLeadCaptureStore(options?: {
     return new Map(records.map((record) => [record.caseId, hydrateVisitBooking(record)]));
   };
 
+  const listLatestCaseAgentRuns = async (caseIds: string[]) => {
+    const caseIdsWithValues = caseIds.filter(Boolean);
+
+    if (caseIdsWithValues.length === 0) {
+      return new Map<string, PersistedCaseAgentRun>();
+    }
+
+    const records = await db
+      .select({
+        actionType: caseAgentRuns.actionType,
+        blockedReason: caseAgentRuns.blockedReason,
+        caseId: caseAgentRuns.caseId,
+        confidencePercent: caseAgentRuns.confidencePercent,
+        createdAt: caseAgentRuns.createdAt,
+        escalationReason: caseAgentRuns.escalationReason,
+        finishedAt: caseAgentRuns.finishedAt,
+        modelMode: caseAgentRuns.modelMode,
+        proposedMessage: caseAgentRuns.proposedMessage,
+        proposedNextAction: caseAgentRuns.proposedNextAction,
+        proposedNextActionDueAt: caseAgentRuns.proposedNextActionDueAt,
+        rationaleSummary: caseAgentRuns.rationaleSummary,
+        riskLevel: caseAgentRuns.riskLevel,
+        runId: caseAgentRuns.id,
+        startedAt: caseAgentRuns.startedAt,
+        status: caseAgentRuns.status,
+        toolExecutionStatus: caseAgentRuns.toolExecutionStatus,
+        triggerType: caseAgentRuns.triggerType,
+        updatedAt: caseAgentRuns.updatedAt
+      })
+      .from(caseAgentRuns)
+      .where(inArray(caseAgentRuns.caseId, caseIdsWithValues))
+      .orderBy(desc(caseAgentRuns.createdAt), desc(caseAgentRuns.updatedAt));
+
+    const latestRuns = new Map<string, PersistedCaseAgentRun>();
+
+    for (const record of records) {
+      if (!latestRuns.has(record.caseId)) {
+        latestRuns.set(record.caseId, hydrateCaseAgentRun(record));
+      }
+    }
+
+    return latestRuns;
+  };
+
+  const listCaseAgentWakeUps = async (caseIds: string[]) => {
+    const caseIdsWithValues = caseIds.filter(Boolean);
+
+    if (caseIdsWithValues.length === 0) {
+      return new Map<string, string>();
+    }
+
+    const records = await db
+      .select({
+        caseId: automationJobs.caseId,
+        runAfter: automationJobs.runAfter
+      })
+      .from(automationJobs)
+      .where(
+        and(
+          inArray(automationJobs.caseId, caseIdsWithValues),
+          inArray(automationJobs.jobType, [caseAgentJobType, followUpWatchJobType]),
+          eq(automationJobs.status, "queued")
+        )
+      )
+      .orderBy(asc(automationJobs.runAfter));
+
+    const wakeUps = new Map<string, string>();
+
+    for (const record of records) {
+      if (!wakeUps.has(record.caseId)) {
+        wakeUps.set(record.caseId, toIsoDateTimeString(record.runAfter));
+      }
+    }
+
+    return wakeUps;
+  };
+
   const listCurrentHandoverCustomerUpdateQaReviews = async (caseIds: string[]) => {
     const caseIdsWithValues = caseIds.filter(Boolean);
 
@@ -1962,7 +2231,10 @@ export async function createAlphaLeadCaptureStore(options?: {
       persistedDocumentRequests,
       persistedInterventions,
       persistedQaReviews,
+      persistedCaseAgentMemory,
+      persistedCaseAgentRuns,
       channelSummaryMap,
+      caseAgentWakeUpMap,
       currentHandoverCustomerUpdateQaReviewMap,
       linkedHandoverCase,
       handoverClosureMap,
@@ -2044,7 +2316,49 @@ export async function createAlphaLeadCaptureStore(options?: {
           .from(caseQaReviews)
           .where(eq(caseQaReviews.caseId, caseId))
           .orderBy(desc(caseQaReviews.createdAt), desc(caseQaReviews.updatedAt)),
+        db
+          .select({
+            activeRiskFlags: caseAgentMemories.activeRiskFlags,
+            caseId: caseAgentMemories.caseId,
+            documentGapSummary: caseAgentMemories.documentGapSummary,
+            lastDecisionSummary: caseAgentMemories.lastDecisionSummary,
+            lastInboundAt: caseAgentMemories.lastInboundAt,
+            lastObjectionSummary: caseAgentMemories.lastObjectionSummary,
+            lastSuccessfulOutboundAt: caseAgentMemories.lastSuccessfulOutboundAt,
+            latestIntentSummary: caseAgentMemories.latestIntentSummary,
+            qualificationSummary: caseAgentMemories.qualificationSummary,
+            updatedAt: caseAgentMemories.updatedAt
+          })
+          .from(caseAgentMemories)
+          .where(eq(caseAgentMemories.caseId, caseId))
+          .limit(1),
+        db
+          .select({
+            actionType: caseAgentRuns.actionType,
+            blockedReason: caseAgentRuns.blockedReason,
+            confidencePercent: caseAgentRuns.confidencePercent,
+            createdAt: caseAgentRuns.createdAt,
+            escalationReason: caseAgentRuns.escalationReason,
+            finishedAt: caseAgentRuns.finishedAt,
+            modelMode: caseAgentRuns.modelMode,
+            proposedMessage: caseAgentRuns.proposedMessage,
+            proposedNextAction: caseAgentRuns.proposedNextAction,
+            proposedNextActionDueAt: caseAgentRuns.proposedNextActionDueAt,
+            rationaleSummary: caseAgentRuns.rationaleSummary,
+            riskLevel: caseAgentRuns.riskLevel,
+            runId: caseAgentRuns.id,
+            startedAt: caseAgentRuns.startedAt,
+            status: caseAgentRuns.status,
+            toolExecutionStatus: caseAgentRuns.toolExecutionStatus,
+            triggerType: caseAgentRuns.triggerType,
+            updatedAt: caseAgentRuns.updatedAt
+          })
+          .from(caseAgentRuns)
+          .where(eq(caseAgentRuns.caseId, caseId))
+          .orderBy(desc(caseAgentRuns.createdAt), desc(caseAgentRuns.updatedAt))
+          .limit(12),
         listCaseChannelSummaries([caseId]),
+        listCaseAgentWakeUps([caseId]),
         listCurrentHandoverCustomerUpdateQaReviews([caseId]),
         db
           .select({
@@ -2063,6 +2377,7 @@ export async function createAlphaLeadCaptureStore(options?: {
 
     const hydratedInterventions = persistedInterventions.map((intervention) => hydrateManagerIntervention(intervention));
     const hydratedQaReviews = persistedQaReviews.map((qaReview) => hydrateCaseQaReview(qaReview));
+    const hydratedAgentRuns = persistedCaseAgentRuns.map((agentRun) => hydrateCaseAgentRun(agentRun));
     const currentQaReview = hydratedQaReviews[0] ?? null;
     const latestHumanReply = caseAuditEvents
       .filter((event) => event.eventType === "case_reply_sent")
@@ -2074,6 +2389,9 @@ export async function createAlphaLeadCaptureStore(options?: {
       .find((followUp): followUp is PersistedLatestManagerFollowUp => followUp !== null) ?? null;
 
     return {
+      agentMemory: persistedCaseAgentMemory[0] ? hydrateCaseAgentMemory(persistedCaseAgentMemory[0]) : null,
+      agentRuns: hydratedAgentRuns,
+      agentState: buildPersistedCaseAgentState(hydratedAgentRuns[0] ?? null, caseAgentWakeUpMap.get(caseId) ?? null),
       auditEvents: caseAuditEvents.map((event) => ({
         createdAt: toIsoDateTimeString(event.createdAt),
         eventType: event.eventType,
@@ -2215,6 +2533,159 @@ export async function createAlphaLeadCaptureStore(options?: {
     });
   };
 
+  const mergeCaseAgentMemory = async (
+    transaction: AlphaTransaction,
+    caseId: string,
+    input: Partial<Omit<PersistedCaseAgentMemory, "updatedAt">> & {
+      updatedAt: string;
+    }
+  ) => {
+    const existingRecord = await transaction
+      .select({
+        activeRiskFlags: caseAgentMemories.activeRiskFlags,
+        documentGapSummary: caseAgentMemories.documentGapSummary,
+        lastDecisionSummary: caseAgentMemories.lastDecisionSummary,
+        lastInboundAt: caseAgentMemories.lastInboundAt,
+        lastObjectionSummary: caseAgentMemories.lastObjectionSummary,
+        lastSuccessfulOutboundAt: caseAgentMemories.lastSuccessfulOutboundAt,
+        latestIntentSummary: caseAgentMemories.latestIntentSummary,
+        qualificationSummary: caseAgentMemories.qualificationSummary
+      })
+      .from(caseAgentMemories)
+      .where(eq(caseAgentMemories.caseId, caseId))
+      .limit(1);
+
+    await transaction
+      .insert(caseAgentMemories)
+      .values({
+        activeRiskFlags: input.activeRiskFlags ?? existingRecord[0]?.activeRiskFlags ?? [],
+        caseId,
+        documentGapSummary:
+          input.documentGapSummary === undefined ? existingRecord[0]?.documentGapSummary ?? null : input.documentGapSummary,
+        lastDecisionSummary:
+          input.lastDecisionSummary === undefined ? existingRecord[0]?.lastDecisionSummary ?? null : input.lastDecisionSummary,
+        lastInboundAt: input.lastInboundAt === undefined ? existingRecord[0]?.lastInboundAt ?? null : input.lastInboundAt,
+        lastObjectionSummary:
+          input.lastObjectionSummary === undefined ? existingRecord[0]?.lastObjectionSummary ?? null : input.lastObjectionSummary,
+        lastSuccessfulOutboundAt:
+          input.lastSuccessfulOutboundAt === undefined
+            ? existingRecord[0]?.lastSuccessfulOutboundAt ?? null
+            : input.lastSuccessfulOutboundAt,
+        latestIntentSummary:
+          input.latestIntentSummary === undefined ? existingRecord[0]?.latestIntentSummary ?? null : input.latestIntentSummary,
+        qualificationSummary:
+          input.qualificationSummary === undefined ? existingRecord[0]?.qualificationSummary ?? null : input.qualificationSummary,
+        updatedAt: input.updatedAt
+      })
+      .onConflictDoUpdate({
+        set: {
+          activeRiskFlags: input.activeRiskFlags ?? existingRecord[0]?.activeRiskFlags ?? [],
+          documentGapSummary:
+            input.documentGapSummary === undefined ? existingRecord[0]?.documentGapSummary ?? null : input.documentGapSummary,
+          lastDecisionSummary:
+            input.lastDecisionSummary === undefined ? existingRecord[0]?.lastDecisionSummary ?? null : input.lastDecisionSummary,
+          lastInboundAt: input.lastInboundAt === undefined ? existingRecord[0]?.lastInboundAt ?? null : input.lastInboundAt,
+          lastObjectionSummary:
+            input.lastObjectionSummary === undefined ? existingRecord[0]?.lastObjectionSummary ?? null : input.lastObjectionSummary,
+          lastSuccessfulOutboundAt:
+            input.lastSuccessfulOutboundAt === undefined
+              ? existingRecord[0]?.lastSuccessfulOutboundAt ?? null
+              : input.lastSuccessfulOutboundAt,
+          latestIntentSummary:
+            input.latestIntentSummary === undefined ? existingRecord[0]?.latestIntentSummary ?? null : input.latestIntentSummary,
+          qualificationSummary:
+            input.qualificationSummary === undefined ? existingRecord[0]?.qualificationSummary ?? null : input.qualificationSummary,
+          updatedAt: input.updatedAt
+        },
+        target: caseAgentMemories.caseId
+      });
+  };
+
+  const syncCaseAgentTriggerJob = async (
+    transaction: AlphaTransaction,
+    input: {
+      caseId: string;
+      payload?: Record<string, unknown>;
+      runAfter: string;
+      triggerType: CaseAgentTriggerType;
+      updatedAt: string;
+    }
+  ) => {
+    await transaction
+      .update(automationJobs)
+      .set({
+        status: "cancelled",
+        updatedAt: input.updatedAt
+      })
+      .where(and(eq(automationJobs.caseId, input.caseId), eq(automationJobs.jobType, caseAgentJobType), eq(automationJobs.status, "queued")));
+
+    await transaction.insert(automationJobs).values({
+      attempts: 0,
+      caseId: input.caseId,
+      createdAt: input.updatedAt,
+      id: randomUUID(),
+      jobType: caseAgentJobType,
+      payload: {
+        ...(input.payload ?? {}),
+        triggerType: input.triggerType
+      },
+      runAfter: input.runAfter,
+      status: "queued",
+      updatedAt: input.updatedAt
+    });
+  };
+
+  const syncNewLeadCaseAgentTrigger = async (
+    transaction: AlphaTransaction,
+    input: {
+      automationHoldReason: CaseAutomationHoldReason | null;
+      automationStatus: AutomationStatus;
+      caseId: string;
+      source: "website" | "whatsapp";
+      stage: CaseStage;
+      updatedAt: string;
+    }
+  ) => {
+    await transaction
+      .update(automationJobs)
+      .set({
+        status: "cancelled",
+        updatedAt: input.updatedAt
+      })
+      .where(and(eq(automationJobs.caseId, input.caseId), eq(automationJobs.jobType, caseAgentJobType), eq(automationJobs.status, "queued")));
+
+    if (input.source !== "website" || input.stage !== "new") {
+      return;
+    }
+
+    const channelStateRecord = await transaction
+      .select({
+        latestOutboundStatus: caseChannelStates.latestOutboundStatus
+      })
+      .from(caseChannelStates)
+      .where(eq(caseChannelStates.caseId, input.caseId))
+      .limit(1);
+
+    const latestOutboundStatus = channelStateRecord[0]?.latestOutboundStatus
+      ? toMessageDeliveryStatus(channelStateRecord[0].latestOutboundStatus)
+      : "not_started";
+
+    if (latestOutboundStatus === "sent" || latestOutboundStatus === "delivered") {
+      return;
+    }
+
+    if (input.automationStatus === "paused" || input.automationHoldReason !== null) {
+      return;
+    }
+
+    await syncCaseAgentTriggerJob(transaction, {
+      caseId: input.caseId,
+      runAfter: input.updatedAt,
+      triggerType: "new_lead",
+      updatedAt: input.updatedAt
+    });
+  };
+
   const upsertCaseChannelState = async (
     transaction: AlphaTransaction,
     input: {
@@ -2297,120 +2768,6 @@ export async function createAlphaLeadCaptureStore(options?: {
       },
       runAfter: input.updatedAt,
       status: "queued",
-      updatedAt: input.updatedAt
-    });
-  };
-
-  const syncWhatsAppInitialReplyJob = async (
-    transaction: AlphaTransaction,
-    input: {
-      automationHoldReason: CaseAutomationHoldReason | null;
-      automationStatus: AutomationStatus;
-      caseId: string;
-      contactValue: string | null;
-      customerName: string;
-      preferredLocale: SupportedLocale;
-      projectInterest: string;
-      source: "website" | "whatsapp";
-      updatedAt: string;
-    }
-  ) => {
-    await transaction
-      .update(automationJobs)
-      .set({
-        status: "cancelled",
-        updatedAt: input.updatedAt
-      })
-      .where(
-        and(
-          eq(automationJobs.caseId, input.caseId),
-          eq(automationJobs.jobType, whatsappInitialReplyJobType),
-          eq(automationJobs.status, "queued")
-        )
-      );
-
-    if (input.source !== "website") {
-      return;
-    }
-
-    const latestChannelState = await transaction
-      .select({
-        channel: caseChannelStates.channel,
-        contactValue: caseChannelStates.contactValue,
-        latestOutboundStatus: caseChannelStates.latestOutboundStatus
-      })
-      .from(caseChannelStates)
-      .where(eq(caseChannelStates.caseId, input.caseId))
-      .limit(1);
-
-    const currentChannelState = latestChannelState[0];
-    const channel = input.contactValue ? "whatsapp" : currentChannelState?.channel === "whatsapp" ? "whatsapp" : "website";
-    const latestOutboundStatus = currentChannelState ? toMessageDeliveryStatus(currentChannelState.latestOutboundStatus) : "not_started";
-
-    if (latestOutboundStatus === "sent" || latestOutboundStatus === "delivered") {
-      return;
-    }
-
-    if (!input.contactValue) {
-      await upsertCaseChannelState(transaction, {
-        caseId: input.caseId,
-        channel,
-        contactValue: null,
-        latestOutboundBlockReason: "missing_phone",
-        latestOutboundFailureCode: null,
-        latestOutboundFailureDetail: null,
-        latestOutboundMessage: null,
-        latestOutboundProviderMessageId: null,
-        latestOutboundStatus: "blocked",
-        latestOutboundUpdatedAt: input.updatedAt,
-        provider: null,
-        updatedAt: input.updatedAt
-      });
-      return;
-    }
-
-    if (input.automationStatus === "paused" || input.automationHoldReason !== null) {
-      await upsertCaseChannelState(transaction, {
-        caseId: input.caseId,
-        channel: "whatsapp",
-        contactValue: input.contactValue,
-        latestOutboundBlockReason: input.automationStatus === "paused" ? "automation_paused" : "qa_hold",
-        latestOutboundFailureCode: null,
-        latestOutboundFailureDetail: null,
-        latestOutboundMessage: buildInitialWhatsAppReply(input),
-        latestOutboundProviderMessageId: null,
-        latestOutboundStatus: "blocked",
-        latestOutboundUpdatedAt: input.updatedAt,
-        provider: "meta_whatsapp_cloud",
-        updatedAt: input.updatedAt
-      });
-      return;
-    }
-
-    const messageBody = buildInitialWhatsAppReply(input);
-
-    await upsertCaseChannelState(transaction, {
-      caseId: input.caseId,
-      channel: "whatsapp",
-      contactValue: input.contactValue,
-      latestOutboundBlockReason: null,
-      latestOutboundFailureCode: null,
-      latestOutboundFailureDetail: null,
-      latestOutboundMessage: messageBody,
-      latestOutboundProviderMessageId: null,
-      latestOutboundStatus: "queued",
-      latestOutboundUpdatedAt: input.updatedAt,
-      provider: "meta_whatsapp_cloud",
-      updatedAt: input.updatedAt
-    });
-
-    await queueWhatsAppOutboundJob(transaction, {
-      caseId: input.caseId,
-      jobType: whatsappInitialReplyJobType,
-      messageBody,
-      normalizedPhone: input.contactValue,
-      origin: "system",
-      sentByName: null,
       updatedAt: input.updatedAt
     });
   };
@@ -2652,15 +3009,31 @@ export async function createAlphaLeadCaptureStore(options?: {
             updatedAt: createdAt
           });
         } else {
-          await syncWhatsAppInitialReplyJob(transaction, {
+          await upsertCaseChannelState(transaction, {
+            caseId: createdCaseId,
+            channel: normalizedPhone ? "whatsapp" : "website",
+            contactValue: normalizedPhone,
+            latestOutboundBlockReason: normalizedPhone
+              ? automaticQaReviewId
+                ? "qa_hold"
+                : null
+              : "missing_phone",
+            latestOutboundFailureCode: normalizedPhone ? null : "missing_phone",
+            latestOutboundFailureDetail: normalizedPhone ? null : "No WhatsApp-ready phone number was provided for this lead.",
+            latestOutboundMessage: null,
+            latestOutboundProviderMessageId: null,
+            latestOutboundStatus: normalizedPhone ? (automaticQaReviewId ? "blocked" : "queued") : "blocked",
+            latestOutboundUpdatedAt: createdAt,
+            provider: normalizedPhone ? "meta_whatsapp_cloud" : null,
+            updatedAt: createdAt
+          });
+
+          await syncNewLeadCaseAgentTrigger(transaction, {
             automationHoldReason: automaticQaReviewId ? "qa_pending_review" : null,
             automationStatus: "active",
             caseId: createdCaseId,
-            contactValue: normalizedPhone,
-            customerName: input.customerName,
-            preferredLocale: input.preferredLocale,
-            projectInterest: input.projectInterest,
             source,
+            stage: "new",
             updatedAt: createdAt
           });
         }
@@ -2708,6 +3081,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         : null;
 
       return {
+        agentState: null,
         automationHoldReason: getCaseAutomationHoldReason(currentQaReview),
         automationStatus: toAutomationStatus(createdCase.automationStatus),
         caseId: createdCase.caseId,
@@ -2788,15 +3162,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           updatedAt: createdAt
         });
 
-        await syncWhatsAppInitialReplyJob(transaction, {
+        await syncNewLeadCaseAgentTrigger(transaction, {
           automationHoldReason: "qa_pending_review",
           automationStatus: caseRecord.automationStatus,
           caseId,
-          contactValue: normalizePhoneNumber(caseRecord.phone),
-          customerName: caseRecord.customerName,
-          preferredLocale: caseRecord.preferredLocale,
-          projectInterest: caseRecord.projectInterest,
           source: caseRecord.source,
+          stage: caseRecord.stage,
           updatedAt: createdAt
         });
       });
@@ -2864,15 +3235,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           updatedAt: createdAt
         });
 
-        await syncWhatsAppInitialReplyJob(transaction, {
+        await syncNewLeadCaseAgentTrigger(transaction, {
           automationHoldReason: "qa_pending_review",
           automationStatus: caseRecord.automationStatus,
           caseId,
-          contactValue: normalizePhoneNumber(caseRecord.phone),
-          customerName: caseRecord.customerName,
-          preferredLocale: caseRecord.preferredLocale,
-          projectInterest: caseRecord.projectInterest,
           source: caseRecord.source,
+          stage: caseRecord.stage,
           updatedAt: createdAt
         });
       });
@@ -2954,15 +3322,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           updatedAt
         });
 
-        await syncWhatsAppInitialReplyJob(transaction, {
+        await syncNewLeadCaseAgentTrigger(transaction, {
           automationHoldReason: getCaseAutomationHoldReasonFromStatus(input.status),
           automationStatus: caseRecord.automationStatus,
           caseId,
-          contactValue: normalizePhoneNumber(caseRecord.phone),
-          customerName: caseRecord.customerName,
-          preferredLocale: caseRecord.preferredLocale,
-          projectInterest: caseRecord.projectInterest,
           source: caseRecord.source,
+          stage: caseRecord.stage,
           updatedAt
         });
       });
@@ -3100,7 +3465,9 @@ export async function createAlphaLeadCaptureStore(options?: {
       const caseIds = persistedCases.map((caseRecord) => caseRecord.caseId);
       const [
         openInterventionCounts,
+        caseAgentWakeUps,
         channelSummaries,
+        latestCaseAgentRuns,
         currentQaReviews,
         currentHandoverCustomerUpdateQaReviews,
         latestCaseReplies,
@@ -3110,7 +3477,9 @@ export async function createAlphaLeadCaptureStore(options?: {
       ] =
         await Promise.all([
         listOpenInterventionCounts(caseIds),
+        listCaseAgentWakeUps(caseIds),
         listCaseChannelSummaries(caseIds),
+        listLatestCaseAgentRuns(caseIds),
         listCurrentQaReviews(caseIds),
         listCurrentHandoverCustomerUpdateQaReviews(caseIds),
         listLatestCaseReplies(caseIds),
@@ -3120,6 +3489,10 @@ export async function createAlphaLeadCaptureStore(options?: {
       ]);
 
       return persistedCases.map((caseRecord) => ({
+        agentState: buildPersistedCaseAgentState(
+          latestCaseAgentRuns.get(caseRecord.caseId) ?? null,
+          caseAgentWakeUps.get(caseRecord.caseId) ?? null
+        ),
         automationHoldReason: getCaseAutomationHoldReason(currentQaReviews.get(caseRecord.caseId)),
         automationStatus: toAutomationStatus(caseRecord.automationStatus),
         caseId: caseRecord.caseId,
@@ -3193,6 +3566,279 @@ export async function createAlphaLeadCaptureStore(options?: {
           updatedAt: input.updatedAt
         })
         .where(eq(automationJobs.id, jobId));
+    },
+    async queueCaseAgentTrigger(caseId, input) {
+      await db.transaction(async (transaction) => {
+        const jobInput: {
+          caseId: string;
+          payload?: Record<string, unknown>;
+          runAfter: string;
+          triggerType: CaseAgentTriggerType;
+          updatedAt: string;
+        } = {
+          caseId,
+          runAfter: input.runAfter,
+          triggerType: input.triggerType,
+          updatedAt: input.updatedAt
+        };
+
+        if (input.payload) {
+          jobInput.payload = input.payload;
+        }
+
+        await syncCaseAgentTriggerJob(transaction, jobInput);
+      });
+    },
+    async createCaseAgentRun(caseId, input) {
+      await db.transaction(async (transaction) => {
+        await transaction.insert(caseAgentRuns).values({
+          actionType: input.actionType,
+          blockedReason: input.blockedReason,
+          caseId,
+          confidencePercent: Math.max(0, Math.min(100, Math.round(input.confidence))),
+          createdAt: input.updatedAt,
+          escalationReason: input.escalationReason,
+          finishedAt: input.finishedAt,
+          id: input.agentRunId,
+          modelMode: input.modelMode,
+          proposedMessage: input.proposedMessage,
+          proposedNextAction: input.proposedNextAction,
+          proposedNextActionDueAt: input.proposedNextActionDueAt,
+          rationaleSummary: input.rationaleSummary,
+          riskLevel: input.riskLevel,
+          startedAt: input.startedAt,
+          status: input.status,
+          toolExecutionStatus: input.toolExecutionStatus,
+          triggerType: input.triggerType,
+          updatedAt: input.updatedAt
+        });
+
+        await mergeCaseAgentMemory(transaction, caseId, {
+          lastDecisionSummary: input.rationaleSummary,
+          updatedAt: input.updatedAt
+        });
+      });
+    },
+    async upsertCaseAgentMemory(caseId, input) {
+      await db.transaction(async (transaction) => {
+        await mergeCaseAgentMemory(transaction, caseId, input);
+      });
+    },
+    async queueCaseAgentReply(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const normalizedPhone = caseRecord.channelSummary?.contactValue ?? normalizePhoneNumber(caseRecord.phone);
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            updatedAt: input.updatedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await resolveOpenInterventions(transaction, {
+          caseId,
+          resolutionNote: "case_agent_reply_queued",
+          resolvedAt: input.updatedAt
+        });
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType: "case_agent_message_queued",
+          id: randomUUID(),
+          payload: {
+            agentRunId: input.agentRunId,
+            messageBody: input.messageBody,
+            nextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            triggerType: input.triggerType
+          }
+        });
+
+        if (normalizedPhone) {
+          await upsertCaseChannelState(transaction, {
+            caseId,
+            channel: "whatsapp",
+            contactValue: normalizedPhone,
+            lastInboundAt: caseRecord.channelSummary?.lastInboundAt ?? null,
+            latestOutboundBlockReason: null,
+            latestOutboundFailureCode: null,
+            latestOutboundFailureDetail: null,
+            latestOutboundMessage: input.messageBody,
+            latestOutboundProviderMessageId: null,
+            latestOutboundStatus: "queued",
+            latestOutboundUpdatedAt: input.updatedAt,
+            provider: "meta_whatsapp_cloud",
+            updatedAt: input.updatedAt
+          });
+
+          await queueWhatsAppOutboundJob(transaction, {
+            caseId,
+            jobType: whatsappAgentReplyJobType,
+            messageBody: input.messageBody,
+            normalizedPhone,
+            origin: "system",
+            sentByName: null,
+            updatedAt: input.updatedAt
+          });
+        }
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt: input.updatedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async saveCaseAgentFollowUp(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            updatedAt: input.updatedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType: "case_agent_follow_up_saved",
+          id: randomUUID(),
+          payload: {
+            agentRunId: input.agentRunId,
+            nextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            summary: input.summary,
+            triggerType: input.triggerType
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt: input.updatedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async createCaseAgentReplyDraft(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            updatedAt: input.updatedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType: "case_agent_reply_draft_created",
+          id: randomUUID(),
+          payload: {
+            agentRunId: input.agentRunId,
+            messageBody: input.messageBody,
+            nextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            summary: input.summary,
+            triggerType: input.triggerType
+          }
+        });
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt: input.updatedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async openCaseManagerIntervention(caseId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      await db.transaction(async (transaction) => {
+        const existingOpenIntervention = await transaction
+          .select({
+            interventionId: managerInterventions.id
+          })
+          .from(managerInterventions)
+          .where(
+            and(
+              eq(managerInterventions.caseId, caseId),
+              eq(managerInterventions.status, "open"),
+              eq(managerInterventions.type, "agent_decision_required")
+            )
+          )
+          .limit(1);
+
+        if (!existingOpenIntervention[0]) {
+          await transaction.insert(managerInterventions).values({
+            caseId,
+            createdAt: input.updatedAt,
+            id: randomUUID(),
+            resolutionNote: null,
+            resolvedAt: null,
+            severity: input.severity,
+            status: "open",
+            summary: input.summary,
+            type: "agent_decision_required",
+            updatedAt: input.updatedAt
+          });
+        }
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType: "case_agent_intervention_opened",
+          id: randomUUID(),
+          payload: {
+            agentRunId: input.agentRunId,
+            severity: input.severity,
+            summary: input.summary,
+            triggerType: input.triggerType
+          }
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
     },
     async recordVisitBooking(caseId, visitId, input) {
       await db.transaction(async (transaction) => {
@@ -3286,6 +3932,13 @@ export async function createAlphaLeadCaptureStore(options?: {
           updatedAt: input.updatedAt
         });
 
+        if (input.status === "sent" || input.status === "delivered") {
+          await mergeCaseAgentMemory(transaction, caseId, {
+            lastSuccessfulOutboundAt: input.updatedAt,
+            updatedAt: input.updatedAt
+          });
+        }
+
         await transaction.insert(auditEvents).values({
           caseId,
           createdAt: input.updatedAt,
@@ -3364,6 +4017,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           updatedAt: input.receivedAt
         });
 
+        await mergeCaseAgentMemory(transaction, matchedCaseId, {
+          lastInboundAt: input.receivedAt,
+          latestIntentSummary: input.textBody.slice(0, 280),
+          updatedAt: input.receivedAt
+        });
+
         await transaction.insert(auditEvents).values({
           caseId: matchedCaseId,
           createdAt: input.receivedAt,
@@ -3403,6 +4062,13 @@ export async function createAlphaLeadCaptureStore(options?: {
           provider: input.provider,
           updatedAt: input.updatedAt
         });
+
+        if (input.status === "sent" || input.status === "delivered") {
+          await mergeCaseAgentMemory(transaction, caseId, {
+            lastSuccessfulOutboundAt: input.updatedAt,
+            updatedAt: input.updatedAt
+          });
+        }
 
         await transaction.insert(auditEvents).values({
           caseId,
@@ -3569,7 +4235,6 @@ export async function createAlphaLeadCaptureStore(options?: {
 
       const dueTimestamp = new Date(input.runAt).getTime();
       let processedJobs = 0;
-      let openedInterventions = 0;
       const touchedCaseIds = new Set<string>();
 
       for (const job of dueJobs) {
@@ -3585,11 +4250,9 @@ export async function createAlphaLeadCaptureStore(options?: {
               automationStatus: cases.automationStatus,
               caseId: cases.id,
               nextActionDueAt: cases.nextActionDueAt,
-              ownerName: cases.ownerName,
-              preferredLocale: leads.preferredLocale
+              stage: cases.stage
             })
             .from(cases)
-            .innerJoin(leads, eq(cases.leadId, leads.id))
             .where(eq(cases.id, job.caseId))
             .limit(1);
 
@@ -3602,6 +4265,15 @@ export async function createAlphaLeadCaptureStore(options?: {
             .orderBy(desc(caseQaReviews.createdAt), desc(caseQaReviews.updatedAt))
             .limit(1);
 
+          const outstandingDocumentRecords = caseRecord
+            ? await transaction
+                .select({
+                  status: documentRequests.status
+                })
+                .from(documentRequests)
+                .where(eq(documentRequests.caseId, caseRecord.caseId))
+            : [];
+
           await transaction
             .update(automationJobs)
             .set({
@@ -3613,7 +4285,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           if (!caseRecord) {
             return {
               caseId: job.caseId,
-              openedIntervention: false
+              queuedTrigger: false
             };
           }
 
@@ -3623,83 +4295,39 @@ export async function createAlphaLeadCaptureStore(options?: {
           ) {
             return {
               caseId: caseRecord.caseId,
-              openedIntervention: false
+              queuedTrigger: false
             };
           }
 
           if (new Date(caseRecord.nextActionDueAt).getTime() > dueTimestamp) {
             return {
               caseId: caseRecord.caseId,
-              openedIntervention: false
+              queuedTrigger: false
             };
           }
 
-          const openIntervention = await transaction
-            .select({
-              interventionId: managerInterventions.id
-            })
-            .from(managerInterventions)
-            .where(
-              and(
-                eq(managerInterventions.caseId, caseRecord.caseId),
-                eq(managerInterventions.status, "open"),
-                eq(managerInterventions.type, "follow_up_overdue")
-              )
-            )
-            .limit(1);
+          const hasOutstandingDocuments =
+            caseRecord.stage === "documents_in_progress" &&
+            outstandingDocumentRecords.some((documentRecord) => toDocumentRequestStatus(documentRecord.status) !== "accepted");
 
-          if (openIntervention[0]) {
-            return {
-              caseId: caseRecord.caseId,
-              openedIntervention: false
-            };
-          }
-
-          const overdueHours = Math.max(0, (dueTimestamp - new Date(caseRecord.nextActionDueAt).getTime()) / (60 * 60 * 1000));
-          const severity = overdueHours >= 12 ? "critical" : "warning";
-
-          await transaction.insert(managerInterventions).values({
+          await syncCaseAgentTriggerJob(transaction, {
             caseId: caseRecord.caseId,
-            createdAt: input.runAt,
-            id: randomUUID(),
-            resolutionNote: null,
-            resolvedAt: null,
-            severity,
-            status: "open",
-            summary: buildFollowUpInterventionSummary(),
-            type: "follow_up_overdue",
+            runAfter: input.runAt,
+            triggerType: hasOutstandingDocuments ? "document_missing" : "no_response_follow_up",
             updatedAt: input.runAt
-          });
-
-          await transaction.insert(auditEvents).values({
-            caseId: caseRecord.caseId,
-            createdAt: input.runAt,
-            eventType: "follow_up_intervention_opened",
-            id: randomUUID(),
-            payload: {
-              nextActionDueAt: caseRecord.nextActionDueAt,
-              overdueHours: Number(overdueHours.toFixed(2)),
-              ownerName: caseRecord.ownerName,
-              preferredLocale: caseRecord.preferredLocale,
-              severity
-            }
           });
 
           return {
             caseId: caseRecord.caseId,
-            openedIntervention: true
+            queuedTrigger: true
           };
         });
 
         touchedCaseIds.add(cycleOutcome.caseId);
-
-        if (cycleOutcome.openedIntervention) {
-          openedInterventions += 1;
-        }
       }
 
       return {
-        openedInterventions,
+        openedInterventions: 0,
         processedJobs,
         touchedCaseIds: Array.from(touchedCaseIds)
       };
@@ -3790,15 +4418,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           updatedAt
         });
 
-        await syncWhatsAppInitialReplyJob(transaction, {
+        await syncNewLeadCaseAgentTrigger(transaction, {
           automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
           automationStatus: input.status,
           caseId,
-          contactValue: normalizePhoneNumber(caseRecord.phone),
-          customerName: caseRecord.customerName,
-          preferredLocale: caseRecord.preferredLocale,
-          projectInterest: caseRecord.projectInterest,
           source: caseRecord.source,
+          stage: caseRecord.stage,
           updatedAt
         });
       });
@@ -5343,10 +5968,6 @@ export async function createAlphaLeadCaptureStore(options?: {
   };
 }
 
-function buildFollowUpInterventionSummary() {
-  return "Manager follow-up is required because the next action is overdue.";
-}
-
 function createFutureTimestamp(anchor: string, hoursFromNow: number) {
   return new Date(new Date(anchor).getTime() + hoursFromNow * 60 * 60 * 1000).toISOString();
 }
@@ -6022,6 +6643,93 @@ function hydrateLinkedHandoverCase(value: {
   };
 }
 
+function hydrateCaseAgentMemory(value: {
+  activeRiskFlags: string[] | null;
+  documentGapSummary: string | null;
+  lastDecisionSummary: string | null;
+  lastInboundAt: string | null;
+  lastObjectionSummary: string | null;
+  lastSuccessfulOutboundAt: string | null;
+  latestIntentSummary: string | null;
+  qualificationSummary: string | null;
+  updatedAt: string;
+}): PersistedCaseAgentMemory {
+  return {
+    activeRiskFlags: value.activeRiskFlags ?? [],
+    documentGapSummary: value.documentGapSummary,
+    lastDecisionSummary: value.lastDecisionSummary,
+    lastInboundAt: value.lastInboundAt,
+    lastObjectionSummary: value.lastObjectionSummary,
+    lastSuccessfulOutboundAt: value.lastSuccessfulOutboundAt,
+    latestIntentSummary: value.latestIntentSummary,
+    qualificationSummary: value.qualificationSummary,
+    updatedAt: value.updatedAt
+  };
+}
+
+function hydrateCaseAgentRun(value: {
+  actionType: string | null;
+  blockedReason: string | null;
+  confidencePercent: number;
+  createdAt: string;
+  escalationReason: string | null;
+  finishedAt: string;
+  modelMode: string;
+  proposedMessage: string | null;
+  proposedNextAction: string | null;
+  proposedNextActionDueAt: string | null;
+  rationaleSummary: string;
+  riskLevel: string;
+  runId: string;
+  startedAt: string;
+  status: string;
+  toolExecutionStatus: string | null;
+  triggerType: string;
+  updatedAt: string;
+}): PersistedCaseAgentRun {
+  return {
+    actionType: value.actionType ? toCaseAgentActionType(value.actionType) : null,
+    agentRunId: value.runId,
+    blockedReason: value.blockedReason,
+    confidence: Math.max(0, Math.min(1, value.confidencePercent / 100)),
+    createdAt: value.createdAt,
+    escalationReason: value.escalationReason,
+    finishedAt: value.finishedAt,
+    modelMode: value.modelMode,
+    proposedMessage: value.proposedMessage,
+    proposedNextAction: value.proposedNextAction,
+    proposedNextActionDueAt: value.proposedNextActionDueAt,
+    rationaleSummary: value.rationaleSummary,
+    riskLevel: toCaseAgentRiskLevel(value.riskLevel),
+    startedAt: value.startedAt,
+    status: toCaseAgentRunStatus(value.status),
+    toolExecutionStatus: value.toolExecutionStatus ? toCaseAgentToolExecutionStatus(value.toolExecutionStatus) : null,
+    triggerType: toCaseAgentTriggerType(value.triggerType),
+    updatedAt: value.updatedAt
+  };
+}
+
+function buildPersistedCaseAgentState(
+  latestRun: PersistedCaseAgentRun | null,
+  nextWakeUpAt: string | null
+): PersistedCaseAgentState | null {
+  if (!latestRun) {
+    return null;
+  }
+
+  return {
+    latestBlockedReason: latestRun.blockedReason,
+    latestDecisionSummary: latestRun.rationaleSummary,
+    latestEscalationReason: latestRun.escalationReason,
+    latestRecommendedAction: latestRun.actionType,
+    latestRiskLevel: latestRun.riskLevel,
+    latestRunAt: latestRun.finishedAt,
+    latestRunStatus: latestRun.status,
+    latestTriggerType: latestRun.triggerType,
+    nextWakeUpAt
+  };
+}
+
 function hydrateCaseChannelSummary(value: {
   channel: string;
   contactValue: string | null;
@@ -6319,6 +7027,53 @@ function toAutomationStatus(value: string): AutomationStatus {
   }
 
   throw new Error(`unsupported_automation_status:${value}`);
+}
+
+function toCaseAgentActionType(value: string): CaseAgentActionType {
+  if (
+    value === "send_whatsapp_message" ||
+    value === "save_follow_up_plan" ||
+    value === "request_manager_intervention" ||
+    value === "pause_automation" ||
+    value === "request_document_follow_up" ||
+    value === "create_reply_draft"
+  ) {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_agent_action_type:${value}`);
+}
+
+function toCaseAgentRiskLevel(value: string): CaseAgentRiskLevel {
+  if (value === "low" || value === "medium" || value === "high") {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_agent_risk_level:${value}`);
+}
+
+function toCaseAgentRunStatus(value: string): CaseAgentRunStatus {
+  if (value === "completed" || value === "waiting" || value === "escalated" || value === "blocked" || value === "failed") {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_agent_run_status:${value}`);
+}
+
+function toCaseAgentToolExecutionStatus(value: string): CaseAgentToolExecutionStatus {
+  if (value === "executed" || value === "queued" || value === "blocked" || value === "skipped" || value === "failed") {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_agent_tool_execution_status:${value}`);
+}
+
+function toCaseAgentTriggerType(value: string): CaseAgentTriggerType {
+  if (value === "new_lead" || value === "no_response_follow_up" || value === "document_missing") {
+    return value;
+  }
+
+  throw new Error(`unsupported_case_agent_trigger_type:${value}`);
 }
 
 function toCaseStage(value: string): CaseStage {
@@ -6653,7 +7408,7 @@ function toManagerInterventionStatus(value: string): ManagerInterventionStatus {
 }
 
 function toManagerInterventionType(value: string): ManagerInterventionType {
-  if (value === "follow_up_overdue") {
+  if (value === "follow_up_overdue" || value === "agent_decision_required") {
     return value;
   }
 

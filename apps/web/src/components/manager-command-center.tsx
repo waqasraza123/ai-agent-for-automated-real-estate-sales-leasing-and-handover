@@ -57,6 +57,9 @@ import {
 } from "@/lib/manager-workspace";
 import { getOperatorPermissionGuardNote, getOperatorRoleLabel } from "@/lib/operator-role";
 import {
+  getPersistedAgentActionLabel,
+  getPersistedAgentStateNote,
+  getPersistedAgentStatusLabel,
   buildCaseReferenceCode,
   formatCaseLastChange,
   formatLatestManagerFollowUpSavedAt,
@@ -1725,6 +1728,9 @@ export function RevenueManagerCommandCenter(props: {
                 caseItem.followUpStatus,
                 caseItem.openInterventionsCount
               );
+              const agentStatusLabel = getPersistedAgentStatusLabel(props.locale, caseItem.agentState);
+              const agentActionLabel = getPersistedAgentActionLabel(props.locale, caseItem.agentState);
+              const agentNote = getPersistedAgentStateNote(props.locale, caseItem.agentState);
 
               return (
                 <WorkflowCard
@@ -1738,6 +1744,7 @@ export function RevenueManagerCommandCenter(props: {
                       {caseItem.openInterventionsCount > 0 ? (
                         <StatusBadge tone="warning">{getInterventionCountLabel(props.locale, caseItem.openInterventionsCount)}</StatusBadge>
                       ) : null}
+                      {agentStatusLabel ? <StatusBadge tone="warning">{agentStatusLabel}</StatusBadge> : null}
                       {qaReviewDisplay ? <StatusBadge tone={qaReviewDisplay.statusTone}>{qaReviewDisplay.statusLabel}</StatusBadge> : null}
                       {handoverDisplay ? <StatusBadge tone={handoverDisplay.statusTone}>{handoverDisplay.statusLabel}</StatusBadge> : null}
                     </>
@@ -1758,6 +1765,13 @@ export function RevenueManagerCommandCenter(props: {
                     </>
                   }
                 >
+                  {agentStatusLabel ? (
+                    <p className={caseMetaClassName}>
+                      {agentStatusLabel}
+                      {agentActionLabel ? ` · ${agentActionLabel}` : ""}
+                      {agentNote ? ` · ${agentNote}` : ""}
+                    </p>
+                  ) : null}
                   {caseItem.latestHumanReply ? (
                     <div className={stackTightClassName}>
                       <p className={caseMetaClassName}>

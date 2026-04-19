@@ -1,9 +1,10 @@
 import { createAlphaLeadCaptureStore } from "@real-estate-ai/database";
 import { createMetaWhatsAppClient, type WhatsAppClient } from "@real-estate-ai/integrations";
-import { runPersistedFollowUpCycle } from "@real-estate-ai/workflows";
+import { runPersistedCaseAgentCycle, runPersistedFollowUpCycle } from "@real-estate-ai/workflows";
 
 import { parseWorkerEnvironment } from "./env";
 
+const whatsappAgentReplyJobType = "whatsapp_agent_reply";
 const whatsappCaseReplyJobType = "whatsapp_case_reply";
 const whatsappInitialReplyJobType = "whatsapp_initial_reply";
 const whatsappInitialReplyMaxAttempts = 3;
@@ -176,8 +177,18 @@ async function runWhatsAppOutboundCycle(input: {
 
 const runCycle = async () => {
   const runAt = new Date().toISOString();
-  const [followUpResult, initialReplyResult, caseReplyResult] = await Promise.all([
-    runPersistedFollowUpCycle(store, {
+  const followUpResult = await runPersistedFollowUpCycle(store, {
+    limit: environment.WORKER_BATCH_LIMIT,
+    runAt
+  });
+  const caseAgentResult = await runPersistedCaseAgentCycle(store, {
+    canSendWhatsApp: Boolean(whatsappClient),
+    limit: environment.WORKER_BATCH_LIMIT,
+    runAt
+  });
+  const [agentReplyResult, initialReplyResult, caseReplyResult] = await Promise.all([
+    runWhatsAppOutboundCycle({
+      jobType: whatsappAgentReplyJobType,
       limit: environment.WORKER_BATCH_LIMIT,
       runAt
     }),
@@ -196,17 +207,32 @@ const runCycle = async () => {
   if (
     followUpResult.processedJobs > 0 ||
     followUpResult.openedInterventions > 0 ||
+    caseAgentResult.processedJobs > 0 ||
+    agentReplyResult.processedJobs > 0 ||
     initialReplyResult.processedJobs > 0 ||
     caseReplyResult.processedJobs > 0
   ) {
     console.info(
       JSON.stringify({
+        blockedAgentRuns: caseAgentResult.blockedRuns,
+        escalatedAgentRuns: caseAgentResult.escalatedRuns,
         openedInterventions: followUpResult.openedInterventions,
-        processedJobs: followUpResult.processedJobs + initialReplyResult.processedJobs + caseReplyResult.processedJobs,
+        processedJobs:
+          followUpResult.processedJobs +
+          caseAgentResult.processedJobs +
+          agentReplyResult.processedJobs +
+          initialReplyResult.processedJobs +
+          caseReplyResult.processedJobs,
         touchedCaseIds: Array.from(
-          new Set([...followUpResult.touchedCaseIds, ...initialReplyResult.touchedCaseIds, ...caseReplyResult.touchedCaseIds])
+          new Set([
+            ...followUpResult.touchedCaseIds,
+            ...caseAgentResult.touchedCaseIds,
+            ...agentReplyResult.touchedCaseIds,
+            ...initialReplyResult.touchedCaseIds,
+            ...caseReplyResult.touchedCaseIds
+          ])
         ),
-        worker: "follow_up_cycle"
+        worker: "case_agent_cycle"
       })
     );
   }

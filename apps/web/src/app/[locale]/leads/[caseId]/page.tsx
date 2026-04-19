@@ -43,6 +43,9 @@ import {
   formatDueAt,
   formatLatestManagerFollowUpSavedAt,
   formatLatestHumanReplySentAt,
+  getPersistedAgentActionLabel,
+  getPersistedAgentStateNote,
+  getPersistedAgentStatusLabel,
   getPersistedAutomationLabel,
   getPersistedAutomationHoldReasonLabel,
   getPersistedAutomationHoldReasonNote,
@@ -144,6 +147,9 @@ export default async function LeadProfilePage(props: PageProps) {
     );
     const channelStatusLabel = getPersistedChannelStatusLabel(locale, persistedCase.channelSummary);
     const channelStatusNote = getPersistedChannelStatusNote(locale, persistedCase.channelSummary);
+    const agentStatusLabel = getPersistedAgentStatusLabel(locale, persistedCase.agentState);
+    const agentActionLabel = getPersistedAgentActionLabel(locale, persistedCase.agentState);
+    const agentStateNote = getPersistedAgentStateNote(locale, persistedCase.agentState);
     const bookingStatusLabel =
       persistedCase.currentVisit?.booking?.status === "confirmed"
         ? locale === "ar"
@@ -257,6 +263,21 @@ export default async function LeadProfilePage(props: PageProps) {
         </div>
 
         <div className={twoColumnGridClassName}>
+          <Panel title={locale === "ar" ? "حالة الوكيل" : "Agent state"}>
+            <WorkflowPanelBody className="mt-4">
+              <DetailGrid>
+                <DetailItem label={locale === "ar" ? "الحالة الأخيرة" : "Latest status"} value={agentStatusLabel ?? "—"} />
+                <DetailItem label={locale === "ar" ? "آخر إجراء" : "Latest action"} value={agentActionLabel ?? "—"} />
+                <DetailItem
+                  label={locale === "ar" ? "الاستيقاظ التالي" : "Next wake-up"}
+                  value={persistedCase.agentState?.nextWakeUpAt ? formatDateTime(persistedCase.agentState.nextWakeUpAt, locale) : "—"}
+                />
+                <DetailItem label={locale === "ar" ? "آخر تشغيل" : "Latest run"} value={persistedCase.agentState?.latestRunAt ? formatDateTime(persistedCase.agentState.latestRunAt, locale) : "—"} />
+              </DetailGrid>
+              {agentStateNote ? <p className={caseMetaClassName}>{agentStateNote}</p> : null}
+            </WorkflowPanelBody>
+          </Panel>
+
           <Panel title={locale === "ar" ? "حالة القناة والزيارة" : "Channel and booking state"}>
             <WorkflowPanelBody className="mt-4">
               <WorkflowCard

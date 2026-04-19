@@ -1114,9 +1114,11 @@ export function getInterventionSeverityLabel(locale: SupportedLocale, severity: 
 export function getInterventionSummary(locale: SupportedLocale, type: ManagerInterventionType) {
   const summaries = {
     ar: {
+      agent_decision_required: "اتخذ الوكيل الآلي قراراً يحتاج إلى مراجعة مديرية قبل استمرار الحالة.",
       follow_up_overdue: "تجاوزت الخطوة التالية موعدها المحدد وتحتاج إلى تدخل المدير."
     },
     en: {
+      agent_decision_required: "The case agent reached a decision that now needs manager review before the case can continue.",
       follow_up_overdue: "The next action is overdue and now requires manager intervention."
     }
   } as const;

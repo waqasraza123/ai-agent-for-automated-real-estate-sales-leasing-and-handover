@@ -77,7 +77,11 @@ export function buildManagerWorkspaceQueues(persistedCases: PersistedManagerCase
     });
 
   const revenueAttentionCases = persistedCases.filter(
-    (caseItem) => caseItem.followUpStatus === "attention" || caseItem.openInterventionsCount > 0
+    (caseItem) =>
+      caseItem.followUpStatus === "attention" ||
+      caseItem.openInterventionsCount > 0 ||
+      caseItem.agentState?.latestRunStatus === "blocked" ||
+      caseItem.agentState?.latestRunStatus === "escalated"
   );
   const governanceHeldAutomationCases = persistedCases.filter((caseItem) => caseItem.automationHoldReason !== null);
   const pausedAutomationCases = persistedCases.filter((caseItem) => caseItem.automationStatus === "paused");

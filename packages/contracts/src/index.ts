@@ -38,9 +38,21 @@ export const messageDeliveryStatusSchema = z.enum(["not_started", "blocked", "qu
 export const messageDeliveryBlockReasonSchema = z.enum(["missing_phone", "qa_hold", "automation_paused", "client_credentials_pending"]);
 export const calendarProviderSchema = z.enum(["google_calendar"]);
 export const visitBookingStatusSchema = z.enum(["not_requested", "pending", "confirmed", "blocked", "failed"]);
-export const managerInterventionTypeSchema = z.enum(["follow_up_overdue"]);
+export const managerInterventionTypeSchema = z.enum(["follow_up_overdue", "agent_decision_required"]);
 export const managerInterventionSeveritySchema = z.enum(["warning", "critical"]);
 export const managerInterventionStatusSchema = z.enum(["open", "resolved"]);
+export const caseAgentTriggerTypeSchema = z.enum(["new_lead", "no_response_follow_up", "document_missing"]);
+export const caseAgentRunStatusSchema = z.enum(["completed", "waiting", "escalated", "blocked", "failed"]);
+export const caseAgentRiskLevelSchema = z.enum(["low", "medium", "high"]);
+export const caseAgentActionTypeSchema = z.enum([
+  "send_whatsapp_message",
+  "save_follow_up_plan",
+  "request_manager_intervention",
+  "pause_automation",
+  "request_document_follow_up",
+  "create_reply_draft"
+]);
+export const caseAgentToolExecutionStatusSchema = z.enum(["executed", "queued", "blocked", "skipped", "failed"]);
 export const caseQaReviewStatusSchema = z.enum(["pending_review", "approved", "follow_up_required"]);
 export const caseQaReviewTriggerSourceSchema = z.enum(["manual_request", "policy_rule"]);
 export const caseQaReviewSubjectTypeSchema = z.enum(["case_message", "prepared_reply_draft"]);
@@ -350,6 +362,51 @@ export const persistedCaseQaReviewSchema = z.object({
   updatedAt: z.iso.datetime()
 });
 
+export const persistedCaseAgentMemorySchema = z.object({
+  activeRiskFlags: z.array(z.string()),
+  documentGapSummary: z.string().nullable(),
+  lastDecisionSummary: z.string().nullable(),
+  lastInboundAt: z.iso.datetime().nullable(),
+  lastObjectionSummary: z.string().nullable(),
+  lastSuccessfulOutboundAt: z.iso.datetime().nullable(),
+  latestIntentSummary: z.string().nullable(),
+  qualificationSummary: z.string().nullable(),
+  updatedAt: z.iso.datetime()
+});
+
+export const persistedCaseAgentRunSchema = z.object({
+  actionType: caseAgentActionTypeSchema.nullable(),
+  agentRunId: z.uuid(),
+  blockedReason: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+  createdAt: z.iso.datetime(),
+  escalationReason: z.string().nullable(),
+  finishedAt: z.iso.datetime(),
+  modelMode: z.string(),
+  proposedMessage: z.string().nullable(),
+  proposedNextAction: z.string().nullable(),
+  proposedNextActionDueAt: z.iso.datetime().nullable(),
+  rationaleSummary: z.string(),
+  riskLevel: caseAgentRiskLevelSchema,
+  startedAt: z.iso.datetime(),
+  status: caseAgentRunStatusSchema,
+  toolExecutionStatus: caseAgentToolExecutionStatusSchema.nullable(),
+  triggerType: caseAgentTriggerTypeSchema,
+  updatedAt: z.iso.datetime()
+});
+
+export const persistedCaseAgentStateSchema = z.object({
+  latestBlockedReason: z.string().nullable(),
+  latestDecisionSummary: z.string().nullable(),
+  latestEscalationReason: z.string().nullable(),
+  latestRecommendedAction: caseAgentActionTypeSchema.nullable(),
+  latestRiskLevel: caseAgentRiskLevelSchema.nullable(),
+  latestRunAt: z.iso.datetime(),
+  latestRunStatus: caseAgentRunStatusSchema,
+  latestTriggerType: caseAgentTriggerTypeSchema,
+  nextWakeUpAt: z.iso.datetime().nullable()
+});
+
 export const persistedHandoverTaskSchema = z.object({
   createdAt: z.iso.datetime(),
   dueAt: z.iso.datetime(),
@@ -610,6 +667,7 @@ export const persistedGovernanceSummarySchema = z.object({
 });
 
 export const persistedCaseSummarySchema = z.object({
+  agentState: persistedCaseAgentStateSchema.nullable().optional(),
   automationHoldReason: caseAutomationHoldReasonSchema.nullable(),
   automationStatus: automationStatusSchema,
   caseId: z.uuid(),
@@ -635,6 +693,8 @@ export const persistedCaseSummarySchema = z.object({
 });
 
 export const persistedCaseDetailSchema = persistedCaseSummarySchema.extend({
+  agentMemory: persistedCaseAgentMemorySchema.nullable().optional(),
+  agentRuns: z.array(persistedCaseAgentRunSchema).optional(),
   auditEvents: z.array(persistedAuditEventSchema),
   budget: z.string().nullable(),
   currentVisit: persistedVisitSchema.nullable(),
@@ -680,6 +740,11 @@ export const manageBulkCaseFollowUpResultSchema = z.object({
 export type ApproveHandoverCustomerUpdateInput = z.infer<typeof approveHandoverCustomerUpdateInputSchema>;
 export type AutomationStatus = z.infer<typeof automationStatusSchema>;
 export type CalendarProvider = z.infer<typeof calendarProviderSchema>;
+export type CaseAgentActionType = z.infer<typeof caseAgentActionTypeSchema>;
+export type CaseAgentRiskLevel = z.infer<typeof caseAgentRiskLevelSchema>;
+export type CaseAgentRunStatus = z.infer<typeof caseAgentRunStatusSchema>;
+export type CaseAgentToolExecutionStatus = z.infer<typeof caseAgentToolExecutionStatusSchema>;
+export type CaseAgentTriggerType = z.infer<typeof caseAgentTriggerTypeSchema>;
 export type CaseAutomationHoldReason = z.infer<typeof caseAutomationHoldReasonSchema>;
 export type CaseContactChannel = z.infer<typeof caseContactChannelSchema>;
 export type CaseStage = z.infer<typeof caseStageSchema>;
@@ -737,6 +802,9 @@ export type PersistedCaseDetail = z.infer<typeof persistedCaseDetailSchema>;
 export type PersistedCaseQaReview = z.infer<typeof persistedCaseQaReviewSchema>;
 export type PersistedBulkManagerFollowUp = z.infer<typeof persistedBulkManagerFollowUpSchema>;
 export type PersistedCaseChannelSummary = z.infer<typeof persistedCaseChannelSummarySchema>;
+export type PersistedCaseAgentMemory = z.infer<typeof persistedCaseAgentMemorySchema>;
+export type PersistedCaseAgentRun = z.infer<typeof persistedCaseAgentRunSchema>;
+export type PersistedCaseAgentState = z.infer<typeof persistedCaseAgentStateSchema>;
 export type PersistedLatestCaseReply = z.infer<typeof persistedLatestCaseReplySchema>;
 export type PersistedLatestManagerFollowUp = z.infer<typeof persistedLatestManagerFollowUpSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;

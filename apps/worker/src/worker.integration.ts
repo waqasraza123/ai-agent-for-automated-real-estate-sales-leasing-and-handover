@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createAlphaLeadCaptureStore } from "@real-estate-ai/database";
-import { managePersistedCaseFollowUp, runPersistedFollowUpCycle } from "@real-estate-ai/workflows";
+import { runPersistedCaseAgentCycle, runPersistedFollowUpCycle } from "@real-estate-ai/workflows";
 
-describe("follow-up worker", () => {
+describe("case agent worker", () => {
   let store: Awaited<ReturnType<typeof createAlphaLeadCaptureStore>>;
 
   beforeEach(async () => {
@@ -16,126 +16,166 @@ describe("follow-up worker", () => {
     await store.close();
   });
 
-  it("opens an intervention for an overdue case and re-arms follow-up after manager intervention", async () => {
+  it("queues a WhatsApp first reply for a new low-risk lead", async () => {
     const createdCase = await store.createWebsiteLeadCase({
       customerName: "Maya Cole",
       email: "maya@example.com",
-      message: "Need a quick callback about a premium unit this afternoon.",
+      message: "Need a callback about a premium unit this afternoon.",
       nextAction: "Call the buyer back immediately",
       nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+1 555 200 1000",
       preferredLocale: "en",
       projectInterest: "Marina Crest"
     });
+    const runAt = "2099-01-01T00:00:00.000Z";
 
-    const firstCycle = await runPersistedFollowUpCycle(store, {
-      limit: 10,
-      runAt: "2026-04-12T12:00:00.000Z"
+    const cycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      runAt
     });
 
-    expect(firstCycle.processedJobs).toBe(1);
-    expect(firstCycle.openedInterventions).toBe(1);
+    expect(cycle.processedJobs).toBe(1);
+    expect(cycle.blockedRuns).toBe(0);
 
-    const overdueCase = await store.getCaseDetail(createdCase.caseId);
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
 
-    expect(overdueCase?.openInterventionsCount).toBe(1);
-    expect(overdueCase?.managerInterventions[0]?.type).toBe("follow_up_overdue");
-
-    const updatedCase = await managePersistedCaseFollowUp(store, createdCase.caseId, {
-      nextAction: "Manager callback confirmed for tomorrow morning",
-      nextActionDueAt: "2026-04-13T09:30:00.000Z",
-      ownerName: "Manager Desk North"
-    });
-
-    expect(updatedCase?.openInterventionsCount).toBe(0);
-    expect(updatedCase?.ownerName).toBe("Manager Desk North");
-
-    const secondCycle = await runPersistedFollowUpCycle(store, {
-      limit: 10,
-      runAt: "2026-04-13T12:00:00.000Z"
-    });
-
-    expect(secondCycle.processedJobs).toBe(1);
-    expect(secondCycle.openedInterventions).toBe(1);
+    expect(caseDetail?.agentState?.latestTriggerType).toBe("new_lead");
+    expect(caseDetail?.agentState?.latestRecommendedAction).toBe("send_whatsapp_message");
+    expect(caseDetail?.agentState?.latestRunStatus).toBe("completed");
+    expect(caseDetail?.channelSummary?.latestOutboundStatus).toBe("queued");
+    expect(caseDetail?.agentRuns?.[0]?.proposedMessage).toContain("Marina Crest");
   });
 
-  it("skips overdue intervention creation when automation is paused", async () => {
+  it("records a blocked run when client WhatsApp credentials are not available", async () => {
     const createdCase = await store.createWebsiteLeadCase({
       customerName: "Layal Abbas",
       email: "layal@example.com",
       message: "Need a bilingual callback later today.",
       nextAction: "Prepare first bilingual reply",
       nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 55 555 1111",
       preferredLocale: "ar",
       projectInterest: "Palm Horizon"
     });
+    const runAt = "2099-01-01T00:00:00.000Z";
 
-    await store.setAutomationStatus(createdCase.caseId, {
-      status: "paused"
+    const cycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: false,
+      runAt
     });
 
-    const cycle = await runPersistedFollowUpCycle(store, {
-      limit: 10,
-      runAt: "2026-04-12T12:00:00.000Z"
-    });
-
-    expect(cycle.processedJobs).toBe(0);
-    expect(cycle.openedInterventions).toBe(0);
+    expect(cycle.processedJobs).toBe(1);
+    expect(cycle.blockedRuns).toBe(1);
 
     const caseDetail = await store.getCaseDetail(createdCase.caseId);
 
-    expect(caseDetail?.automationStatus).toBe("paused");
-    expect(caseDetail?.openInterventionsCount).toBe(0);
+    expect(caseDetail?.agentState?.latestRunStatus).toBe("blocked");
+    expect(caseDetail?.agentState?.latestBlockedReason).toBe("client_credentials_pending");
+    expect(caseDetail?.channelSummary?.latestOutboundStatus).toBe("blocked");
+    expect(caseDetail?.channelSummary?.latestOutboundBlockReason).toBe("client_credentials_pending");
   });
 
-  it("suppresses overdue automation while QA is open and re-arms follow-up once QA clears", async () => {
+  it("escalates a repeated no-response case after an earlier automated follow-up", async () => {
     const createdCase = await store.createWebsiteLeadCase({
       customerName: "Noura Aziz",
       email: "noura@example.com",
-      message:
-        "I am frustrated and need a special approval on the deposit terms. If this keeps happening, my lawyer will step in.",
-      nextAction: "Call the customer back with the next revenue update",
+      message: "Need details on the available layout.",
+      nextAction: "Review the lead and continue qualification",
       nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 50 123 7777",
       preferredLocale: "en",
       projectInterest: "Harbor Gate"
     });
 
-    expect(createdCase.automationHoldReason).toBe("qa_pending_review");
-    expect(createdCase.currentQaReview?.status).toBe("pending_review");
+    await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      runAt: "2026-04-12T08:05:00.000Z"
+    });
 
-    const heldCycle = await runPersistedFollowUpCycle(store, {
+    await store.manageCaseFollowUp(createdCase.caseId, {
+      nextAction: "Check back if the customer stays silent",
+      nextActionDueAt: "2026-04-12T09:00:00.000Z",
+      ownerName: "Revenue Ops Queue"
+    });
+
+    const firstDueCycle = await runPersistedFollowUpCycle(store, {
       limit: 10,
       runAt: "2026-04-12T12:00:00.000Z"
     });
-
-    expect(heldCycle.processedJobs).toBe(0);
-    expect(heldCycle.openedInterventions).toBe(0);
-
-    const pendingCase = await store.getCaseDetail(createdCase.caseId);
-
-    expect(pendingCase?.automationHoldReason).toBe("qa_pending_review");
-    expect(pendingCase?.openInterventionsCount).toBe(0);
-
-    const resolvedCase = await store.resolveCaseQaReview(createdCase.caseId, createdCase.currentQaReview!.qaReviewId, {
-      reviewSummary: "The escalation can proceed with a compliant human-managed response.",
-      reviewerName: "QA Desk",
-      status: "approved"
+    const firstAgentCycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      runAt: "2026-04-12T12:00:00.000Z"
     });
 
-    expect(resolvedCase?.automationHoldReason).toBeNull();
-    expect(resolvedCase?.currentQaReview?.status).toBe("approved");
+    expect(firstDueCycle.processedJobs).toBe(1);
+    expect(firstAgentCycle.processedJobs).toBe(1);
+    expect(firstAgentCycle.escalatedRuns).toBe(0);
 
-    const resumedCycle = await runPersistedFollowUpCycle(store, {
+    await store.manageCaseFollowUp(createdCase.caseId, {
+      nextAction: "One more check-in before escalation",
+      nextActionDueAt: "2026-04-12T13:00:00.000Z",
+      ownerName: "Revenue Ops Queue"
+    });
+
+    const secondDueCycle = await runPersistedFollowUpCycle(store, {
       limit: 10,
-      runAt: "2026-04-12T12:05:00.000Z"
+      runAt: "2026-04-12T16:00:00.000Z"
+    });
+    const secondAgentCycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      runAt: "2026-04-12T16:00:00.000Z"
     });
 
-    expect(resumedCycle.processedJobs).toBe(1);
-    expect(resumedCycle.openedInterventions).toBe(1);
+    expect(secondDueCycle.processedJobs).toBe(1);
+    expect(secondAgentCycle.processedJobs).toBe(1);
+    expect(secondAgentCycle.escalatedRuns).toBe(1);
 
-    const escalatedCase = await store.getCaseDetail(createdCase.caseId);
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
 
-    expect(escalatedCase?.automationHoldReason).toBeNull();
-    expect(escalatedCase?.openInterventionsCount).toBe(1);
-    expect(escalatedCase?.managerInterventions[0]?.type).toBe("follow_up_overdue");
+    expect(caseDetail?.agentState?.latestTriggerType).toBe("no_response_follow_up");
+    expect(caseDetail?.agentState?.latestRunStatus).toBe("escalated");
+    expect(caseDetail?.managerInterventions[0]?.type).toBe("agent_decision_required");
+  });
+
+  it("routes document-stage cases through the document-missing trigger", async () => {
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Sami Khan",
+      email: "sami@example.com",
+      message: "I can send the remaining paperwork after the visit.",
+      nextAction: "Track the lead after the visit",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 54 000 9898",
+      preferredLocale: "en",
+      projectInterest: "Palm Horizon"
+    });
+
+    const firstCase = await store.getCaseDetail(createdCase.caseId);
+    const firstDocumentId = firstCase?.documentRequests[0]?.documentRequestId;
+
+    expect(firstDocumentId).toBeTruthy();
+
+    await store.updateDocumentRequestStatus(createdCase.caseId, firstDocumentId!, {
+      nextAction: "Chase the missing documents",
+      nextActionDueAt: "2026-04-12T10:00:00.000Z",
+      status: "rejected"
+    });
+
+    const dueCycle = await runPersistedFollowUpCycle(store, {
+      limit: 10,
+      runAt: "2026-04-12T12:00:00.000Z"
+    });
+    const agentCycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      runAt: "2026-04-12T12:00:00.000Z"
+    });
+
+    expect(dueCycle.processedJobs).toBe(1);
+    expect(agentCycle.processedJobs).toBe(1);
+
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
+
+    expect(caseDetail?.agentState?.latestTriggerType).toBe("document_missing");
+    expect(caseDetail?.agentState?.latestRecommendedAction).toBe("send_whatsapp_message");
+    expect(caseDetail?.agentMemory?.documentGapSummary).toContain("government");
   });
 });
