@@ -53,6 +53,7 @@ The repository is past bootstrap and currently contains a working local alpha fo
 - persisted document upload and authenticated download flow backed by local storage for live cases
 - production-style `CaseAgentOrchestrator` runtime for `new_lead`, `no_response_follow_up`, and `document_missing`
 - asynchronous document-analysis pipeline with safe auto-accept, re-upload recommendation, and manual-review fallback over uploaded evidence
+- provider-ready text extraction with preview-first parsing and optional Tesseract OCR for uploaded documents
 - provider-backed model adapter boundary with deterministic fallback and scenario-based evaluation coverage
 - Playwright smoke tests and opt-in visual regression baselines
 - integration-tested website lead capture, WhatsApp webhook handling, qualification, visit scheduling, document updates, and manager-readable persisted case APIs
@@ -63,7 +64,6 @@ Not implemented yet:
 - full production PostgreSQL deployment wiring
 - authentication and authorization
 - CRM export and sync
-- document OCR, extraction, and review intelligence over uploaded files
 - downstream CRM export and sync
 - production deployment automation around provider secrets and hosting
 - broader handover packaging beyond the current local implementation
@@ -198,6 +198,11 @@ Optional agent-decision provider configuration:
 - `WORKER_AGENT_OPENAI_BASE_URL`: defaults to `https://api.openai.com/v1`
 - `WORKER_AGENT_OPENAI_TIMEOUT_MS`: request timeout for model calls
 - `WORKER_DOCUMENT_STORAGE_PATH`: local document-upload directory the worker reads when running document analysis
+- `WORKER_DOCUMENT_OCR_MODE`: `preview_only` by default, or `tesseract` to enable OCR for image uploads
+- `WORKER_TESSERACT_LANGUAGES`: OCR language pack list; defaults to `eng+ara`
+- `WORKER_TESSERACT_PATH`: OCR executable path; defaults to `tesseract`
+- `WORKER_TESSERACT_PSM`: Tesseract page segmentation mode; defaults to `6`
+- `WORKER_TESSERACT_TIMEOUT_MS`: OCR process timeout in milliseconds
 
 If those worker variables are unset, the `CaseAgentOrchestrator` still runs through the deterministic policy adapter. If the provider call fails or returns invalid structured output, the worker falls back to deterministic policy and records the run as a provider fallback mode.
 
@@ -231,6 +236,8 @@ Current document flow:
 - the API persists upload metadata plus the file bytes
 - the web app exposes authenticated download links through a Next.js proxy route
 - the worker queues each upload for asynchronous document analysis
+- preview text extraction is enabled by default for text-bearing files, and optional Tesseract OCR can be enabled for image uploads without changing the analysis contracts
+- upload analyses now persist extraction source, extraction status, and extraction-failure detail so operator UI and agent logic can distinguish no-text, extracted-text, and OCR-failure cases
 - strong text-based matches can auto-accept, strong mismatches can auto-reject and wake the document-missing agent path, and ambiguous uploads stay in manual review
 - `document_missing` agent logic now keys off real upload evidence and persisted analysis state instead of checklist status alone
 

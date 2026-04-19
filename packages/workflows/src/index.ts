@@ -14,6 +14,8 @@ import type {
   CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  DocumentTextExtractionSource,
+  DocumentTextExtractionStatus,
   DocumentRequestStatus,
   DocumentRequestType,
   DocumentUploadAnalysisRecommendation,
@@ -306,7 +308,10 @@ export function createDeterministicCaseAgentModelAdapter(): CaseAgentModelAdapte
 export interface DocumentUploadAnalysisInput {
   caseDetail: PersistedCaseDetail;
   documentRequest: PersistedCaseDetail["documentRequests"][number];
+  extractedTextFailureDetail: string | null;
   extractedTextPreview: string | null;
+  extractedTextSource: DocumentTextExtractionSource;
+  extractedTextStatus: DocumentTextExtractionStatus;
   now: string;
   upload: PersistedDocumentUpload;
 }
@@ -612,7 +617,10 @@ export async function uploadPersistedDocument(
               confidencePercent: null,
               detectedType: null,
               evidence: [],
+              extractedTextFailureDetail: null,
               extractedTextPreview: null,
+              extractedTextSource: "none" as const,
+              extractedTextStatus: "not_available" as const,
               providerMode: "queued_pending_analysis",
               recommendation: null,
               status: "pending" as const,
@@ -636,7 +644,10 @@ export async function uploadPersistedDocument(
                 confidencePercent: null,
                 detectedType: null,
                 evidence: [],
+                extractedTextFailureDetail: null,
                 extractedTextPreview: null,
+                extractedTextSource: "none" as const,
+                extractedTextStatus: "not_available" as const,
                 providerMode: "queued_pending_analysis",
                 recommendation: null,
                 status: "pending" as const,
@@ -670,7 +681,10 @@ export async function resolvePersistedDocumentUploadAnalysis(
     caseDetail: PersistedCaseDetail;
     documentRequestId: string;
     documentUploadId: string;
+    extractedTextFailureDetail: string | null;
     extractedTextPreview: string | null;
+    extractedTextSource: DocumentTextExtractionSource;
+    extractedTextStatus: DocumentTextExtractionStatus;
     modelAdapter?: DocumentUploadAnalysisModelAdapter;
     now?: string;
   }
@@ -691,7 +705,10 @@ export async function resolvePersistedDocumentUploadAnalysis(
     decision = await modelAdapter.analyzeDocument({
       caseDetail: input.caseDetail,
       documentRequest,
+      extractedTextFailureDetail: input.extractedTextFailureDetail,
       extractedTextPreview: input.extractedTextPreview,
+      extractedTextSource: input.extractedTextSource,
+      extractedTextStatus: input.extractedTextStatus,
       now,
       upload
     });
@@ -699,7 +716,10 @@ export async function resolvePersistedDocumentUploadAnalysis(
     decision = decideDocumentUploadAnalysisDeterministic({
       caseDetail: input.caseDetail,
       documentRequest,
+      extractedTextFailureDetail: input.extractedTextFailureDetail,
       extractedTextPreview: input.extractedTextPreview,
+      extractedTextSource: input.extractedTextSource,
+      extractedTextStatus: input.extractedTextStatus,
       now,
       upload
     });
@@ -711,7 +731,10 @@ export async function resolvePersistedDocumentUploadAnalysis(
 
   const resolvedAnalysis = applyDocumentUploadAnalysisGuardrails(input.caseDetail, documentRequest, {
     decision,
+    extractedTextFailureDetail: input.extractedTextFailureDetail,
     extractedTextPreview: input.extractedTextPreview,
+    extractedTextSource: input.extractedTextSource,
+    extractedTextStatus: input.extractedTextStatus,
     modelMode,
     now
   });
@@ -744,7 +767,10 @@ export async function resolvePersistedDocumentUploadAnalysis(
     confidencePercent: resolvedAnalysis.analysis.confidencePercent,
     detectedType: resolvedAnalysis.analysis.detectedType,
     evidence: resolvedAnalysis.analysis.evidence,
+    extractedTextFailureDetail: resolvedAnalysis.analysis.extractedTextFailureDetail,
     extractedTextPreview: resolvedAnalysis.analysis.extractedTextPreview,
+    extractedTextSource: resolvedAnalysis.analysis.extractedTextSource,
+    extractedTextStatus: resolvedAnalysis.analysis.extractedTextStatus,
     nextAction: deriveDocumentWorkflowNextAction(projectedDocumentRequests, input.caseDetail.preferredLocale),
     nextActionDueAt: resolvedAnalysis.nextActionDueAt,
     providerMode: resolvedAnalysis.analysis.providerMode,
@@ -804,7 +830,10 @@ function applyDocumentUploadAnalysisGuardrails(
   documentRequest: PersistedCaseDetail["documentRequests"][number],
   input: {
     decision: DocumentUploadAnalysisDecision;
+    extractedTextFailureDetail: string | null;
     extractedTextPreview: string | null;
+    extractedTextSource: DocumentTextExtractionSource;
+    extractedTextStatus: DocumentTextExtractionStatus;
     modelMode: string;
     now: string;
   }
@@ -832,7 +861,10 @@ function applyDocumentUploadAnalysisGuardrails(
       confidencePercent,
       detectedType: input.decision.detectedType,
       evidence: safeEvidence,
+      extractedTextFailureDetail: input.extractedTextFailureDetail,
       extractedTextPreview: input.extractedTextPreview,
+      extractedTextSource: input.extractedTextSource,
+      extractedTextStatus: input.extractedTextStatus,
       providerMode: input.modelMode,
       recommendation,
       status,
@@ -847,6 +879,24 @@ function applyDocumentUploadAnalysisGuardrails(
 
 function decideDocumentUploadAnalysisDeterministic(input: DocumentUploadAnalysisInput): DocumentUploadAnalysisDecision {
   const expectedLabel = getDocumentTypeLabel(input.caseDetail.preferredLocale, input.documentRequest.type);
+
+  if (input.extractedTextStatus === "failed") {
+    return {
+      confidence: 0.6,
+      detectedType: null,
+      evidence: [
+        input.extractedTextFailureDetail ??
+          (input.caseDetail.preferredLocale === "ar"
+            ? "تعذر استخراج نص قابل للاستخدام من الملف."
+            : "The worker could not extract usable text from the file.")
+      ],
+      recommendation: "manual_review",
+      summary:
+        input.caseDetail.preferredLocale === "ar"
+          ? `تم حفظ ${expectedLabel} لكن استخراج النص فشل، لذلك تحتاج الحالة مراجعة بشرية.`
+          : `The ${expectedLabel} was stored, but text extraction failed, so it needs human review.`
+    };
+  }
 
   if (input.upload.sizeBytes < 2048) {
     return {

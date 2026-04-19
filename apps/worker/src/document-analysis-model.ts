@@ -170,28 +170,6 @@ export function createOpenAiDocumentUploadAnalysisModelAdapter(input: {
   };
 }
 
-export function extractDocumentTextPreview(input: {
-  bytes: Uint8Array;
-  mimeType: string;
-}) {
-  if (input.bytes.byteLength === 0) {
-    return null;
-  }
-
-  if (input.mimeType !== "application/pdf" && !input.mimeType.startsWith("text/")) {
-    return null;
-  }
-
-  const rawText = Buffer.from(input.bytes).toString("latin1");
-  const candidateSegments = rawText.match(/[A-Za-z0-9\u0600-\u06FF][A-Za-z0-9\u0600-\u06FF\s:/#().,-]{8,120}/g) ?? [];
-  const uniqueSegments = Array.from(new Set(candidateSegments.map((segment) => segment.replace(/\s+/g, " ").trim()))).filter(
-    (segment) => segment.length >= 8
-  );
-  const preview = uniqueSegments.slice(0, 10).join(" | ").slice(0, 1200);
-
-  return preview.length > 0 ? preview : null;
-}
-
 function buildOpenAiDocumentAnalysisPromptInput(input: DocumentUploadAnalysisInput) {
   return {
     constraints: {
@@ -202,7 +180,10 @@ function buildOpenAiDocumentAnalysisPromptInput(input: DocumentUploadAnalysisInp
       caseLocale: input.caseDetail.preferredLocale,
       customerName: input.caseDetail.customerName,
       expectedType: input.documentRequest.type,
+      extractedTextFailureDetail: input.extractedTextFailureDetail,
       extractedTextPreview: input.extractedTextPreview,
+      extractedTextSource: input.extractedTextSource,
+      extractedTextStatus: input.extractedTextStatus,
       fileName: input.upload.fileName,
       mimeType: input.upload.mimeType,
       sizeBytes: input.upload.sizeBytes

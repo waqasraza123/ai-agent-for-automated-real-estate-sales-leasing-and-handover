@@ -28,6 +28,8 @@ import type {
   CreateHandoverBlockerInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  DocumentTextExtractionSource,
+  DocumentTextExtractionStatus,
   DocumentUploadAnalysisRecommendation,
   DocumentUploadAnalysisStatus,
   DocumentRequestStatus,
@@ -312,7 +314,10 @@ const documentUploadAnalyses = pgTable("document_upload_analyses", {
     .unique()
     .references(() => documentUploads.id, { onDelete: "cascade" }),
   evidence: jsonb("evidence").$type<string[]>().notNull(),
+  extractedTextFailureDetail: text("extracted_text_failure_detail"),
   extractedTextPreview: text("extracted_text_preview"),
+  extractedTextSource: text("extracted_text_source").notNull(),
+  extractedTextStatus: text("extracted_text_status").notNull(),
   providerMode: text("provider_mode").notNull(),
   recommendation: text("recommendation"),
   status: text("status").notNull(),
@@ -625,7 +630,10 @@ export interface LeadCaptureStore {
       confidencePercent: number | null;
       detectedType: DocumentRequestType | null;
       evidence: string[];
+      extractedTextFailureDetail: string | null;
       extractedTextPreview: string | null;
+      extractedTextSource: DocumentTextExtractionSource;
+      extractedTextStatus: DocumentTextExtractionStatus;
       nextAction: string;
       nextActionDueAt: string;
       providerMode: string;
@@ -1183,12 +1191,20 @@ export async function createAlphaLeadCaptureStore(options?: {
       detected_type text,
       summary text not null,
       evidence jsonb not null default '[]'::jsonb,
+      extracted_text_failure_detail text,
       extracted_text_preview text,
+      extracted_text_source text not null default 'none',
+      extracted_text_status text not null default 'not_available',
       provider_mode text not null,
       analyzed_at timestamptz,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
+
+    alter table document_upload_analyses add column if not exists extracted_text_failure_detail text;
+    alter table document_upload_analyses add column if not exists extracted_text_preview text;
+    alter table document_upload_analyses add column if not exists extracted_text_source text not null default 'none';
+    alter table document_upload_analyses add column if not exists extracted_text_status text not null default 'not_available';
 
     create table if not exists handover_cases (
       id uuid primary key,
@@ -2435,7 +2451,10 @@ export async function createAlphaLeadCaptureStore(options?: {
             detectedType: documentUploadAnalyses.detectedType,
             documentUploadId: documentUploadAnalyses.documentUploadId,
             evidence: documentUploadAnalyses.evidence,
+            extractedTextFailureDetail: documentUploadAnalyses.extractedTextFailureDetail,
             extractedTextPreview: documentUploadAnalyses.extractedTextPreview,
+            extractedTextSource: documentUploadAnalyses.extractedTextSource,
+            extractedTextStatus: documentUploadAnalyses.extractedTextStatus,
             providerMode: documentUploadAnalyses.providerMode,
             recommendation: documentUploadAnalyses.recommendation,
             status: documentUploadAnalyses.status,
@@ -4899,7 +4918,10 @@ export async function createAlphaLeadCaptureStore(options?: {
           detectedType: null,
           documentUploadId: input.documentUploadId,
           evidence: [],
+          extractedTextFailureDetail: null,
           extractedTextPreview: null,
+          extractedTextSource: "none",
+          extractedTextStatus: "not_available",
           providerMode: "queued_pending_analysis",
           recommendation: null,
           status: "pending",
@@ -5007,7 +5029,10 @@ export async function createAlphaLeadCaptureStore(options?: {
             detectedType: input.detectedType,
             documentUploadId,
             evidence: input.evidence,
+            extractedTextFailureDetail: input.extractedTextFailureDetail,
             extractedTextPreview: input.extractedTextPreview,
+            extractedTextSource: input.extractedTextSource,
+            extractedTextStatus: input.extractedTextStatus,
             providerMode: input.providerMode,
             recommendation: input.recommendation,
             status: input.status,
@@ -5020,7 +5045,10 @@ export async function createAlphaLeadCaptureStore(options?: {
               confidencePercent: input.confidencePercent,
               detectedType: input.detectedType,
               evidence: input.evidence,
+              extractedTextFailureDetail: input.extractedTextFailureDetail,
               extractedTextPreview: input.extractedTextPreview,
+              extractedTextSource: input.extractedTextSource,
+              extractedTextStatus: input.extractedTextStatus,
               providerMode: input.providerMode,
               recommendation: input.recommendation,
               status: input.status,
@@ -5065,6 +5093,8 @@ export async function createAlphaLeadCaptureStore(options?: {
             documentRequestId,
             documentUploadId,
             evidence: input.evidence,
+            extractedTextSource: input.extractedTextSource,
+            extractedTextStatus: input.extractedTextStatus,
             providerMode: input.providerMode,
             recommendation: input.recommendation,
             status: input.status,
@@ -7356,7 +7386,10 @@ function hydrateDocumentUploadAnalysis(value: {
   confidencePercent: number | null;
   detectedType: string | null;
   evidence: string[];
+  extractedTextFailureDetail: string | null;
   extractedTextPreview: string | null;
+  extractedTextSource: string;
+  extractedTextStatus: string;
   providerMode: string;
   recommendation: string | null;
   status: string;
@@ -7369,7 +7402,10 @@ function hydrateDocumentUploadAnalysis(value: {
     confidencePercent: value.confidencePercent,
     detectedType: value.detectedType ? toDocumentRequestType(value.detectedType) : null,
     evidence: value.evidence,
+    extractedTextFailureDetail: value.extractedTextFailureDetail,
     extractedTextPreview: value.extractedTextPreview,
+    extractedTextSource: toDocumentTextExtractionSource(value.extractedTextSource),
+    extractedTextStatus: toDocumentTextExtractionStatus(value.extractedTextStatus),
     providerMode: value.providerMode,
     recommendation: value.recommendation ? toDocumentUploadAnalysisRecommendation(value.recommendation) : null,
     status: toDocumentUploadAnalysisStatus(value.status),
@@ -7817,6 +7853,22 @@ function toDocumentUploadAnalysisStatus(value: string): DocumentUploadAnalysisSt
   }
 
   throw new Error(`unsupported_document_upload_analysis_status:${value}`);
+}
+
+function toDocumentTextExtractionSource(value: string): DocumentTextExtractionSource {
+  if (value === "none" || value === "text_preview" || value === "tesseract_ocr") {
+    return value;
+  }
+
+  throw new Error(`unsupported_document_text_extraction_source:${value}`);
+}
+
+function toDocumentTextExtractionStatus(value: string): DocumentTextExtractionStatus {
+  if (value === "not_available" || value === "extracted" || value === "failed") {
+    return value;
+  }
+
+  throw new Error(`unsupported_document_text_extraction_status:${value}`);
 }
 
 function toIsoDateTimeString(value: string) {

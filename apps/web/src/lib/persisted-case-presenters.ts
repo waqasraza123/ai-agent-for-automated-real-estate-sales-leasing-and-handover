@@ -602,6 +602,20 @@ function getDocumentAnalysisSummary(locale: SupportedLocale, analysis: Persisted
     return null;
   }
 
+  const extractionSummary =
+    analysis.extractedTextStatus === "extracted"
+      ? locale === "ar"
+        ? analysis.extractedTextSource === "tesseract_ocr"
+          ? "تم استخراج نص عبر OCR"
+          : "تم استخراج نص للمعاينة"
+        : analysis.extractedTextSource === "tesseract_ocr"
+          ? "OCR text extracted"
+          : "Preview text extracted"
+      : analysis.extractedTextStatus === "failed"
+        ? locale === "ar"
+          ? "فشل استخراج النص"
+          : "Text extraction failed"
+        : null;
   const confidenceSummary =
     typeof analysis.confidencePercent === "number"
       ? locale === "ar"
@@ -609,7 +623,7 @@ function getDocumentAnalysisSummary(locale: SupportedLocale, analysis: Persisted
         : `${analysis.confidencePercent}% confidence`
       : null;
 
-  return [analysis.summary, confidenceSummary].filter(Boolean).join(" • ");
+  return [analysis.summary, extractionSummary, confidenceSummary].filter(Boolean).join(" • ");
 }
 
 function getDocumentAnalysisTone(

@@ -263,7 +263,10 @@ describe("case agent worker", () => {
       caseDetail: uploadedCase!,
       documentRequestId: documentRequest!.documentRequestId,
       documentUploadId: "00000000-0000-4000-8000-000000000031",
+      extractedTextFailureDetail: null,
       extractedTextPreview: "Bank statement account balance available funds IBAN",
+      extractedTextSource: "text_preview",
+      extractedTextStatus: "extracted",
       modelAdapter: createDeterministicDocumentUploadAnalysisModelAdapter(),
       now: "2026-04-12T09:05:00.000Z"
     });
@@ -316,8 +319,11 @@ describe("case agent worker", () => {
       caseDetail: uploadedCase!,
       documentRequestId: documentRequest!.documentRequestId,
       documentUploadId: "00000000-0000-4000-8000-000000000032",
+      extractedTextFailureDetail: null,
       extractedTextPreview:
         "Bank statement available funds account balance IBAN customer reference balance certificate for financing review",
+      extractedTextSource: "text_preview",
+      extractedTextStatus: "extracted",
       modelAdapter: createDeterministicDocumentUploadAnalysisModelAdapter(),
       now: "2026-04-12T09:06:00.000Z"
     });

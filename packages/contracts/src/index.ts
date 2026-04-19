@@ -32,6 +32,8 @@ export const documentRequestTypeSchema = z.enum(["government_id", "proof_of_fund
 export const documentRequestStatusSchema = z.enum(["requested", "under_review", "accepted", "rejected"]);
 export const documentUploadAnalysisStatusSchema = z.enum(["pending", "completed", "manual_review_required", "failed"]);
 export const documentUploadAnalysisRecommendationSchema = z.enum(["accept", "request_reupload", "manual_review"]);
+export const documentTextExtractionSourceSchema = z.enum(["none", "text_preview", "tesseract_ocr"]);
+export const documentTextExtractionStatusSchema = z.enum(["not_available", "extracted", "failed"]);
 export const automationStatusSchema = z.enum(["active", "paused"]);
 export const caseAutomationHoldReasonSchema = z.enum(["qa_pending_review", "qa_follow_up_required"]);
 export const caseContactChannelSchema = z.enum(["website", "whatsapp"]);
@@ -342,7 +344,10 @@ export const persistedDocumentUploadAnalysisSchema = z.object({
   confidencePercent: z.number().int().min(0).max(100).nullable(),
   detectedType: documentRequestTypeSchema.nullable(),
   evidence: z.array(z.string()),
+  extractedTextFailureDetail: z.string().nullable(),
   extractedTextPreview: z.string().nullable(),
+  extractedTextSource: documentTextExtractionSourceSchema,
+  extractedTextStatus: documentTextExtractionStatusSchema,
   providerMode: z.string(),
   recommendation: documentUploadAnalysisRecommendationSchema.nullable(),
   status: documentUploadAnalysisStatusSchema,
@@ -816,6 +821,8 @@ export type CreateHandoverBlockerInput = z.infer<typeof createHandoverBlockerInp
 export type CreateHandoverIntakeInput = z.infer<typeof createHandoverIntakeInputSchema>;
 export type CreateWebsiteLeadInput = z.infer<typeof createWebsiteLeadInputSchema>;
 export type CreateWebsiteLeadResult = z.infer<typeof createWebsiteLeadResultSchema>;
+export type DocumentTextExtractionSource = z.infer<typeof documentTextExtractionSourceSchema>;
+export type DocumentTextExtractionStatus = z.infer<typeof documentTextExtractionStatusSchema>;
 export type DocumentUploadAnalysisRecommendation = z.infer<typeof documentUploadAnalysisRecommendationSchema>;
 export type DocumentUploadAnalysisStatus = z.infer<typeof documentUploadAnalysisStatusSchema>;
 export type DocumentRequestStatus = z.infer<typeof documentRequestStatusSchema>;

@@ -11,7 +11,8 @@ import {
 } from "@real-estate-ai/workflows";
 
 import { createWorkerCaseAgentModelAdapter } from "./case-agent-model";
-import { createWorkerDocumentUploadAnalysisModelAdapter, extractDocumentTextPreview } from "./document-analysis-model";
+import { createWorkerDocumentUploadAnalysisModelAdapter } from "./document-analysis-model";
+import { createWorkerDocumentTextExtractionAdapter } from "./document-text-extraction";
 import { parseWorkerEnvironment } from "./env";
 
 const documentUploadAnalysisJobType = "document_upload_analysis";
@@ -46,6 +47,13 @@ const documentAnalysisModelAdapter = createWorkerDocumentUploadAnalysisModelAdap
   fetchImplementation: fetch,
   model: environment.WORKER_AGENT_OPENAI_MODEL,
   timeoutMs: environment.WORKER_AGENT_OPENAI_TIMEOUT_MS
+});
+const documentTextExtractionAdapter = createWorkerDocumentTextExtractionAdapter({
+  ocrMode: environment.WORKER_DOCUMENT_OCR_MODE,
+  tesseractLanguages: environment.WORKER_TESSERACT_LANGUAGES,
+  tesseractPath: environment.WORKER_TESSERACT_PATH,
+  tesseractPsm: environment.WORKER_TESSERACT_PSM,
+  tesseractTimeoutMs: environment.WORKER_TESSERACT_TIMEOUT_MS
 });
 
 async function runDocumentUploadAnalysisCycle(input: {
@@ -82,15 +90,20 @@ async function runDocumentUploadAnalysisCycle(input: {
 
     try {
       const fileBytes = new Uint8Array(await readFile(path.join(environment.WORKER_DOCUMENT_STORAGE_PATH, uploadRecord.storagePath)));
+      const extractionResult = await documentTextExtractionAdapter.extractText({
+        bytes: fileBytes,
+        fileName: uploadRecord.fileName,
+        mimeType: uploadRecord.mimeType
+      });
 
       await resolvePersistedDocumentUploadAnalysis(store, {
         caseDetail,
         documentRequestId,
         documentUploadId,
-        extractedTextPreview: extractDocumentTextPreview({
-          bytes: fileBytes,
-          mimeType: uploadRecord.mimeType
-        }),
+        extractedTextFailureDetail: extractionResult.failureDetail,
+        extractedTextPreview: extractionResult.preview,
+        extractedTextSource: extractionResult.source,
+        extractedTextStatus: extractionResult.status,
         modelAdapter: documentAnalysisModelAdapter,
         now: input.runAt
       });
@@ -104,7 +117,13 @@ async function runDocumentUploadAnalysisCycle(input: {
             ? "تعذر على العامل إعادة فتح الملف من مسار التخزين الحالي."
             : "The worker could not reopen the file from the current storage path."
         ],
+        extractedTextFailureDetail:
+          caseDetail.preferredLocale === "ar"
+            ? "تعذر على العامل إعادة فتح الملف من مسار التخزين الحالي."
+            : "The worker could not reopen the file from the current storage path.",
         extractedTextPreview: null,
+        extractedTextSource: "none",
+        extractedTextStatus: "failed",
         nextAction:
           caseDetail.preferredLocale === "ar"
             ? "راجع تخزين الملف أو اطلب إعادة رفع المستند"
