@@ -52,6 +52,7 @@ The repository is past bootstrap and currently contains a working local alpha fo
 - live alpha workflow for website lead intake, WhatsApp-first reply orchestration, qualification, visit scheduling, document tracking, and manager review
 - persisted document upload and authenticated download flow backed by local storage for live cases
 - production-style `CaseAgentOrchestrator` runtime for `new_lead`, `no_response_follow_up`, and `document_missing`
+- asynchronous document-analysis pipeline with safe auto-accept, re-upload recommendation, and manual-review fallback over uploaded evidence
 - provider-backed model adapter boundary with deterministic fallback and scenario-based evaluation coverage
 - Playwright smoke tests and opt-in visual regression baselines
 - integration-tested website lead capture, WhatsApp webhook handling, qualification, visit scheduling, document updates, and manager-readable persisted case APIs
@@ -63,6 +64,7 @@ Not implemented yet:
 - authentication and authorization
 - CRM export and sync
 - document OCR, extraction, and review intelligence over uploaded files
+- downstream CRM export and sync
 - production deployment automation around provider secrets and hosting
 - broader handover packaging beyond the current local implementation
 
@@ -195,6 +197,7 @@ Optional agent-decision provider configuration:
 - `WORKER_AGENT_OPENAI_MODEL`: defaults to `gpt-5.4-mini`
 - `WORKER_AGENT_OPENAI_BASE_URL`: defaults to `https://api.openai.com/v1`
 - `WORKER_AGENT_OPENAI_TIMEOUT_MS`: request timeout for model calls
+- `WORKER_DOCUMENT_STORAGE_PATH`: local document-upload directory the worker reads when running document analysis
 
 If those worker variables are unset, the `CaseAgentOrchestrator` still runs through the deterministic policy adapter. If the provider call fails or returns invalid structured output, the worker falls back to deterministic policy and records the run as a provider fallback mode.
 
@@ -227,7 +230,9 @@ Current document flow:
 - operators can upload PDF, PNG, and JPEG evidence against live document requests
 - the API persists upload metadata plus the file bytes
 - the web app exposes authenticated download links through a Next.js proxy route
-- `document_missing` agent logic now keys off real upload evidence instead of checklist status alone
+- the worker queues each upload for asynchronous document analysis
+- strong text-based matches can auto-accept, strong mismatches can auto-reject and wake the document-missing agent path, and ambiguous uploads stay in manual review
+- `document_missing` agent logic now keys off real upload evidence and persisted analysis state instead of checklist status alone
 
 ## Verification
 

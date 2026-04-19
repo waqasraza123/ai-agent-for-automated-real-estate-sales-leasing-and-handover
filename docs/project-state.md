@@ -19,6 +19,7 @@
 - The worker application now processes both overdue follow-up watches and queued WhatsApp initial-reply jobs, with bounded retry handling and explicit failed-delivery state when provider sends do not complete
 - The worker now also runs a persisted `CaseAgentOrchestrator` loop for `new_lead`, `no_response_follow_up`, and `document_missing` triggers, with typed run records, compact case-agent memory, explicit manager-escalation boundaries, and WhatsApp transport delegated through the lower-level outbound queue
 - The worker-side case-agent runtime is now adapter-backed: workflows own the typed decision contract plus deterministic policy fallback, while `apps/worker` can optionally call a provider-backed OpenAI Responses adapter behind the same boundary and fall back safely on provider or schema failure
+- The worker now also owns a persisted document-analysis pipeline: each uploaded file is queued for asynchronous review, upload records carry pending or completed analysis state, strong text-based matches can auto-accept, strong mismatches can auto-reject and wake the `document_missing` agent path immediately, and low-signal uploads stay in manual-review state
 - The current persisted alpha store uses Drizzle over local `PGlite` for safe Phase 2 and early Phase 3 development without introducing remote infrastructure
 - A shared `packages/integrations` layer is now live for Meta WhatsApp Cloud API send contracts, Meta webhook parsing, Google Calendar booking contracts, and shared phone normalization
 - The API now exposes Meta WhatsApp webhook endpoints plus provider-aware Google Calendar booking persistence, and the persisted store now tracks normalized lead phone numbers, case channel state, delivery status, and visit booking status
@@ -30,6 +31,7 @@
 - Provider integration ownership is now explicitly client-managed: the WhatsApp and Google Calendar code paths are implemented, but absent credentials are represented as pending client configuration in runtime state and UI copy instead of being treated as opaque provider failure
 - Revenue case summaries and details now expose `agentState`, `agentRuns`, and `agentMemory`, and manager plus lead surfaces now render the latest agent status, recommended action, note, and next wake-up inside the narrowed four-surface MVP
 - Document requests now carry persisted upload evidence, latest-upload summaries, and authenticated download paths, so the document checklist reflects actual submitted files instead of status-only placeholders
+- Document uploads now also carry persisted AI-review metadata including recommendation, confidence, evidence, extracted-text preview, and provider mode, and the document center renders that analysis state directly
 - Durable memory is kept in `docs/project-state.md`
 - Local working memory is kept in `docs/_local/current-session.md` and must remain uncommitted
 - Shared localization now lives behind typed domain resources in `packages/i18n`, with Arabic as the authored default, English as the secondary locale, and shared helpers for locale direction, labels, and formatter locale selection
@@ -52,9 +54,10 @@
 - Core workflow coverage is now partially live locally through the persisted website lead -> queued WhatsApp initial reply -> webhook-backed channel updates -> visit scheduling -> Google Calendar booking state -> manager-visible follow-up path
 - Phase 3: document workflow depth with upload/storage, checklist visibility, rejection handling, and blocked-case management
 - Phase 3 is now partially live locally through persisted document request tracking, upload/storage, authenticated download access, queue-backed follow-up interventions, automation pause or resume controls, and manager follow-up reset actions
+- Phase 3 now also includes asynchronous document intelligence over uploaded evidence, with safe auto-accept or re-upload decisions only on high-confidence cases and manual-review fallback everywhere else
 - Phase 4: wedge-supporting controls and reporting tied directly to the live operational flow
 - The first production-style agent runtime is now live locally for the core wedge, so the next step should be improving the decision model and evaluation harness rather than adding another parallel rules engine
-- The first provider-ready decision-model upgrade is now live locally as well, and real document upload/storage is now in place, so the next step should be document intelligence over uploaded evidence or deeper scenario coverage plus live-model rollout
+- The first provider-ready decision-model upgrade is now live locally, and document intelligence over uploaded evidence is now in place as well, so the next step should be live-model rollout and broader bilingual scenario coverage, or downstream document/OCR hardening beyond metadata-plus-text-preview analysis
 - Phase 5: handover as an add-on workflow after the core wedge is proven with real integrations and KPI movement
 - Existing Phase 4 and Phase 5 handover/governance slices remain implemented locally, but they are no longer the near-term product priority
 - The first persisted Phase 5 control boundary is now live locally: role-aware restrictions now protect post-completion review, aftercare follow-up, and archive mutations behind local handover-manager or admin control

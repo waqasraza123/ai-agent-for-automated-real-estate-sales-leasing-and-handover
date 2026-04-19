@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type {
   ApproveHandoverCustomerUpdateInput,
   CaseAgentActionType,
@@ -12,6 +14,10 @@ import type {
   CreateHandoverIntakeInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  DocumentRequestStatus,
+  DocumentRequestType,
+  DocumentUploadAnalysisRecommendation,
+  DocumentUploadAnalysisStatus,
   ListGovernanceEventsQuery,
   ManageBulkCaseFollowUpInput,
   MarkHandoverCustomerUpdateDispatchReadyInput,
@@ -22,6 +28,7 @@ import type {
   PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
   PersistedCaseSummary,
+  PersistedDocumentUpload,
   PersistedGovernanceEventList,
   PersistedGovernanceSummary,
   PersistedHandoverCaseDetail,
@@ -296,6 +303,38 @@ export function createDeterministicCaseAgentModelAdapter(): CaseAgentModelAdapte
   return deterministicCaseAgentModelAdapter;
 }
 
+export interface DocumentUploadAnalysisInput {
+  caseDetail: PersistedCaseDetail;
+  documentRequest: PersistedCaseDetail["documentRequests"][number];
+  extractedTextPreview: string | null;
+  now: string;
+  upload: PersistedDocumentUpload;
+}
+
+export interface DocumentUploadAnalysisDecision {
+  confidence: number;
+  detectedType: DocumentRequestType | null;
+  evidence: string[];
+  recommendation: DocumentUploadAnalysisRecommendation;
+  summary: string;
+}
+
+export interface DocumentUploadAnalysisModelAdapter {
+  analyzeDocument(input: DocumentUploadAnalysisInput): Promise<DocumentUploadAnalysisDecision>;
+  modelMode: string;
+}
+
+const deterministicDocumentUploadAnalysisModelAdapter: DocumentUploadAnalysisModelAdapter = {
+  modelMode: "deterministic_document_analysis_v1",
+  async analyzeDocument(input) {
+    return decideDocumentUploadAnalysisDeterministic(input);
+  }
+};
+
+export function createDeterministicDocumentUploadAnalysisModelAdapter(): DocumentUploadAnalysisModelAdapter {
+  return deterministicDocumentUploadAnalysisModelAdapter;
+}
+
 export async function runPersistedCaseAgentCycle(
   store: LeadCaptureStore,
   input?: {
@@ -567,6 +606,19 @@ export async function uploadPersistedDocument(
       ? {
           ...documentRequest,
           latestUpload: {
+            analysis: {
+              analysisId: input.documentUploadId,
+              analyzedAt: null,
+              confidencePercent: null,
+              detectedType: null,
+              evidence: [],
+              extractedTextPreview: null,
+              providerMode: "queued_pending_analysis",
+              recommendation: null,
+              status: "pending" as const,
+              summary: "Queued for document analysis.",
+              updatedAt: input.uploadedAt
+            },
             checksumSha256: input.checksumSha256,
             createdAt: input.uploadedAt,
             documentUploadId: input.documentUploadId,
@@ -578,6 +630,19 @@ export async function uploadPersistedDocument(
           status: "under_review" as const,
           uploads: [
             {
+              analysis: {
+                analysisId: input.documentUploadId,
+                analyzedAt: null,
+                confidencePercent: null,
+                detectedType: null,
+                evidence: [],
+                extractedTextPreview: null,
+                providerMode: "queued_pending_analysis",
+                recommendation: null,
+                status: "pending" as const,
+                summary: "Queued for document analysis.",
+                updatedAt: input.uploadedAt
+              },
               checksumSha256: input.checksumSha256,
               createdAt: input.uploadedAt,
               documentUploadId: input.documentUploadId,
@@ -596,6 +661,100 @@ export async function uploadPersistedDocument(
     ...input,
     nextAction: deriveDocumentWorkflowNextAction(projectedDocumentRequests, caseDetail.preferredLocale),
     nextActionDueAt: createFutureTimestamp(12)
+  });
+}
+
+export async function resolvePersistedDocumentUploadAnalysis(
+  store: LeadCaptureStore,
+  input: {
+    caseDetail: PersistedCaseDetail;
+    documentRequestId: string;
+    documentUploadId: string;
+    extractedTextPreview: string | null;
+    modelAdapter?: DocumentUploadAnalysisModelAdapter;
+    now?: string;
+  }
+): Promise<PersistedCaseDetail | null> {
+  const now = input.now ?? new Date().toISOString();
+  const modelAdapter = input.modelAdapter ?? deterministicDocumentUploadAnalysisModelAdapter;
+  const documentRequest = input.caseDetail.documentRequests.find((item) => item.documentRequestId === input.documentRequestId);
+  const upload = documentRequest?.uploads.find((item) => item.documentUploadId === input.documentUploadId);
+
+  if (!documentRequest || !upload) {
+    return null;
+  }
+
+  let decision: DocumentUploadAnalysisDecision;
+  let modelMode = modelAdapter.modelMode;
+
+  try {
+    decision = await modelAdapter.analyzeDocument({
+      caseDetail: input.caseDetail,
+      documentRequest,
+      extractedTextPreview: input.extractedTextPreview,
+      now,
+      upload
+    });
+  } catch {
+    decision = decideDocumentUploadAnalysisDeterministic({
+      caseDetail: input.caseDetail,
+      documentRequest,
+      extractedTextPreview: input.extractedTextPreview,
+      now,
+      upload
+    });
+    modelMode =
+      modelAdapter.modelMode === deterministicDocumentUploadAnalysisModelAdapter.modelMode
+        ? deterministicDocumentUploadAnalysisModelAdapter.modelMode
+        : `${modelAdapter.modelMode}_fallback`;
+  }
+
+  const resolvedAnalysis = applyDocumentUploadAnalysisGuardrails(input.caseDetail, documentRequest, {
+    decision,
+    extractedTextPreview: input.extractedTextPreview,
+    modelMode,
+    now
+  });
+  const projectedDocumentRequests = input.caseDetail.documentRequests.map((currentRequest) =>
+    currentRequest.documentRequestId === input.documentRequestId
+      ? {
+          ...currentRequest,
+          latestUpload:
+            currentRequest.latestUpload?.documentUploadId === input.documentUploadId
+              ? {
+                  ...currentRequest.latestUpload,
+                  analysis: resolvedAnalysis.analysis
+                }
+              : currentRequest.latestUpload,
+          status: resolvedAnalysis.uploadStatus,
+          uploads: currentRequest.uploads.map((currentUpload) =>
+            currentUpload.documentUploadId === input.documentUploadId
+              ? {
+                  ...currentUpload,
+                  analysis: resolvedAnalysis.analysis
+                }
+              : currentUpload
+          )
+        }
+      : currentRequest
+  );
+
+  return store.saveDocumentUploadAnalysis(input.caseDetail.caseId, input.documentRequestId, input.documentUploadId, {
+    analyzedAt: resolvedAnalysis.analysis.analyzedAt,
+    confidencePercent: resolvedAnalysis.analysis.confidencePercent,
+    detectedType: resolvedAnalysis.analysis.detectedType,
+    evidence: resolvedAnalysis.analysis.evidence,
+    extractedTextPreview: resolvedAnalysis.analysis.extractedTextPreview,
+    nextAction: deriveDocumentWorkflowNextAction(projectedDocumentRequests, input.caseDetail.preferredLocale),
+    nextActionDueAt: resolvedAnalysis.nextActionDueAt,
+    providerMode: resolvedAnalysis.analysis.providerMode,
+    queueDocumentMissingTrigger: resolvedAnalysis.queueDocumentMissingTrigger,
+    recommendation: resolvedAnalysis.analysis.recommendation,
+    status: resolvedAnalysis.analysis.status,
+    summary: resolvedAnalysis.analysis.summary,
+    updatedAt: now,
+    uploadAnalysisId: resolvedAnalysis.analysis.analysisId,
+    uploadStatus: resolvedAnalysis.uploadStatus
   });
 }
 
@@ -638,6 +797,227 @@ export async function updatePersistedHandoverTask(
     nextHandoverStatus,
     status: input.status
   });
+}
+
+function applyDocumentUploadAnalysisGuardrails(
+  caseDetail: PersistedCaseDetail,
+  documentRequest: PersistedCaseDetail["documentRequests"][number],
+  input: {
+    decision: DocumentUploadAnalysisDecision;
+    extractedTextPreview: string | null;
+    modelMode: string;
+    now: string;
+  }
+) {
+  const confidencePercent = Math.max(0, Math.min(100, Math.round(input.decision.confidence * 100)));
+  const safeEvidence = input.decision.evidence.filter(Boolean).slice(0, 4);
+  const recommendation =
+    input.decision.detectedType && input.decision.detectedType !== documentRequest.type && input.decision.recommendation === "accept"
+      ? "request_reupload"
+      : input.decision.recommendation;
+  const canAutoAccept =
+    recommendation === "accept" &&
+    confidencePercent >= 97 &&
+    Boolean(input.extractedTextPreview && input.extractedTextPreview.length >= 80) &&
+    documentRequest.latestUpload?.mimeType === "application/pdf" &&
+    input.decision.detectedType === documentRequest.type;
+  const canAutoReject = recommendation === "request_reupload" && confidencePercent >= 90;
+  const status: DocumentUploadAnalysisStatus = canAutoAccept || canAutoReject ? "completed" : "manual_review_required";
+  const uploadStatus: DocumentRequestStatus = canAutoAccept ? "accepted" : canAutoReject ? "rejected" : "under_review";
+
+  return {
+    analysis: {
+      analysisId: randomAnalysisId(),
+      analyzedAt: input.now,
+      confidencePercent,
+      detectedType: input.decision.detectedType,
+      evidence: safeEvidence,
+      extractedTextPreview: input.extractedTextPreview,
+      providerMode: input.modelMode,
+      recommendation,
+      status,
+      summary: input.decision.summary,
+      updatedAt: input.now
+    },
+    nextActionDueAt: createFutureTimestamp(canAutoReject ? 1 : canAutoAccept ? 4 : 12),
+    queueDocumentMissingTrigger: canAutoReject,
+    uploadStatus
+  };
+}
+
+function decideDocumentUploadAnalysisDeterministic(input: DocumentUploadAnalysisInput): DocumentUploadAnalysisDecision {
+  const expectedLabel = getDocumentTypeLabel(input.caseDetail.preferredLocale, input.documentRequest.type);
+
+  if (input.upload.sizeBytes < 2048) {
+    return {
+      confidence: 0.99,
+      detectedType: null,
+      evidence: [
+        input.caseDetail.preferredLocale === "ar" ? "حجم الملف صغير جداً للمراجعة" : "The file size is too small to review safely."
+      ],
+      recommendation: "request_reupload",
+      summary:
+        input.caseDetail.preferredLocale === "ar"
+          ? `الملف المرفوع يبدو صغيراً أو غير صالح. اطلب نسخة أوضح من ${expectedLabel}.`
+          : `The uploaded file looks too small or incomplete. Ask for a clearer ${expectedLabel}.`
+    };
+  }
+
+  const signalSummary = detectDocumentSignals(`${input.upload.fileName} ${input.extractedTextPreview ?? ""}`);
+  const expectedScore = signalSummary.expectedScoreByType.get(input.documentRequest.type) ?? 0;
+  const expectedKeywords = signalSummary.expectedKeywordsByType.get(input.documentRequest.type) ?? [];
+  const strongestOtherSignal = signalSummary.strongestOtherType;
+
+  if (
+    strongestOtherSignal &&
+    strongestOtherSignal.type !== input.documentRequest.type &&
+    strongestOtherSignal.score >= 2 &&
+    expectedScore === 0
+  ) {
+    return {
+      confidence: 0.95,
+      detectedType: strongestOtherSignal.type,
+      evidence: [
+        buildSignalEvidence(input.caseDetail.preferredLocale, strongestOtherSignal.type, strongestOtherSignal.keywords),
+        input.caseDetail.preferredLocale === "ar"
+          ? `المطلوب: ${expectedLabel}`
+          : `Expected: ${expectedLabel}`
+      ],
+      recommendation: "request_reupload",
+      summary:
+        input.caseDetail.preferredLocale === "ar"
+          ? `الملف المرفوع يبدو أقرب إلى ${getDocumentTypeLabel(input.caseDetail.preferredLocale, strongestOtherSignal.type)} وليس ${expectedLabel}.`
+          : `The uploaded file looks closer to ${getDocumentTypeLabel(input.caseDetail.preferredLocale, strongestOtherSignal.type)} than ${expectedLabel}.`
+    };
+  }
+
+  if (
+    input.upload.mimeType === "application/pdf" &&
+    expectedScore >= 2 &&
+    signalSummary.competingScore === 0 &&
+    Boolean(input.extractedTextPreview && input.extractedTextPreview.length >= 80)
+  ) {
+    return {
+      confidence: 0.97,
+      detectedType: input.documentRequest.type,
+      evidence: [
+        buildSignalEvidence(input.caseDetail.preferredLocale, input.documentRequest.type, expectedKeywords),
+        input.caseDetail.preferredLocale === "ar"
+          ? "تم العثور على إشارات نصية قوية داخل الملف."
+          : "Strong text signals were found inside the file."
+      ],
+      recommendation: "accept",
+      summary:
+        input.caseDetail.preferredLocale === "ar"
+          ? `الملف النصي يطابق على الأرجح ${expectedLabel} ويمكن قبوله تلقائياً.`
+          : `The text-based file strongly matches ${expectedLabel} and can be auto-accepted.`
+    };
+  }
+
+  if (expectedScore >= 1 && signalSummary.competingScore === 0) {
+    return {
+      confidence: input.upload.mimeType === "application/pdf" ? 0.84 : 0.74,
+      detectedType: input.documentRequest.type,
+      evidence: [
+        buildSignalEvidence(input.caseDetail.preferredLocale, input.documentRequest.type, expectedKeywords),
+        input.upload.mimeType.startsWith("image/")
+          ? input.caseDetail.preferredLocale === "ar"
+            ? "الملف صورة ويحتاج OCR أو مراجعة بشرية قبل الاعتماد."
+            : "The upload is an image and still needs OCR or human review before approval."
+          : input.caseDetail.preferredLocale === "ar"
+            ? "الإشارات الحالية غير كافية للقبول التلقائي."
+            : "The current signals are not strong enough for auto-accept."
+      ],
+      recommendation: "manual_review",
+      summary:
+        input.caseDetail.preferredLocale === "ar"
+          ? `الملف يبدو قريباً من ${expectedLabel} لكنه يحتاج مراجعة بشرية قبل الاعتماد.`
+          : `The upload likely matches ${expectedLabel}, but it still needs human review.`
+    };
+  }
+
+  return {
+    confidence: 0.68,
+    detectedType: null,
+    evidence: [
+      input.caseDetail.preferredLocale === "ar"
+        ? "لم يتم العثور على إشارات كافية لقرار تلقائي آمن."
+        : "Not enough strong signals were found for a safe automated decision."
+    ],
+    recommendation: "manual_review",
+    summary:
+      input.caseDetail.preferredLocale === "ar"
+        ? `تم حفظ الملف لكن القرار الآلي غير واثق بما يكفي. راجع ${expectedLabel} يدوياً.`
+        : `The file was stored, but automation is not confident enough yet. Review the ${expectedLabel} manually.`
+  };
+}
+
+function buildSignalEvidence(locale: SupportedLocale, type: DocumentRequestType, keywords: string[]) {
+  const signalText = keywords.slice(0, 3).join(locale === "ar" ? "، " : ", ");
+
+  if (signalText.length === 0) {
+    return locale === "ar"
+      ? `تمت مطابقة الملف مع ${getDocumentTypeLabel(locale, type)}.`
+      : `The upload matches ${getDocumentTypeLabel(locale, type)}.`;
+  }
+
+  return locale === "ar"
+    ? `إشارات مطابقة ${getDocumentTypeLabel(locale, type)}: ${signalText}`
+    : `${getDocumentTypeLabel(locale, type)} signals: ${signalText}`;
+}
+
+function detectDocumentSignals(value: string) {
+  const corpus = value.toLowerCase();
+  const signalMap = {
+    employment_letter: ["employment", "employer", "hr", "salary", "job title", "offer letter", "خطاب", "وظيفة", "راتب"],
+    government_id: ["passport", "national id", "identity", "iqama", "passport no", "هوية", "جواز", "إقامة"],
+    proof_of_funds: ["bank", "statement", "balance", "funds", "iban", "account", "كشف", "رصيد", "حساب"]
+  } satisfies Record<DocumentRequestType, string[]>;
+  const entries = (Object.entries(signalMap) as Array<[DocumentRequestType, string[]]>).map(([type, keywords]) => {
+    const matchedKeywords = keywords.filter((keyword) => corpus.includes(keyword));
+
+    return {
+      keywords: matchedKeywords,
+      score: matchedKeywords.length,
+      type
+    };
+  });
+  const [topEntry, secondEntry] = [...entries].sort((left, right) => right.score - left.score);
+
+  return {
+    competingScore: secondEntry?.score ?? 0,
+    expectedKeywordsByType: new Map(entries.map((entry) => [entry.type, entry.keywords])),
+    expectedScoreByType: new Map(entries.map((entry) => [entry.type, entry.score])),
+    strongestOtherType: topEntry?.score ? topEntry : null
+  };
+}
+
+function getDocumentTypeLabel(locale: SupportedLocale, type: DocumentRequestType) {
+  if (locale === "ar") {
+    if (type === "government_id") {
+      return "الهوية";
+    }
+
+    if (type === "proof_of_funds") {
+      return "إثبات القدرة المالية";
+    }
+
+    return "خطاب العمل";
+  }
+
+  if (type === "government_id") {
+    return "government ID";
+  }
+
+  if (type === "proof_of_funds") {
+    return "proof of funds";
+  }
+
+  return "employment letter";
+}
+
+function randomAnalysisId() {
+  return randomUUID();
 }
 
 export async function createPersistedHandoverBlocker(
@@ -2203,7 +2583,11 @@ function documentRequestNeedsCustomerUpload(documentRequest: PersistedCaseDetail
     return true;
   }
 
-  return documentRequest.uploads.length === 0;
+  if (documentRequest.uploads.length === 0) {
+    return true;
+  }
+
+  return documentRequest.uploads[0]?.analysis?.recommendation === "request_reupload";
 }
 
 function buildRiskFlags(caseDetail: PersistedCaseDetail) {

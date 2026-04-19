@@ -92,6 +92,7 @@ export default async function DocumentsPage(props: PageProps) {
                       <div className="space-y-2 text-sm leading-7 text-ink-soft">
                         <p>{documentItem.detail}</p>
                         <p>{documentItem.latestUploadSummary}</p>
+                        {documentItem.analysisSummary ? <p>{documentItem.analysisSummary}</p> : null}
                       </div>
                     }
                     title={documentItem.label}
@@ -127,13 +128,19 @@ export default async function DocumentsPage(props: PageProps) {
                                     <p className="text-xs leading-6 text-ink-soft">
                                       {upload.sizeLabel} • {upload.mimeType} • {upload.uploadedAt}
                                     </p>
+                                    {upload.analysisSummary ? (
+                                      <p className="text-xs leading-6 text-ink-soft">{upload.analysisSummary}</p>
+                                    ) : null}
                                   </div>
-                                  <Link
-                                    className={inlineLinkClassName}
-                                    href={`/api/cases/${persistedCase.caseId}/documents/${documentItem.documentRequestId}/uploads/${upload.documentUploadId}`}
-                                  >
-                                    {locale === "ar" ? "تنزيل الملف" : "Download file"}
-                                  </Link>
+                                  <div className="flex items-center gap-3">
+                                    <StatusBadge tone={upload.analysisTone}>{upload.analysisLabel}</StatusBadge>
+                                    <Link
+                                      className={inlineLinkClassName}
+                                      href={`/api/cases/${persistedCase.caseId}/documents/${documentItem.documentRequestId}/uploads/${upload.documentUploadId}`}
+                                    >
+                                      {locale === "ar" ? "تنزيل الملف" : "Download file"}
+                                    </Link>
+                                  </div>
                                 </div>
                               </li>
                             ))}

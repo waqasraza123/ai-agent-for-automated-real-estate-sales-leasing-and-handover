@@ -30,6 +30,8 @@ export const followUpStatusSchema = z.enum(["on_track", "attention"]);
 export const qualificationReadinessSchema = z.enum(["watch", "medium", "high"]);
 export const documentRequestTypeSchema = z.enum(["government_id", "proof_of_funds", "employment_letter"]);
 export const documentRequestStatusSchema = z.enum(["requested", "under_review", "accepted", "rejected"]);
+export const documentUploadAnalysisStatusSchema = z.enum(["pending", "completed", "manual_review_required", "failed"]);
+export const documentUploadAnalysisRecommendationSchema = z.enum(["accept", "request_reupload", "manual_review"]);
 export const automationStatusSchema = z.enum(["active", "paused"]);
 export const caseAutomationHoldReasonSchema = z.enum(["qa_pending_review", "qa_follow_up_required"]);
 export const caseContactChannelSchema = z.enum(["website", "whatsapp"]);
@@ -334,7 +336,22 @@ export const persistedVisitSchema = z.object({
   visitId: z.uuid()
 });
 
+export const persistedDocumentUploadAnalysisSchema = z.object({
+  analysisId: z.uuid(),
+  analyzedAt: z.iso.datetime().nullable(),
+  confidencePercent: z.number().int().min(0).max(100).nullable(),
+  detectedType: documentRequestTypeSchema.nullable(),
+  evidence: z.array(z.string()),
+  extractedTextPreview: z.string().nullable(),
+  providerMode: z.string(),
+  recommendation: documentUploadAnalysisRecommendationSchema.nullable(),
+  status: documentUploadAnalysisStatusSchema,
+  summary: z.string(),
+  updatedAt: z.iso.datetime()
+});
+
 export const persistedDocumentUploadSchema = z.object({
+  analysis: persistedDocumentUploadAnalysisSchema.nullable(),
   checksumSha256: z.string(),
   createdAt: z.iso.datetime(),
   documentUploadId: z.uuid(),
@@ -799,6 +816,8 @@ export type CreateHandoverBlockerInput = z.infer<typeof createHandoverBlockerInp
 export type CreateHandoverIntakeInput = z.infer<typeof createHandoverIntakeInputSchema>;
 export type CreateWebsiteLeadInput = z.infer<typeof createWebsiteLeadInputSchema>;
 export type CreateWebsiteLeadResult = z.infer<typeof createWebsiteLeadResultSchema>;
+export type DocumentUploadAnalysisRecommendation = z.infer<typeof documentUploadAnalysisRecommendationSchema>;
+export type DocumentUploadAnalysisStatus = z.infer<typeof documentUploadAnalysisStatusSchema>;
 export type DocumentRequestStatus = z.infer<typeof documentRequestStatusSchema>;
 export type DocumentRequestType = z.infer<typeof documentRequestTypeSchema>;
 export type FollowUpStatus = z.infer<typeof followUpStatusSchema>;
@@ -846,6 +865,7 @@ export type PersistedLatestCaseReply = z.infer<typeof persistedLatestCaseReplySc
 export type PersistedLatestManagerFollowUp = z.infer<typeof persistedLatestManagerFollowUpSchema>;
 export type PersistedCaseSummary = z.infer<typeof persistedCaseSummarySchema>;
 export type PersistedCurrentHandoverCustomerUpdateQaReview = z.infer<typeof persistedCurrentHandoverCustomerUpdateQaReviewSchema>;
+export type PersistedDocumentUploadAnalysis = z.infer<typeof persistedDocumentUploadAnalysisSchema>;
 export type PersistedDocumentRequest = z.infer<typeof persistedDocumentRequestSchema>;
 export type PersistedDocumentUpload = z.infer<typeof persistedDocumentUploadSchema>;
 export type PersistedGovernanceDailyActivity = z.infer<typeof persistedGovernanceDailyActivitySchema>;

@@ -28,6 +28,8 @@ import type {
   CreateHandoverBlockerInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  DocumentUploadAnalysisRecommendation,
+  DocumentUploadAnalysisStatus,
   DocumentRequestStatus,
   DocumentRequestType,
   FollowUpStatus,
@@ -64,6 +66,7 @@ import type {
   PersistedCaseDetail,
   PersistedCaseSummary,
   PersistedCurrentHandoverCustomerUpdateQaReview,
+  PersistedDocumentUploadAnalysis,
   PersistedDocumentRequest,
   PersistedDocumentUpload,
   PersistedGovernanceEventList,
@@ -137,6 +140,7 @@ const defaultHandoverCustomerUpdateTypes: HandoverCustomerUpdateType[] = [
 ];
 const followUpWatchJobType = "follow_up_watch";
 const caseAgentJobType = "case_agent_trigger";
+const documentUploadAnalysisJobType = "document_upload_analysis";
 const whatsappAgentReplyJobType = "whatsapp_agent_reply";
 const whatsappCaseReplyJobType = "whatsapp_case_reply";
 
@@ -295,6 +299,25 @@ const documentUploads = pgTable("document_uploads", {
   sizeBytes: integer("size_bytes").notNull(),
   storagePath: text("storage_path").notNull(),
   uploadedAt: timestamp("uploaded_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const documentUploadAnalyses = pgTable("document_upload_analyses", {
+  analysisId: uuid("analysis_id").primaryKey(),
+  analyzedAt: timestamp("analyzed_at", { mode: "string", withTimezone: true }),
+  confidencePercent: integer("confidence_percent"),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  detectedType: text("detected_type"),
+  documentUploadId: uuid("document_upload_id")
+    .notNull()
+    .unique()
+    .references(() => documentUploads.id, { onDelete: "cascade" }),
+  evidence: jsonb("evidence").$type<string[]>().notNull(),
+  extractedTextPreview: text("extracted_text_preview"),
+  providerMode: text("provider_mode").notNull(),
+  recommendation: text("recommendation"),
+  status: text("status").notNull(),
+  summary: text("summary").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
 const handoverCases = pgTable("handover_cases", {
@@ -593,6 +616,28 @@ export interface LeadCaptureStore {
       }
     | null
   >;
+  saveDocumentUploadAnalysis(
+    caseId: string,
+    documentRequestId: string,
+    documentUploadId: string,
+    input: {
+      analyzedAt: string | null;
+      confidencePercent: number | null;
+      detectedType: DocumentRequestType | null;
+      evidence: string[];
+      extractedTextPreview: string | null;
+      nextAction: string;
+      nextActionDueAt: string;
+      providerMode: string;
+      queueDocumentMissingTrigger: boolean;
+      recommendation: DocumentUploadAnalysisRecommendation | null;
+      status: DocumentUploadAnalysisStatus;
+      summary: string;
+      updatedAt: string;
+      uploadAnalysisId: string;
+      uploadStatus: DocumentRequestStatus;
+    }
+  ): Promise<PersistedCaseDetail | null>;
   recordVisitBooking(
     caseId: string,
     visitId: string,
@@ -924,6 +969,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       caseQaReviews,
       cases,
       documentRequests,
+      documentUploadAnalyses,
       documentUploads,
       handoverAppointments,
       handoverArchiveReviews,
@@ -1126,6 +1172,22 @@ export async function createAlphaLeadCaptureStore(options?: {
       storage_path text not null,
       uploaded_at timestamptz not null default now(),
       created_at timestamptz not null default now()
+    );
+
+    create table if not exists document_upload_analyses (
+      analysis_id uuid primary key,
+      document_upload_id uuid not null unique references document_uploads(id) on delete cascade,
+      status text not null,
+      recommendation text,
+      confidence_percent integer,
+      detected_type text,
+      summary text not null,
+      evidence jsonb not null default '[]'::jsonb,
+      extracted_text_preview text,
+      provider_mode text not null,
+      analyzed_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
     );
 
     create table if not exists handover_cases (
@@ -1331,6 +1393,7 @@ export async function createAlphaLeadCaptureStore(options?: {
     create index if not exists document_requests_case_id_idx on document_requests (case_id, created_at asc);
     create index if not exists document_uploads_document_request_id_idx on document_uploads (document_request_id, uploaded_at desc);
     create index if not exists document_uploads_case_id_idx on document_uploads (case_id, uploaded_at desc);
+    create index if not exists document_upload_analyses_upload_id_idx on document_upload_analyses (document_upload_id, updated_at desc);
     create index if not exists handover_tasks_case_id_idx on handover_tasks (handover_case_id, due_at asc);
     create index if not exists handover_blockers_case_id_idx on handover_blockers (handover_case_id, due_at asc);
     create index if not exists handover_milestones_case_id_idx on handover_milestones (handover_case_id, target_at asc);
@@ -2296,6 +2359,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       currentVisit,
       persistedDocumentRequests,
       persistedDocumentUploads,
+      persistedDocumentUploadAnalyses,
       persistedInterventions,
       persistedQaReviews,
       persistedCaseAgentMemory,
@@ -2363,6 +2427,25 @@ export async function createAlphaLeadCaptureStore(options?: {
           .from(documentUploads)
           .where(eq(documentUploads.caseId, caseId))
           .orderBy(desc(documentUploads.uploadedAt), desc(documentUploads.createdAt)),
+        db
+          .select({
+            analysisId: documentUploadAnalyses.analysisId,
+            analyzedAt: documentUploadAnalyses.analyzedAt,
+            confidencePercent: documentUploadAnalyses.confidencePercent,
+            detectedType: documentUploadAnalyses.detectedType,
+            documentUploadId: documentUploadAnalyses.documentUploadId,
+            evidence: documentUploadAnalyses.evidence,
+            extractedTextPreview: documentUploadAnalyses.extractedTextPreview,
+            providerMode: documentUploadAnalyses.providerMode,
+            recommendation: documentUploadAnalyses.recommendation,
+            status: documentUploadAnalyses.status,
+            summary: documentUploadAnalyses.summary,
+            updatedAt: documentUploadAnalyses.updatedAt
+          })
+          .from(documentUploadAnalyses)
+          .innerJoin(documentUploads, eq(documentUploadAnalyses.documentUploadId, documentUploads.id))
+          .where(eq(documentUploads.caseId, caseId))
+          .orderBy(desc(documentUploadAnalyses.updatedAt), desc(documentUploadAnalyses.analyzedAt)),
         db
           .select({
             createdAt: managerInterventions.createdAt,
@@ -2459,8 +2542,15 @@ export async function createAlphaLeadCaptureStore(options?: {
     const hydratedInterventions = persistedInterventions.map((intervention) => hydrateManagerIntervention(intervention));
     const hydratedQaReviews = persistedQaReviews.map((qaReview) => hydrateCaseQaReview(qaReview));
     const hydratedAgentRuns = persistedCaseAgentRuns.map((agentRun) => hydrateCaseAgentRun(agentRun));
+    const documentAnalysesByUploadId = persistedDocumentUploadAnalyses.reduce<Map<string, PersistedDocumentUploadAnalysis>>((map, analysis) => {
+      if (!map.has(analysis.documentUploadId)) {
+        map.set(analysis.documentUploadId, hydrateDocumentUploadAnalysis(analysis));
+      }
+
+      return map;
+    }, new Map());
     const documentUploadsByRequestId = persistedDocumentUploads.reduce<Map<string, PersistedDocumentUpload[]>>((map, upload) => {
-      const hydratedUpload = hydrateDocumentUpload(upload);
+      const hydratedUpload = hydrateDocumentUpload(upload, documentAnalysesByUploadId.get(upload.documentUploadId) ?? null);
       const existingUploads = map.get(upload.documentRequestId) ?? [];
 
       existingUploads.push(hydratedUpload);
@@ -2720,6 +2810,32 @@ export async function createAlphaLeadCaptureStore(options?: {
       payload: {
         ...(input.payload ?? {}),
         triggerType: input.triggerType
+      },
+      runAfter: input.runAfter,
+      status: "queued",
+      updatedAt: input.updatedAt
+    });
+  };
+
+  const queueDocumentUploadAnalysisJob = async (
+    transaction: AlphaTransaction,
+    input: {
+      caseId: string;
+      documentRequestId: string;
+      documentUploadId: string;
+      runAfter: string;
+      updatedAt: string;
+    }
+  ) => {
+    await transaction.insert(automationJobs).values({
+      attempts: 0,
+      caseId: input.caseId,
+      createdAt: input.updatedAt,
+      id: randomUUID(),
+      jobType: documentUploadAnalysisJobType,
+      payload: {
+        documentRequestId: input.documentRequestId,
+        documentUploadId: input.documentUploadId
       },
       runAfter: input.runAfter,
       status: "queued",
@@ -4392,10 +4508,12 @@ export async function createAlphaLeadCaptureStore(options?: {
           const latestDocumentUploadRecords = caseRecord
             ? await transaction
                 .select({
+                  analysisRecommendation: documentUploadAnalyses.recommendation,
                   documentRequestId: documentUploads.documentRequestId,
                   uploadedAt: documentUploads.uploadedAt
                 })
                 .from(documentUploads)
+                .leftJoin(documentUploadAnalyses, eq(documentUploadAnalyses.documentUploadId, documentUploads.id))
                 .where(eq(documentUploads.caseId, caseRecord.caseId))
                 .orderBy(desc(documentUploads.uploadedAt), desc(documentUploads.createdAt))
             : [];
@@ -4435,12 +4553,16 @@ export async function createAlphaLeadCaptureStore(options?: {
           const hasOutstandingDocuments =
             caseRecord.stage === "documents_in_progress" &&
             outstandingDocumentRecords.some((documentRecord) => {
-              const hasUpload = latestDocumentUploadRecords.some(
+              const latestUpload = latestDocumentUploadRecords.find(
                 (uploadRecord) => uploadRecord.documentRequestId === documentRecord.documentRequestId
               );
 
               return documentRequestNeedsCustomerUpload({
-                hasUpload,
+                hasUpload: Boolean(latestUpload),
+                latestAnalysisRecommendation:
+                  latestUpload?.analysisRecommendation && latestUpload.analysisRecommendation.length > 0
+                    ? toDocumentUploadAnalysisRecommendation(latestUpload.analysisRecommendation)
+                    : null,
                 status: toDocumentRequestStatus(documentRecord.status)
               });
             });
@@ -4769,6 +4891,22 @@ export async function createAlphaLeadCaptureStore(options?: {
           uploadedAt: input.uploadedAt
         });
 
+        await transaction.insert(documentUploadAnalyses).values({
+          analysisId: randomUUID(),
+          analyzedAt: null,
+          confidencePercent: null,
+          createdAt: input.uploadedAt,
+          detectedType: null,
+          documentUploadId: input.documentUploadId,
+          evidence: [],
+          extractedTextPreview: null,
+          providerMode: "queued_pending_analysis",
+          recommendation: null,
+          status: "pending",
+          summary: "Queued for document analysis.",
+          updatedAt: input.uploadedAt
+        });
+
         await transaction
           .update(documentRequests)
           .set({
@@ -4802,12 +4940,159 @@ export async function createAlphaLeadCaptureStore(options?: {
           }
         });
 
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.uploadedAt,
+          eventType: "document_analysis_requested",
+          id: randomUUID(),
+          payload: {
+            documentRequestId,
+            documentUploadId: input.documentUploadId
+          }
+        });
+
+        await queueDocumentUploadAnalysisJob(transaction, {
+          caseId,
+          documentRequestId,
+          documentUploadId: input.documentUploadId,
+          runAfter: input.uploadedAt,
+          updatedAt: input.uploadedAt
+        });
+
         await syncFollowUpJob(transaction, {
           automationStatus: caseRecord.automationStatus,
           automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
           caseId,
           runAfter: input.nextActionDueAt,
           updatedAt: input.uploadedAt
+        });
+      });
+
+      return getPersistedCaseDetail(caseId);
+    },
+    async saveDocumentUploadAnalysis(caseId, documentRequestId, documentUploadId, input) {
+      const caseRecord = await getPersistedCaseDetail(caseId);
+
+      if (!caseRecord) {
+        return null;
+      }
+
+      const uploadRecord = await db
+        .select({
+          documentRequestId: documentUploads.documentRequestId,
+          documentUploadId: documentUploads.id
+        })
+        .from(documentUploads)
+        .where(
+          and(
+            eq(documentUploads.caseId, caseId),
+            eq(documentUploads.documentRequestId, documentRequestId),
+            eq(documentUploads.id, documentUploadId)
+          )
+        )
+        .limit(1);
+
+      if (!uploadRecord[0]) {
+        return null;
+      }
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .insert(documentUploadAnalyses)
+          .values({
+            analysisId: input.uploadAnalysisId,
+            analyzedAt: input.analyzedAt,
+            confidencePercent: input.confidencePercent,
+            createdAt: input.updatedAt,
+            detectedType: input.detectedType,
+            documentUploadId,
+            evidence: input.evidence,
+            extractedTextPreview: input.extractedTextPreview,
+            providerMode: input.providerMode,
+            recommendation: input.recommendation,
+            status: input.status,
+            summary: input.summary,
+            updatedAt: input.updatedAt
+          })
+          .onConflictDoUpdate({
+            set: {
+              analyzedAt: input.analyzedAt,
+              confidencePercent: input.confidencePercent,
+              detectedType: input.detectedType,
+              evidence: input.evidence,
+              extractedTextPreview: input.extractedTextPreview,
+              providerMode: input.providerMode,
+              recommendation: input.recommendation,
+              status: input.status,
+              summary: input.summary,
+              updatedAt: input.updatedAt
+            },
+            target: documentUploadAnalyses.documentUploadId
+          });
+
+        await transaction
+          .update(documentRequests)
+          .set({
+            status: input.uploadStatus,
+            updatedAt: input.updatedAt
+          })
+          .where(and(eq(documentRequests.caseId, caseId), eq(documentRequests.id, documentRequestId)));
+
+        await transaction
+          .update(cases)
+          .set({
+            currentNextAction: input.nextAction,
+            nextActionDueAt: input.nextActionDueAt,
+            stage: "documents_in_progress",
+            updatedAt: input.updatedAt
+          })
+          .where(eq(cases.id, caseId));
+
+        await transaction.insert(auditEvents).values({
+          caseId,
+          createdAt: input.updatedAt,
+          eventType:
+            input.status === "failed"
+              ? "document_analysis_failed"
+              : input.recommendation === "request_reupload"
+                ? "document_analysis_flagged"
+                : "document_analysis_completed",
+          id: randomUUID(),
+          payload: {
+            analyzedAt: input.analyzedAt,
+            confidencePercent: input.confidencePercent,
+            detectedType: input.detectedType,
+            documentRequestId,
+            documentUploadId,
+            evidence: input.evidence,
+            providerMode: input.providerMode,
+            recommendation: input.recommendation,
+            status: input.status,
+            summary: input.summary,
+            uploadStatus: input.uploadStatus
+          }
+        });
+
+        if (input.queueDocumentMissingTrigger) {
+          await syncCaseAgentTriggerJob(transaction, {
+            caseId,
+            payload: {
+              documentRequestId,
+              documentUploadId,
+              reason: "analysis_request_reupload"
+            },
+            runAfter: input.updatedAt,
+            triggerType: "document_missing",
+            updatedAt: input.updatedAt
+          });
+        }
+
+        await syncFollowUpJob(transaction, {
+          automationStatus: caseRecord.automationStatus,
+          automationHoldReason: getCaseAutomationHoldReason(caseRecord.currentQaReview),
+          caseId,
+          runAfter: input.nextActionDueAt,
+          updatedAt: input.updatedAt
         });
       });
 
@@ -6197,6 +6482,12 @@ function deriveDocumentWorkflowNextAction(documentRequests: PersistedDocumentReq
     return locale === "ar" ? "متابعة المستندات المطلوبة مع العميل" : "Track the outstanding document requests with the prospect";
   }
 
+  if (documentRequests.some((documentRequest) => documentRequestNeedsInternalReview(documentRequest))) {
+    return locale === "ar"
+      ? "راجع نتائج التحليل والملفات المرفوعة قبل اعتماد المستندات"
+      : "Review the analysis results and uploaded files before approving the documents";
+  }
+
   return locale === "ar"
     ? "راجع الملفات المرفوعة ووافق على الجاهزية أو اطلب بديلاً واضحاً"
     : "Review the uploaded files and either approve readiness or request a clear replacement";
@@ -6207,6 +6498,7 @@ function documentRequestNeedsCustomerUpload(
     | PersistedDocumentRequest
     | {
         hasUpload: boolean;
+        latestAnalysisRecommendation?: DocumentUploadAnalysisRecommendation | null;
         status: DocumentRequestStatus;
       }
 ) {
@@ -6218,9 +6510,50 @@ function documentRequestNeedsCustomerUpload(
     return true;
   }
 
+  const latestAnalysisRecommendation =
+    "uploads" in documentRequest
+      ? getLatestDocumentUploadAnalysis(documentRequest)?.recommendation ?? null
+      : documentRequest.latestAnalysisRecommendation ?? null;
   const hasUpload = "uploads" in documentRequest ? documentRequest.uploads.length > 0 : documentRequest.hasUpload;
 
+  if (latestAnalysisRecommendation === "request_reupload") {
+    return true;
+  }
+
   return !hasUpload;
+}
+
+function documentRequestNeedsInternalReview(documentRequest: PersistedDocumentRequest) {
+  if (documentRequest.status === "accepted" || documentRequest.status === "rejected") {
+    return false;
+  }
+
+  if (documentRequest.uploads.length === 0) {
+    return false;
+  }
+
+  const latestAnalysis = getLatestDocumentUploadAnalysis(documentRequest);
+
+  if (!latestAnalysis) {
+    return true;
+  }
+
+  return latestAnalysis.recommendation !== "request_reupload";
+}
+
+function getLatestDocumentUploadAnalysis(
+  documentRequest:
+    | PersistedDocumentRequest
+    | {
+        latestAnalysis?: PersistedDocumentUploadAnalysis | null;
+        uploads: PersistedDocumentUpload[];
+      }
+) {
+  if ("latestAnalysis" in documentRequest) {
+    return documentRequest.latestAnalysis ?? null;
+  }
+
+  return documentRequest.uploads[0]?.analysis ?? null;
 }
 
 function deriveHandoverCaseStatus(
@@ -7017,6 +7350,34 @@ function hydrateVisitBooking(value: {
   };
 }
 
+function hydrateDocumentUploadAnalysis(value: {
+  analysisId: string;
+  analyzedAt: string | null;
+  confidencePercent: number | null;
+  detectedType: string | null;
+  evidence: string[];
+  extractedTextPreview: string | null;
+  providerMode: string;
+  recommendation: string | null;
+  status: string;
+  summary: string;
+  updatedAt: string;
+}): PersistedDocumentUploadAnalysis {
+  return {
+    analysisId: value.analysisId,
+    analyzedAt: value.analyzedAt,
+    confidencePercent: value.confidencePercent,
+    detectedType: value.detectedType ? toDocumentRequestType(value.detectedType) : null,
+    evidence: value.evidence,
+    extractedTextPreview: value.extractedTextPreview,
+    providerMode: value.providerMode,
+    recommendation: value.recommendation ? toDocumentUploadAnalysisRecommendation(value.recommendation) : null,
+    status: toDocumentUploadAnalysisStatus(value.status),
+    summary: value.summary,
+    updatedAt: value.updatedAt
+  };
+}
+
 function hydrateDocumentUpload(value: {
   checksumSha256: string;
   createdAt: string;
@@ -7025,8 +7386,9 @@ function hydrateDocumentUpload(value: {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: string;
-}): PersistedDocumentUpload {
+}, analysis: PersistedDocumentUploadAnalysis | null): PersistedDocumentUpload {
   return {
+    analysis,
     checksumSha256: value.checksumSha256,
     createdAt: value.createdAt,
     documentUploadId: value.documentUploadId,
@@ -7439,6 +7801,22 @@ function toDocumentRequestType(value: string): DocumentRequestType {
   }
 
   throw new Error(`unsupported_document_request_type:${value}`);
+}
+
+function toDocumentUploadAnalysisRecommendation(value: string): DocumentUploadAnalysisRecommendation {
+  if (value === "accept" || value === "request_reupload" || value === "manual_review") {
+    return value;
+  }
+
+  throw new Error(`unsupported_document_upload_analysis_recommendation:${value}`);
+}
+
+function toDocumentUploadAnalysisStatus(value: string): DocumentUploadAnalysisStatus {
+  if (value === "pending" || value === "completed" || value === "manual_review_required" || value === "failed") {
+    return value;
+  }
+
+  throw new Error(`unsupported_document_upload_analysis_status:${value}`);
 }
 
 function toIsoDateTimeString(value: string) {

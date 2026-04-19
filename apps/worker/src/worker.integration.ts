@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createAlphaLeadCaptureStore } from "@real-estate-ai/database";
-import { runPersistedCaseAgentCycle, runPersistedFollowUpCycle } from "@real-estate-ai/workflows";
+import {
+  createDeterministicDocumentUploadAnalysisModelAdapter,
+  resolvePersistedDocumentUploadAnalysis,
+  runPersistedCaseAgentCycle,
+  runPersistedFollowUpCycle
+} from "@real-estate-ai/workflows";
 
 describe("case agent worker", () => {
   let store: Awaited<ReturnType<typeof createAlphaLeadCaptureStore>>;
@@ -222,5 +227,109 @@ describe("case agent worker", () => {
     expect(agentCycle.processedJobs).toBe(1);
     expect(caseDetail?.agentState?.latestTriggerType).toBe("no_response_follow_up");
     expect(caseDetail?.agentMemory?.documentGapSummary).toBeNull();
+  });
+
+  it("flags a mismatched upload for replacement and wakes the document-missing agent path immediately", async () => {
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Rana Faisal",
+      email: "rana@example.com",
+      message: "I will upload the ID today.",
+      nextAction: "Collect the remaining documents",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 55 101 2020",
+      preferredLocale: "en",
+      projectInterest: "Palm Horizon"
+    });
+    const initialCase = await store.getCaseDetail(createdCase.caseId);
+    const documentRequest = initialCase?.documentRequests[0];
+
+    expect(documentRequest?.type).toBe("government_id");
+
+    await store.recordDocumentUpload(createdCase.caseId, documentRequest!.documentRequestId, {
+      checksumSha256: "checksum-mismatch",
+      documentUploadId: "00000000-0000-4000-8000-000000000031",
+      fileName: "bank-statement.pdf",
+      mimeType: "application/pdf",
+      nextAction: "Review the uploaded files and either approve readiness or request a clear replacement",
+      nextActionDueAt: "2026-04-12T10:00:00.000Z",
+      sizeBytes: 12_000,
+      storagePath: `${createdCase.caseId}/${documentRequest!.documentRequestId}/bank-statement.pdf`,
+      uploadedAt: "2026-04-12T09:00:00.000Z"
+    });
+
+    const uploadedCase = await store.getCaseDetail(createdCase.caseId);
+
+    await resolvePersistedDocumentUploadAnalysis(store, {
+      caseDetail: uploadedCase!,
+      documentRequestId: documentRequest!.documentRequestId,
+      documentUploadId: "00000000-0000-4000-8000-000000000031",
+      extractedTextPreview: "Bank statement account balance available funds IBAN",
+      modelAdapter: createDeterministicDocumentUploadAnalysisModelAdapter(),
+      now: "2026-04-12T09:05:00.000Z"
+    });
+
+    const analyzedCase = await store.getCaseDetail(createdCase.caseId);
+
+    expect(analyzedCase?.documentRequests[0]?.status).toBe("rejected");
+    expect(analyzedCase?.documentRequests[0]?.latestUpload?.analysis?.recommendation).toBe("request_reupload");
+
+    const agentCycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      runAt: "2026-04-12T09:05:00.000Z"
+    });
+    const caseAfterAgent = await store.getCaseDetail(createdCase.caseId);
+
+    expect(agentCycle.processedJobs).toBe(1);
+    expect(caseAfterAgent?.agentState?.latestTriggerType).toBe("document_missing");
+    expect(caseAfterAgent?.channelSummary?.latestOutboundStatus).toBe("queued");
+  });
+
+  it("auto-accepts a strong text-based document match when analysis confidence is high", async () => {
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Omar Kareem",
+      email: "omar@example.com",
+      message: "I can send proof of funds today.",
+      nextAction: "Collect the required documents",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 55 303 4040",
+      preferredLocale: "en",
+      projectInterest: "Palm Horizon"
+    });
+    const initialCase = await store.getCaseDetail(createdCase.caseId);
+    const documentRequest = initialCase?.documentRequests.find((item) => item.type === "proof_of_funds");
+
+    await store.recordDocumentUpload(createdCase.caseId, documentRequest!.documentRequestId, {
+      checksumSha256: "checksum-proof",
+      documentUploadId: "00000000-0000-4000-8000-000000000032",
+      fileName: "proof-of-funds.pdf",
+      mimeType: "application/pdf",
+      nextAction: "Review the uploaded files and either approve readiness or request a clear replacement",
+      nextActionDueAt: "2026-04-12T10:00:00.000Z",
+      sizeBytes: 28_000,
+      storagePath: `${createdCase.caseId}/${documentRequest!.documentRequestId}/proof-of-funds.pdf`,
+      uploadedAt: "2026-04-12T09:00:00.000Z"
+    });
+
+    const uploadedCase = await store.getCaseDetail(createdCase.caseId);
+
+    await resolvePersistedDocumentUploadAnalysis(store, {
+      caseDetail: uploadedCase!,
+      documentRequestId: documentRequest!.documentRequestId,
+      documentUploadId: "00000000-0000-4000-8000-000000000032",
+      extractedTextPreview:
+        "Bank statement available funds account balance IBAN customer reference balance certificate for financing review",
+      modelAdapter: createDeterministicDocumentUploadAnalysisModelAdapter(),
+      now: "2026-04-12T09:06:00.000Z"
+    });
+
+    const analyzedCase = await store.getCaseDetail(createdCase.caseId);
+
+    expect(analyzedCase?.documentRequests.find((item) => item.documentRequestId === documentRequest!.documentRequestId)?.status).toBe(
+      "accepted"
+    );
+    expect(
+      analyzedCase?.documentRequests.find((item) => item.documentRequestId === documentRequest!.documentRequestId)?.latestUpload?.analysis
+        ?.recommendation
+    ).toBe("accept");
   });
 });

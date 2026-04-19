@@ -518,6 +518,7 @@ export function getPersistedAgentStateNote(
 
 export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.documentRequests.map((documentRequest) => ({
+    analysisSummary: getDocumentAnalysisSummary(locale, documentRequest.latestUpload?.analysis ?? null),
     detail: getDocumentRequestDetail(locale, documentRequest.type),
     documentRequestId: documentRequest.documentRequestId,
     label: getDocumentRequestTypeLabel(locale, documentRequest.type),
@@ -532,6 +533,9 @@ export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail:
     statusTone: getDocumentTone(documentRequest.status),
     updatedAt: formatDateTime(documentRequest.updatedAt, locale),
     uploads: documentRequest.uploads.map((upload) => ({
+      analysisLabel: getDocumentAnalysisLabel(locale, upload.analysis),
+      analysisSummary: getDocumentAnalysisSummary(locale, upload.analysis),
+      analysisTone: getDocumentAnalysisTone(upload.analysis),
       documentUploadId: upload.documentUploadId,
       fileName: upload.fileName,
       mimeType: upload.mimeType,
@@ -567,6 +571,63 @@ function formatFileSize(locale: SupportedLocale, sizeBytes: number) {
   const megabytes = Math.round(sizeBytes / (1024 * 1024 / 10)) / 10;
 
   return locale === "ar" ? `${megabytes} ميغابايت` : `${megabytes} MB`;
+}
+
+function getDocumentAnalysisLabel(locale: SupportedLocale, analysis: PersistedCaseDetail["documentRequests"][number]["uploads"][number]["analysis"]) {
+  if (!analysis) {
+    return locale === "ar" ? "من دون تحليل" : "No analysis yet";
+  }
+
+  if (analysis.status === "pending") {
+    return locale === "ar" ? "التحليل قيد الانتظار" : "Analysis queued";
+  }
+
+  if (analysis.recommendation === "accept") {
+    return locale === "ar" ? "ترشيح للقبول" : "Recommended accept";
+  }
+
+  if (analysis.recommendation === "request_reupload") {
+    return locale === "ar" ? "طلب إعادة رفع" : "Re-upload required";
+  }
+
+  if (analysis.status === "failed") {
+    return locale === "ar" ? "فشل التحليل" : "Analysis failed";
+  }
+
+  return locale === "ar" ? "مراجعة بشرية" : "Manual review";
+}
+
+function getDocumentAnalysisSummary(locale: SupportedLocale, analysis: PersistedCaseDetail["documentRequests"][number]["uploads"][number]["analysis"]) {
+  if (!analysis) {
+    return null;
+  }
+
+  const confidenceSummary =
+    typeof analysis.confidencePercent === "number"
+      ? locale === "ar"
+        ? `ثقة ${analysis.confidencePercent}%`
+        : `${analysis.confidencePercent}% confidence`
+      : null;
+
+  return [analysis.summary, confidenceSummary].filter(Boolean).join(" • ");
+}
+
+function getDocumentAnalysisTone(
+  analysis: PersistedCaseDetail["documentRequests"][number]["uploads"][number]["analysis"]
+): "success" | "critical" | "warning" {
+  if (!analysis) {
+    return "warning";
+  }
+
+  if (analysis.recommendation === "accept") {
+    return "success";
+  }
+
+  if (analysis.recommendation === "request_reupload" || analysis.status === "failed") {
+    return "critical";
+  }
+
+  return "warning";
 }
 
 export function getPersistedHandoverBlockerDisplay(locale: SupportedLocale, handoverCase: PersistedHandoverCaseDetail) {

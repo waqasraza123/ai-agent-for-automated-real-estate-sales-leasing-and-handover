@@ -1,3 +1,4 @@
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
@@ -11,6 +12,7 @@ const workerEnvironmentSchema = z.object({
   WORKER_AGENT_OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   WORKER_BATCH_LIMIT: z.coerce.number().int().positive().default(25),
   WORKER_DATABASE_PATH: z.string().min(1).default(defaultDatabasePath),
+  WORKER_DOCUMENT_STORAGE_PATH: z.string().min(1).default(path.join(defaultDatabasePath, "document-uploads")),
   WORKER_META_WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
   WORKER_META_WHATSAPP_API_VERSION: z.string().min(1).default("v20.0"),
   WORKER_META_WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),

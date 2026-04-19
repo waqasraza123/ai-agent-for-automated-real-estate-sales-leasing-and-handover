@@ -1,10 +1,20 @@
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import { createAlphaLeadCaptureStore } from "@real-estate-ai/database";
 import { createMetaWhatsAppClient, type WhatsAppClient } from "@real-estate-ai/integrations";
-import { runPersistedCaseAgentCycle, runPersistedFollowUpCycle } from "@real-estate-ai/workflows";
+import {
+  resolvePersistedDocumentUploadAnalysis,
+  runPersistedCaseAgentCycle,
+  runPersistedFollowUpCycle
+} from "@real-estate-ai/workflows";
 
 import { createWorkerCaseAgentModelAdapter } from "./case-agent-model";
+import { createWorkerDocumentUploadAnalysisModelAdapter, extractDocumentTextPreview } from "./document-analysis-model";
 import { parseWorkerEnvironment } from "./env";
 
+const documentUploadAnalysisJobType = "document_upload_analysis";
 const whatsappAgentReplyJobType = "whatsapp_agent_reply";
 const whatsappCaseReplyJobType = "whatsapp_case_reply";
 const whatsappInitialReplyJobType = "whatsapp_initial_reply";
@@ -30,6 +40,98 @@ const caseAgentModelAdapter = createWorkerCaseAgentModelAdapter({
   model: environment.WORKER_AGENT_OPENAI_MODEL,
   timeoutMs: environment.WORKER_AGENT_OPENAI_TIMEOUT_MS
 });
+const documentAnalysisModelAdapter = createWorkerDocumentUploadAnalysisModelAdapter({
+  apiKey: environment.WORKER_AGENT_OPENAI_API_KEY,
+  baseUrl: environment.WORKER_AGENT_OPENAI_BASE_URL,
+  fetchImplementation: fetch,
+  model: environment.WORKER_AGENT_OPENAI_MODEL,
+  timeoutMs: environment.WORKER_AGENT_OPENAI_TIMEOUT_MS
+});
+
+async function runDocumentUploadAnalysisCycle(input: {
+  limit: number;
+  runAt: string;
+}) {
+  const dueJobs = await store.getDueAutomationJobs({
+    jobType: documentUploadAnalysisJobType,
+    limit: input.limit,
+    runAt: input.runAt
+  });
+  let processedJobs = 0;
+  const touchedCaseIds = new Set<string>();
+
+  for (const job of dueJobs) {
+    processedJobs += 1;
+    touchedCaseIds.add(job.caseId);
+
+    const documentRequestId = typeof job.payload.documentRequestId === "string" ? job.payload.documentRequestId : null;
+    const documentUploadId = typeof job.payload.documentUploadId === "string" ? job.payload.documentUploadId : null;
+    const caseDetail = await store.getCaseDetail(job.caseId);
+
+    if (!caseDetail || !documentRequestId || !documentUploadId) {
+      await store.markAutomationJobCompleted(job.jobId, input.runAt);
+      continue;
+    }
+
+    const uploadRecord = await store.getDocumentUploadRecord(job.caseId, documentRequestId, documentUploadId);
+
+    if (!uploadRecord) {
+      await store.markAutomationJobCompleted(job.jobId, input.runAt);
+      continue;
+    }
+
+    try {
+      const fileBytes = new Uint8Array(await readFile(path.join(environment.WORKER_DOCUMENT_STORAGE_PATH, uploadRecord.storagePath)));
+
+      await resolvePersistedDocumentUploadAnalysis(store, {
+        caseDetail,
+        documentRequestId,
+        documentUploadId,
+        extractedTextPreview: extractDocumentTextPreview({
+          bytes: fileBytes,
+          mimeType: uploadRecord.mimeType
+        }),
+        modelAdapter: documentAnalysisModelAdapter,
+        now: input.runAt
+      });
+    } catch {
+      await store.saveDocumentUploadAnalysis(job.caseId, documentRequestId, documentUploadId, {
+        analyzedAt: input.runAt,
+        confidencePercent: null,
+        detectedType: null,
+        evidence: [
+          caseDetail.preferredLocale === "ar"
+            ? "تعذر على العامل إعادة فتح الملف من مسار التخزين الحالي."
+            : "The worker could not reopen the file from the current storage path."
+        ],
+        extractedTextPreview: null,
+        nextAction:
+          caseDetail.preferredLocale === "ar"
+            ? "راجع تخزين الملف أو اطلب إعادة رفع المستند"
+            : "Review document storage or request the customer to upload the file again",
+        nextActionDueAt: input.runAt,
+        providerMode: "storage_read_failure",
+        queueDocumentMissingTrigger: false,
+        recommendation: null,
+        status: "failed",
+        summary:
+          caseDetail.preferredLocale === "ar"
+            ? "فشل العامل في قراءة الملف المرفوع من التخزين المحلي."
+            : "The worker failed to read the uploaded file from local storage.",
+        updatedAt: input.runAt,
+        uploadAnalysisId: randomUUID(),
+        uploadStatus: "under_review"
+      });
+    }
+
+    await store.markAutomationJobCompleted(job.jobId, input.runAt);
+  }
+
+  return {
+    processedJobs,
+    touchedCaseIds: Array.from(touchedCaseIds)
+  };
+}
 
 async function runWhatsAppOutboundCycle(input: {
   jobType: string;
@@ -185,6 +287,10 @@ async function runWhatsAppOutboundCycle(input: {
 
 const runCycle = async () => {
   const runAt = new Date().toISOString();
+  const documentAnalysisResult = await runDocumentUploadAnalysisCycle({
+    limit: environment.WORKER_BATCH_LIMIT,
+    runAt
+  });
   const followUpResult = await runPersistedFollowUpCycle(store, {
     limit: environment.WORKER_BATCH_LIMIT,
     runAt
@@ -214,6 +320,7 @@ const runCycle = async () => {
   ]);
 
   if (
+    documentAnalysisResult.processedJobs > 0 ||
     followUpResult.processedJobs > 0 ||
     followUpResult.openedInterventions > 0 ||
     caseAgentResult.processedJobs > 0 ||
@@ -227,6 +334,7 @@ const runCycle = async () => {
         escalatedAgentRuns: caseAgentResult.escalatedRuns,
         openedInterventions: followUpResult.openedInterventions,
         processedJobs:
+          documentAnalysisResult.processedJobs +
           followUpResult.processedJobs +
           caseAgentResult.processedJobs +
           agentReplyResult.processedJobs +
@@ -236,6 +344,7 @@ const runCycle = async () => {
           new Set([
             ...followUpResult.touchedCaseIds,
             ...caseAgentResult.touchedCaseIds,
+            ...documentAnalysisResult.touchedCaseIds,
             ...agentReplyResult.touchedCaseIds,
             ...initialReplyResult.touchedCaseIds,
             ...caseReplyResult.touchedCaseIds

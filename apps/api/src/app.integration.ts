@@ -121,6 +121,7 @@ describe("lead capture api", () => {
     expect(uploadResponse.statusCode).toBe(201);
     expect(uploadResponse.json().documentRequests[0].status).toBe("under_review");
     expect(uploadResponse.json().documentRequests[0].latestUpload?.fileName).toBe("passport-copy.pdf");
+    expect(uploadResponse.json().documentRequests[0].latestUpload?.analysis?.status).toBe("pending");
     expect(uploadResponse.json().documentRequests[0].uploads).toHaveLength(1);
 
     const uploadedDocumentId = uploadResponse.json().documentRequests[0].uploads[0].documentUploadId;
