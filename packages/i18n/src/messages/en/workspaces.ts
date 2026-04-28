@@ -2,14 +2,14 @@ import type { LandingSection, WorkspaceSummarySection } from "../types";
 
 export const enLanding: LandingSection = {
   eyebrow: "Arabic-first lead-response operations for Saudi real-estate teams",
-  title: "Turn first response, follow-up discipline, and document readiness into a real operating advantage.",
-  summary: "This version is focused on the core wedge: bilingual inbound handling, cleaner qualification, visible next actions, and manager-readable risk from one operating flow.",
-  primaryAction: "Open lead inbox",
-  secondaryAction: "Open manager queue",
-  spotlightTitle: "What this product proves first",
-  spotlightSummary: "It proves the bilingual operating flow that matters most: capture the lead, respond fast, qualify clearly, keep follow-up moving, and make risk visible.",
-  liveAlphaTitle: "Live intake",
-  liveAlphaSummary: "This is the first live path that leaves the web app, persists through `apps/api`, and returns as a saved case with visible ownership and next steps."
+  title: "Turn WhatsApp lead chaos into a controlled sales workflow.",
+  summary: "A design-partner view of the core wedge: bilingual inbound handling, cleaner qualification, visible next actions, and manager-readable risk from one operating flow.",
+  primaryAction: "Book a demo",
+  secondaryAction: "View lead inbox",
+  spotlightTitle: "What the design partner pilot proves",
+  spotlightSummary: "It proves the operating flow that matters most for Saudi developer teams: capture the lead, respond fast, qualify clearly, keep follow-up moving, and make risk visible.",
+  liveAlphaTitle: "Live lead path",
+  liveAlphaSummary: "A website lead can become a saved case with WhatsApp state, visible ownership, follow-up, scheduling context, and manager intervention signals."
 };
 
 export const enDashboard: WorkspaceSummarySection = {
