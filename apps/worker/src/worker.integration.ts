@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { CaseAgentDecision, CommercialFactKind, SupportedLocale } from "@real-estate-ai/contracts";
 import { createAlphaLeadCaptureStore } from "@real-estate-ai/database";
 import {
+  type CaseAgentModelAdapter,
   createDeterministicDocumentUploadAnalysisModelAdapter,
   resolvePersistedDocumentUploadAnalysis,
   runPersistedCaseAgentCycle,
@@ -260,7 +262,9 @@ describe("case agent worker", () => {
     const caseDetail = await store.getCaseDetail(createdCase.caseId);
 
     expect(caseDetail?.agentState?.latestTriggerType).toBe("document_missing");
-    expect(caseDetail?.agentState?.latestRecommendedAction).toBe("send_whatsapp_message");
+    expect(caseDetail?.agentState?.latestRecommendedAction).toBe("request_manager_intervention");
+    expect(caseDetail?.agentState?.latestBlockedReason).toBe("commercial_facts_missing");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactRequiredKinds).toContain("document_requirement");
     expect(caseDetail?.agentMemory?.documentGapSummary).toContain("government");
   });
 
@@ -367,6 +371,165 @@ describe("case agent worker", () => {
     expect(caseAfterAgent?.channelSummary?.latestOutboundStatus).toBe("queued");
   });
 
+  it("escalates English commercial questions when approved active facts are missing", async () => {
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Rana Saleh",
+      email: "rana@example.com",
+      message: "Please share details about the available unit.",
+      nextAction: "Continue qualification on WhatsApp",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 50 777 2000",
+      preferredLocale: "en",
+      projectInterest: "Palm Horizon"
+    });
+
+    await store.recordWhatsAppInboundMessage({
+      messageId: "wamid.commercial.en.missing.1",
+      normalizedPhone: "+966507772000",
+      profileName: "Rana Saleh",
+      receivedAt: "2026-04-12T09:00:00.000Z",
+      textBody: "What is the price and payment plan for this unit?"
+    });
+
+    const cycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      modelAdapter: createCommercialReplyAdapter("commercial_missing_en"),
+      runAt: "2026-04-12T09:05:00.000Z"
+    });
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
+
+    expect(cycle.escalatedRuns).toBe(1);
+    expect(caseDetail?.agentState?.latestRunStatus).toBe("escalated");
+    expect(caseDetail?.agentState?.latestBlockedReason).toBe("commercial_facts_missing");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactGroundingStatus).toBe("missing_required_evidence");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactRequiredKinds).toEqual([
+      "pricing",
+      "payment_plan",
+      "policy",
+      "availability",
+      "unit_status",
+      "document_requirement"
+    ]);
+    expect(caseDetail?.managerInterventions[0]?.type).toBe("agent_decision_required");
+  });
+
+  it("escalates Arabic commercial questions when approved active facts are missing", async () => {
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Layal Abbas",
+      email: "layal@example.com",
+      message: "Need details about the unit.",
+      nextAction: "Continue qualification on WhatsApp",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 55 555 1111",
+      preferredLocale: "ar",
+      projectInterest: "Palm Horizon"
+    });
+
+    await store.recordWhatsAppInboundMessage({
+      messageId: "wamid.commercial.ar.missing.1",
+      normalizedPhone: "+966555551111",
+      profileName: "Layal Abbas",
+      receivedAt: "2026-04-12T09:00:00.000Z",
+      textBody: "كم السعر وخطة الدفع لهذه الوحدة؟"
+    });
+
+    await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      modelAdapter: createCommercialReplyAdapter("commercial_missing_ar"),
+      runAt: "2026-04-12T09:05:00.000Z"
+    });
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
+
+    expect(caseDetail?.preferredLocale).toBe("ar");
+    expect(caseDetail?.agentState?.latestRunStatus).toBe("escalated");
+    expect(caseDetail?.agentState?.latestBlockedReason).toBe("commercial_facts_missing");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactRequiredKinds).toEqual([
+      "pricing",
+      "payment_plan",
+      "policy",
+      "availability",
+      "unit_status",
+      "document_requirement"
+    ]);
+  });
+
+  it("allows commercial replies only when required facts are approved, active, and source-linked", async () => {
+    await createApprovedCommercialFactSet(store, "Palm Horizon", "en", "2099-01-01T00:00:00.000Z");
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Rana Saleh",
+      email: "rana.approved@example.com",
+      message: "Please share details about the available unit.",
+      nextAction: "Continue qualification on WhatsApp",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 50 777 2001",
+      preferredLocale: "en",
+      projectInterest: "Palm Horizon"
+    });
+
+    await store.recordWhatsAppInboundMessage({
+      messageId: "wamid.commercial.approved.1",
+      normalizedPhone: "+966507772001",
+      profileName: "Rana Saleh",
+      receivedAt: "2026-04-12T09:00:00.000Z",
+      textBody: "What is the price and payment plan for this unit?"
+    });
+
+    const cycle = await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      modelAdapter: createCommercialReplyAdapter("commercial_grounded_en"),
+      runAt: "2026-04-12T09:05:00.000Z"
+    });
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
+
+    expect(cycle.escalatedRuns).toBe(0);
+    expect(caseDetail?.agentState?.latestRunStatus).toBe("completed");
+    expect(caseDetail?.channelSummary?.latestOutboundStatus).toBe("queued");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactGroundingStatus).toBe("grounded");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactReferences.map((reference) => reference.kind).sort()).toEqual([
+      "availability",
+      "document_requirement",
+      "payment_plan",
+      "policy",
+      "pricing",
+      "unit_status"
+    ]);
+  });
+
+  it("rejects expired and cross-project commercial facts for agent grounding", async () => {
+    await createApprovedCommercialFactSet(store, "Palm Horizon", "en", "2020-01-01T00:00:00.000Z");
+    await createApprovedCommercialFactSet(store, "Diriyah Heights", "en", "2099-01-01T00:00:00.000Z");
+    const createdCase = await store.createWebsiteLeadCase({
+      customerName: "Huda Karim",
+      email: "huda.commercial@example.com",
+      message: "Please share details about the available unit.",
+      nextAction: "Continue qualification on WhatsApp",
+      nextActionDueAt: "2026-04-12T08:00:00.000Z",
+      phone: "+966 50 700 1001",
+      preferredLocale: "en",
+      projectInterest: "Palm Horizon"
+    });
+
+    await store.recordWhatsAppInboundMessage({
+      messageId: "wamid.commercial.expired.cross.1",
+      normalizedPhone: "+966507001001",
+      profileName: "Huda Karim",
+      receivedAt: "2026-04-12T09:00:00.000Z",
+      textBody: "What is the price and payment plan for this unit?"
+    });
+
+    await runPersistedCaseAgentCycle(store, {
+      canSendWhatsApp: true,
+      modelAdapter: createCommercialReplyAdapter("commercial_expired_cross_project"),
+      runAt: "2026-04-12T09:05:00.000Z"
+    });
+    const caseDetail = await store.getCaseDetail(createdCase.caseId);
+
+    expect(caseDetail?.agentState?.latestRunStatus).toBe("escalated");
+    expect(caseDetail?.agentState?.latestBlockedReason).toBe("commercial_facts_missing");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactGroundingStatus).toBe("missing_required_evidence");
+    expect(caseDetail?.agentRuns?.[0]?.commercialFactReferences).toEqual([]);
+  });
+
   it("auto-accepts a strong text-based document match when analysis confidence is high", async () => {
     const createdCase = await store.createWebsiteLeadCase({
       customerName: "Omar Kareem",
@@ -419,3 +582,82 @@ describe("case agent worker", () => {
     ).toBe("accept");
   });
 });
+
+function createCommercialReplyAdapter(modelMode: string): CaseAgentModelAdapter {
+  return {
+    modelMode,
+    async generateDecision(input) {
+      return {
+        actionType: "send_whatsapp_message",
+        blockedReason: null,
+        confidence: 0.95,
+        escalationReason: null,
+        proposedMessage:
+          input.caseDetail.preferredLocale === "ar"
+            ? "السعر المعتمد لهذه الوحدة هو 950000 ريال مع خطة دفع معتمدة."
+            : "The approved price for this unit is SAR 950000 with the approved payment plan.",
+        proposedNextAction: "Wait for the customer reply and continue qualification on WhatsApp",
+        proposedNextActionDueAt: "2026-04-12T12:00:00.000Z",
+        rationaleSummary: "Commercial reply proposed from the model.",
+        riskLevel: "low",
+        status: "completed",
+        toolExecutionStatus: "queued",
+        triggerType: input.triggerType
+      } satisfies CaseAgentDecision;
+    }
+  };
+}
+
+async function createApprovedCommercialFactSet(
+  store: Awaited<ReturnType<typeof createAlphaLeadCaptureStore>>,
+  projectCode: string,
+  locale: SupportedLocale,
+  expiresAt: string
+) {
+  const facts: Array<{ content: string; kind: CommercialFactKind; title: string }> = [
+    {
+      content: `${projectCode} has an approved starting price of SAR 950000.`,
+      kind: "pricing",
+      title: `${projectCode} approved price`
+    },
+    {
+      content: `${projectCode} uses approved payment plan PLAN-A.`,
+      kind: "payment_plan",
+      title: `${projectCode} approved payment plan`
+    },
+    {
+      content: `${projectCode} commercial replies must use approved source-linked facts only.`,
+      kind: "policy",
+      title: `${projectCode} approved commercial policy`
+    },
+    {
+      content: `${projectCode} has approved active unit availability for this lead workflow.`,
+      kind: "availability",
+      title: `${projectCode} approved availability`
+    },
+    {
+      content: `${projectCode} unit status must be confirmed from an approved inventory source before reply.`,
+      kind: "unit_status",
+      title: `${projectCode} approved unit status`
+    },
+    {
+      content: `${projectCode} buyer document requirements are approved for WhatsApp replies.`,
+      kind: "document_requirement",
+      title: `${projectCode} approved buyer documents`
+    }
+  ];
+
+  for (const fact of facts) {
+    await store.createManualCommercialFact({
+      content: fact.content,
+      evidenceLabel: `${projectCode} manager evidence`,
+      expiresAt,
+      kind: fact.kind,
+      locale,
+      projectCode,
+      scope: "whatsapp_reply",
+      tenantId: "local-alpha",
+      title: fact.title
+    });
+  }
+}

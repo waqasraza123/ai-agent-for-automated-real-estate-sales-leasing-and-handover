@@ -2,16 +2,23 @@ import Fastify from "fastify";
 
 import {
   approveHandoverCustomerUpdateInputSchema,
+  approveCommercialFactProposalInputSchema,
   completeHandoverInputSchema,
   confirmHandoverAppointmentInputSchema,
+  createCommercialSourceInputSchema,
   createHandoverBlockerInputSchema,
   createHandoverPostCompletionFollowUpInputSchema,
   createHandoverIntakeInputSchema,
+  createManualCommercialFactInputSchema,
   createWebsiteLeadInputSchema,
+  importInventoryCsvInputSchema,
+  listActiveCommercialFactsQuerySchema,
+  listCommercialFactProposalsQuerySchema,
   listGovernanceEventsQuerySchema,
   manageBulkCaseFollowUpInputSchema,
   prepareCaseReplyDraftQaReviewInputSchema,
   requestCaseQaReviewInputSchema,
+  rejectCommercialFactProposalInputSchema,
   resolveCaseQaReviewInputSchema,
   resolveHandoverCustomerUpdateQaReviewInputSchema,
   sendCaseReplyInputSchema,
@@ -40,14 +47,24 @@ import {
 } from "@real-estate-ai/integrations";
 import {
   approvePersistedHandoverCustomerUpdate,
+  approvePersistedCommercialFactProposal,
   completePersistedHandover,
   confirmPersistedHandoverAppointment,
+  createPersistedCommercialSource,
   createPersistedHandoverBlocker,
   createPersistedHandoverPostCompletionFollowUp,
+  createPersistedManualCommercialFact,
+  getPersistedCommercialSourceDetail,
   preparePersistedCaseReplyDraftQaReview,
+  getPersistedProjectCommercialReadinessSummary,
+  importPersistedInventoryCsv,
+  listPersistedActiveCommercialFacts,
+  listPersistedCommercialFactProposals,
+  listPersistedCommercialSources,
   resolvePersistedCaseQaReview,
   resolvePersistedHandoverPostCompletionFollowUp,
   requestPersistedCaseQaReview,
+  rejectPersistedCommercialFactProposal,
   resolvePersistedHandoverCustomerUpdateQaReview,
   sendPersistedCaseReply,
   savePersistedHandoverArchiveReview,
@@ -227,6 +244,275 @@ export function buildApiApp(dependencies: {
   app.get("/v1/cases", async () => ({
     cases: await listPersistedCases(dependencies.store)
   }));
+
+  app.get<{
+    Querystring: {
+      projectCode?: string;
+      tenantId?: string;
+    };
+  }>("/v1/commercial-sources", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue"])) {
+      return reply;
+    }
+
+    return {
+      sources: await listPersistedCommercialSources(dependencies.store, {
+        ...(request.query.projectCode ? { projectCode: request.query.projectCode } : {}),
+        ...(request.query.tenantId ? { tenantId: request.query.tenantId } : {})
+      })
+    };
+  });
+
+  app.post("/v1/commercial-sources", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = createCommercialSourceInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    return reply.status(201).send(await createPersistedCommercialSource(dependencies.store, result.data));
+  });
+
+  app.get<{
+    Params: {
+      sourceId: string;
+    };
+  }>("/v1/commercial-sources/:sourceId", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue"])) {
+      return reply;
+    }
+
+    const source = await getPersistedCommercialSourceDetail(dependencies.store, request.params.sourceId);
+
+    if (!source) {
+      return reply.status(404).send({
+        error: "commercial_source_not_found"
+      });
+    }
+
+    return source;
+  });
+
+  app.post<{
+    Params: {
+      sourceId: string;
+    };
+  }>("/v1/commercial-sources/:sourceId/inventory-import", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = importInventoryCsvInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const source = await importPersistedInventoryCsv(dependencies.store, request.params.sourceId, result.data);
+
+    if (!source) {
+      return reply.status(404).send({
+        error: "commercial_source_not_found"
+      });
+    }
+
+    return reply.status(200).send(source);
+  });
+
+  app.post("/v1/commercial-facts/manual", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = createManualCommercialFactInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    return reply.status(201).send(await createPersistedManualCommercialFact(dependencies.store, result.data));
+  });
+
+  app.get("/v1/commercial-fact-proposals", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue"])) {
+      return reply;
+    }
+
+    const result = listCommercialFactProposalsQuerySchema.safeParse(request.query);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    return {
+      proposals: await listPersistedCommercialFactProposals(dependencies.store, result.data)
+    };
+  });
+
+  app.post<{
+    Params: {
+      proposalId: string;
+    };
+  }>("/v1/commercial-fact-proposals/:proposalId/approve", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = approveCommercialFactProposalInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const proposal = await approvePersistedCommercialFactProposal(dependencies.store, request.params.proposalId, result.data);
+
+    if (!proposal) {
+      return reply.status(404).send({
+        error: "proposal_not_found"
+      });
+    }
+
+    return proposal;
+  });
+
+  app.post<{
+    Params: {
+      proposalId: string;
+    };
+  }>("/v1/commercial-fact-proposals/:proposalId/reject", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = rejectCommercialFactProposalInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const proposal = await rejectPersistedCommercialFactProposal(dependencies.store, request.params.proposalId, result.data);
+
+    if (!proposal) {
+      return reply.status(404).send({
+        error: "proposal_not_found"
+      });
+    }
+
+    return proposal;
+  });
+
+  app.get("/v1/commercial-facts/active", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue"])) {
+      return reply;
+    }
+
+    const result = listActiveCommercialFactsQuerySchema.safeParse(request.query);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    return {
+      facts: await listPersistedActiveCommercialFacts(dependencies.store, result.data)
+    };
+  });
+
+  app.get("/v1/commercial-facts/expiring", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue"])) {
+      return reply;
+    }
+
+    const result = listActiveCommercialFactsQuerySchema.safeParse(request.query);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const facts = await listPersistedActiveCommercialFacts(dependencies.store, result.data);
+
+    return {
+      facts: facts.filter((fact) => fact.freshnessStatus === "expiring_soon" || fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired")
+    };
+  });
+
+  app.get<{
+    Params: {
+      projectCode: string;
+    };
+    Querystring: {
+      tenantId?: string;
+    };
+  }>("/v1/projects/:projectCode/commercial-readiness", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue"])) {
+      return reply;
+    }
+
+    return getPersistedProjectCommercialReadinessSummary(dependencies.store, {
+      projectCode: request.params.projectCode,
+      ...(request.query.tenantId ? { tenantId: request.query.tenantId } : {})
+    });
+  });
+
+  app.get<{
+    Params: {
+      caseId: string;
+    };
+  }>("/v1/cases/:caseId/commercial-evidence", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue", "qa", "sales"])) {
+      return reply;
+    }
+
+    const caseDetail = await getPersistedCaseDetail(dependencies.store, request.params.caseId);
+
+    if (!caseDetail) {
+      return reply.status(404).send({
+        error: "case_not_found"
+      });
+    }
+
+    return {
+      caseId: caseDetail.caseId,
+      evidence: caseDetail.agentRuns?.[0]?.commercialFactReferences ?? []
+    };
+  });
 
   app.post("/v1/cases/follow-up-plan/bulk", async (request, reply) => {
     const permission = "manage_case_follow_up";

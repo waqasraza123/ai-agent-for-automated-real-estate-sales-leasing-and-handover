@@ -8,7 +8,7 @@ describe("case agent evaluation harness", () => {
     async () => {
       const results = await runCaseAgentEvalScenarios();
 
-      expect(results.every((result) => result.passed)).toBe(true);
+      expect(results.filter((result) => !result.passed)).toEqual([]);
     },
     300000
   );

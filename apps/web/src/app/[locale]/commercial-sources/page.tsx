@@ -1,0 +1,116 @@
+import Link from "next/link";
+
+import { canOperatorRolePerform, type SupportedLocale } from "@real-estate-ai/contracts";
+import { getMessages } from "@real-estate-ai/i18n";
+import {
+  DetailGrid,
+  DetailItem,
+  EmptyState,
+  MetricTile,
+  Panel,
+  StatusBadge,
+  WorkflowCard,
+  WorkflowPanelBody,
+  inlineLinkClassName,
+  metricGridClassName,
+  pageStackClassName,
+  statusRowWrapClassName,
+  twoColumnGridClassName
+} from "@real-estate-ai/ui";
+
+import { CommercialSourceCreateForm, ManualCommercialFactForm } from "@/components/commercial-source-forms";
+import { ScreenIntro } from "@/components/screen-intro";
+import { getCurrentOperatorRole } from "@/lib/operator-session";
+import { tryListActiveCommercialFacts, tryListCommercialFactProposals, tryListCommercialSources } from "@/lib/live-api";
+
+export const dynamic = "force-dynamic";
+
+interface PageProps {
+  params: Promise<{ locale: SupportedLocale }>;
+}
+
+export default async function CommercialSourcesPage(props: PageProps) {
+  const { locale } = await props.params;
+  const messages = getMessages(locale);
+  const role = await getCurrentOperatorRole();
+  const canManage = canOperatorRolePerform("manage_commercial_sources", role);
+  const [sources, proposals, facts] = await Promise.all([
+    tryListCommercialSources(role),
+    tryListCommercialFactProposals(role),
+    tryListActiveCommercialFacts(role)
+  ]);
+  const staleFacts = facts.filter((fact) => fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired");
+  const expiringFacts = facts.filter((fact) => fact.freshnessStatus === "expiring_soon");
+
+  return (
+    <div className={pageStackClassName}>
+      <ScreenIntro
+        badge={messages.app.phaseLabel}
+        summary={
+          locale === "ar"
+            ? "تحكم محلي في مصادر الأسعار والتوفر وخطط الدفع قبل أن يستخدمها الوكيل في واتساب."
+            : "Local control over price, availability, and payment-plan sources before the agent can use them on WhatsApp."
+        }
+        title={locale === "ar" ? "مركز المصادر التجارية" : "Commercial Source Control Center"}
+      />
+
+      <div className={metricGridClassName}>
+        <MetricTile detail={locale === "ar" ? "مسموح بها للردود التجارية" : "Allowed for commercial replies"} label={locale === "ar" ? "حقائق نشطة" : "Active facts"} tone="ocean" value={String(facts.length)} />
+        <MetricTile detail={locale === "ar" ? "تحتاج قرار مدير" : "Need manager decision"} label={locale === "ar" ? "بانتظار الاعتماد" : "Pending approvals"} tone="sand" value={String(proposals.filter((item) => item.state === "pending_review").length)} />
+        <MetricTile detail={locale === "ar" ? "نشطة لكن تحتاج مراجعة" : "Active but needs review"} label={locale === "ar" ? "تنتهي قريباً" : "Expiring soon"} tone="rose" value={String(expiringFacts.length)} />
+        <MetricTile detail={locale === "ar" ? "لا تؤسس ردود الوكيل" : "Cannot ground agent replies"} label={locale === "ar" ? "قديمة أو منتهية" : "Stale or expired"} tone="mint" value={String(staleFacts.length)} />
+      </div>
+
+      <div className={twoColumnGridClassName}>
+        <Panel title={locale === "ar" ? "إضافة مصدر" : "Add source"}>
+          <WorkflowPanelBody className="mt-4" summary={locale === "ar" ? "ابدأ مصدر مخزون أو سياسة أو ملف مبيعات للعميل." : "Start an inventory, policy, or sales-sheet source for the client."}>
+            <CommercialSourceCreateForm canManage={canManage} locale={locale} returnPath={`/${locale}/commercial-sources`} />
+          </WorkflowPanelBody>
+        </Panel>
+
+        <Panel title={locale === "ar" ? "حقيقة يدوية" : "Manual fact"}>
+          <WorkflowPanelBody className="mt-4" summary={locale === "ar" ? "استخدمها للسياسات والرسوم وشروط الزيارة التي لا تأتي من CSV." : "Use this for policies, fees, and visit terms that do not come from CSV."}>
+            <ManualCommercialFactForm canManage={canManage} locale={locale} returnPath={`/${locale}/commercial-sources`} />
+          </WorkflowPanelBody>
+        </Panel>
+      </div>
+
+      <Panel title={locale === "ar" ? "المصادر" : "Sources"}>
+        <WorkflowPanelBody className="mt-4">
+          {sources.length === 0 ? (
+            <EmptyState
+              summary={locale === "ar" ? "لا توجد مصادر تجارية حيّة بعد." : "No live commercial sources exist yet."}
+              title={locale === "ar" ? "لا توجد مصادر" : "No sources"}
+            />
+          ) : (
+            <div className="grid gap-4">
+              {sources.map((source) => (
+                <WorkflowCard
+                  key={source.sourceId}
+                  badges={
+                    <div className={statusRowWrapClassName}>
+                      <StatusBadge>{source.sourceType}</StatusBadge>
+                      <StatusBadge tone={source.pendingProposalsCount > 0 ? "warning" : "success"}>{source.state}</StatusBadge>
+                    </div>
+                  }
+                  summary={source.description ?? (locale === "ar" ? "مصدر تجاري محلي." : "Local commercial source.")}
+                  title={source.sourceName}
+                >
+                  <DetailGrid>
+                    <DetailItem label={locale === "ar" ? "المشروع" : "Project"} value={source.projectCode} />
+                    <DetailItem label={locale === "ar" ? "الحقائق النشطة" : "Active facts"} value={String(source.activeFactsCount)} />
+                    <DetailItem label={locale === "ar" ? "مقترحات معلقة" : "Pending proposals"} value={String(source.pendingProposalsCount)} />
+                    <DetailItem label={locale === "ar" ? "آخر نسخة" : "Latest version"} value={source.latestVersion?.versionLabel ?? "-"} />
+                  </DetailGrid>
+                  <Link className={inlineLinkClassName} href={`/${locale}/commercial-sources/${source.sourceId}`}>
+                    {locale === "ar" ? "فتح المصدر" : "Open source"}
+                  </Link>
+                </WorkflowCard>
+              ))}
+            </div>
+          )}
+        </WorkflowPanelBody>
+      </Panel>
+    </div>
+  );
+}

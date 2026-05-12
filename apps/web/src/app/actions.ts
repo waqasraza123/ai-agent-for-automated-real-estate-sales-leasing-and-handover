@@ -8,12 +8,16 @@ import {
   operatorSessionCookieName,
   operatorRoleSchema,
   approveHandoverCustomerUpdateInputSchema,
+  approveCommercialFactProposalInputSchema,
   completeHandoverInputSchema,
   confirmHandoverAppointmentInputSchema,
+  createCommercialSourceInputSchema,
   createHandoverBlockerInputSchema,
   createHandoverPostCompletionFollowUpInputSchema,
   createHandoverIntakeInputSchema,
+  createManualCommercialFactInputSchema,
   createWebsiteLeadInputSchema,
+  importInventoryCsvInputSchema,
   manageBulkCaseFollowUpInputSchema,
   markHandoverCustomerUpdateDispatchReadyInputSchema,
   manageCaseFollowUpInputSchema,
@@ -22,6 +26,7 @@ import {
   prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   requestCaseQaReviewInputSchema,
+  rejectCommercialFactProposalInputSchema,
   resolveCaseQaReviewInputSchema,
   resolveHandoverCustomerUpdateQaReviewInputSchema,
   resolveHandoverPostCompletionFollowUpInputSchema,
@@ -50,12 +55,16 @@ import {
 import { createSignedOperatorSession, getCurrentOperatorRole } from "@/lib/operator-session";
 import {
   WebApiError,
+  approveCommercialFactProposal,
   approveHandoverCustomerUpdate,
   completeHandover,
   confirmHandoverAppointment,
+  createCommercialSource,
   createHandoverBlocker,
   createHandoverPostCompletionFollowUp,
   createHandoverIntake,
+  createManualCommercialFact,
+  importCommercialInventoryCsv,
   createWebsiteLead,
   markHandoverCustomerUpdateDispatchReady,
   manageBulkCaseFollowUp,
@@ -65,6 +74,7 @@ import {
   prepareHandoverCustomerUpdateDelivery,
   qualifyCase,
   requestCaseQaReview,
+  rejectCommercialFactProposal,
   resolveCaseQaReview,
   resolveHandoverCustomerUpdateQaReview,
   resolveHandoverPostCompletionFollowUp,
@@ -106,6 +116,162 @@ export async function setOperatorRoleAction(formData: FormData) {
   });
 
   redirect(returnPath);
+}
+
+export async function createCommercialSourceAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+  const result = createCommercialSourceInputSchema.safeParse({
+    description: normalizeOptionalString(formData.get("description")),
+    projectCode: formData.get("projectCode"),
+    sourceName: formData.get("sourceName"),
+    sourceType: formData.get("sourceType"),
+    tenantId: "local-alpha"
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    await createCommercialSource(result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    return {
+      message: locale === "ar" ? "تم إنشاء المصدر التجاري." : "Commercial source created.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function importCommercialInventoryAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const sourceId = formData.get("sourceId");
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+
+  if (typeof sourceId !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = importInventoryCsvInputSchema.safeParse({
+    csvText: formData.get("csvText"),
+    importedByName: normalizeOptionalString(formData.get("importedByName")),
+    sourceLabel: normalizeOptionalString(formData.get("sourceLabel")),
+    sourceUpdatedAt: undefined
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    await importCommercialInventoryCsv(sourceId, result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    revalidatePath(`/${locale}/commercial-facts/review`);
+    revalidatePath(`/${locale}/inventory`);
+    return {
+      message: locale === "ar" ? "تم استيراد ملف المخزون وحفظ نتائج المراجعة." : "Inventory CSV imported with review results.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function approveCommercialFactProposalAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const proposalId = formData.get("proposalId");
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+
+  if (typeof proposalId !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = approveCommercialFactProposalInputSchema.safeParse({
+    approvedByName: normalizeOptionalString(formData.get("approvedByName")),
+    expiresAt: normalizeOptionalDateTime(formData.get("expiresAt"))
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    await approveCommercialFactProposal(proposalId, result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    revalidatePath(`/${locale}/commercial-sources`);
+    revalidatePath(`/${locale}/inventory`);
+    return {
+      message: locale === "ar" ? "تم اعتماد الحقيقة التجارية." : "Commercial fact approved.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function rejectCommercialFactProposalAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const proposalId = formData.get("proposalId");
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+
+  if (typeof proposalId !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = rejectCommercialFactProposalInputSchema.safeParse({
+    rejectedByName: normalizeOptionalString(formData.get("rejectedByName")),
+    rejectionReason: formData.get("rejectionReason")
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    await rejectCommercialFactProposal(proposalId, result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    return {
+      message: locale === "ar" ? "تم رفض المقترح مع حفظ السبب." : "Proposal rejected with the reason saved.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function createManualCommercialFactAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+  const result = createManualCommercialFactInputSchema.safeParse({
+    content: formData.get("content"),
+    evidenceLabel: formData.get("evidenceLabel"),
+    expiresAt: normalizeOptionalDateTime(formData.get("expiresAt")),
+    kind: formData.get("kind"),
+    locale: formData.get("factLocale"),
+    projectCode: formData.get("projectCode"),
+    scope: "whatsapp_reply",
+    tenantId: "local-alpha",
+    title: formData.get("title"),
+    unitCode: normalizeOptionalString(formData.get("unitCode"))
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    await createManualCommercialFact(result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    revalidatePath(`/${locale}/commercial-sources`);
+    return {
+      message: locale === "ar" ? "تم إنشاء الحقيقة التجارية اليدوية." : "Manual commercial fact created.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
 }
 
 export async function createHandoverIntakeAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
@@ -1561,6 +1727,20 @@ function getValidationMessage(locale: "en" | "ar") {
 
 function normalizeOptionalString(value: FormDataEntryValue | null) {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function normalizeOptionalDateTime(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function normalizeReturnPath(value: FormDataEntryValue | null, locale: "en" | "ar") {
+  return typeof value === "string" && value.startsWith("/") ? value : `/${locale}/commercial-sources`;
 }
 
 async function getOperatorRole() {

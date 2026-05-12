@@ -14,11 +14,14 @@ import type {
   CaseAgentUrgencyLevel,
   CommercialFactGroundingStatus,
   CommercialFactKind,
+  CommercialFactUsageScope,
   CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
+  CreateCommercialSourceInput,
   CreateHandoverBlockerInput,
   CreateHandoverPostCompletionFollowUpInput,
   CreateHandoverIntakeInput,
+  CreateManualCommercialFactInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
   DocumentTextExtractionSource,
@@ -27,6 +30,9 @@ import type {
   DocumentRequestType,
   DocumentUploadAnalysisRecommendation,
   DocumentUploadAnalysisStatus,
+  ImportInventoryCsvInput,
+  ListActiveCommercialFactsQuery,
+  ListCommercialFactProposalsQuery,
   ListGovernanceEventsQuery,
   ManageBulkCaseFollowUpInput,
   MarkHandoverCustomerUpdateDispatchReadyInput,
@@ -42,11 +48,14 @@ import type {
   PersistedGovernanceEventList,
   PersistedGovernanceSummary,
   PersistedHandoverCaseDetail,
+  ProjectCommercialReadinessSummary,
   SupportedLocale,
   QualifyCaseInput,
   ResolveCaseQaReviewInput,
   ResolveHandoverCustomerUpdateQaReviewInput,
   ResolveHandoverPostCompletionFollowUpInput,
+  ApproveCommercialFactProposalInput,
+  RejectCommercialFactProposalInput,
   SaveHandoverArchiveReviewInput,
   SaveHandoverReviewInput,
   ScheduleVisitInput,
@@ -82,6 +91,403 @@ export class WorkflowRuleError extends Error {
     super(code);
     this.code = code;
   }
+}
+
+export async function createPersistedCommercialSource(store: LeadCaptureStore, input: CreateCommercialSourceInput) {
+  return store.createCommercialSource(input);
+}
+
+export async function listPersistedCommercialSources(store: LeadCaptureStore, input?: {
+  projectCode?: string;
+  tenantId?: string;
+}) {
+  return store.listCommercialSources(input);
+}
+
+export async function getPersistedCommercialSourceDetail(store: LeadCaptureStore, sourceId: string) {
+  return store.getCommercialSourceDetail(sourceId);
+}
+
+export async function importPersistedInventoryCsv(store: LeadCaptureStore, sourceId: string, input: ImportInventoryCsvInput) {
+  const parsed = parseInventoryCsv(input.csvText, {
+    importedByName: input.importedByName ?? null,
+    sourceUpdatedAt: input.sourceUpdatedAt ?? null
+  });
+
+  return store.recordCommercialInventoryImport(sourceId, {
+    ...parsed,
+    importedByName: input.importedByName ?? null,
+    sourceUpdatedAt: input.sourceUpdatedAt ?? parsed.sourceUpdatedAt,
+    versionLabel: input.sourceLabel ?? `inventory-import-${new Date().toISOString()}`
+  });
+}
+
+export async function createPersistedManualCommercialFact(store: LeadCaptureStore, input: CreateManualCommercialFactInput) {
+  return store.createManualCommercialFact(input);
+}
+
+export async function listPersistedCommercialFactProposals(store: LeadCaptureStore, input: ListCommercialFactProposalsQuery) {
+  return store.listCommercialFactProposals(input);
+}
+
+export async function approvePersistedCommercialFactProposal(
+  store: LeadCaptureStore,
+  proposalId: string,
+  input: ApproveCommercialFactProposalInput
+) {
+  return store.approveCommercialFactProposal(proposalId, input);
+}
+
+export async function rejectPersistedCommercialFactProposal(
+  store: LeadCaptureStore,
+  proposalId: string,
+  input: RejectCommercialFactProposalInput
+) {
+  return store.rejectCommercialFactProposal(proposalId, input);
+}
+
+export async function listPersistedActiveCommercialFacts(
+  store: LeadCaptureStore,
+  input: Partial<ListActiveCommercialFactsQuery> & { now?: string }
+) {
+  return store.listActiveCommercialFacts(input);
+}
+
+export async function getPersistedProjectCommercialReadinessSummary(
+  store: LeadCaptureStore,
+  input: {
+    projectCode: string;
+    tenantId?: string;
+  }
+): Promise<ProjectCommercialReadinessSummary> {
+  return store.getProjectCommercialReadinessSummary(input);
+}
+
+function parseInventoryCsv(
+  csvText: string,
+  input: {
+    importedByName: string | null;
+    sourceUpdatedAt: string | null;
+  }
+) {
+  const rows = parseCsvRows(csvText);
+  const [headerRow, ...dataRows] = rows;
+  const importErrors: Array<{ field: string | null; reason: string; rowNumber: number }> = [];
+  const normalizedRows: Array<{
+    areaSqm: number | null;
+    availabilityStatus: string;
+    bedrooms: number | null;
+    floor: string | null;
+    handoverDate: string | null;
+    paymentPlanCode: string | null;
+    priceSar: number | null;
+    projectCode: string;
+    sourceUpdatedAt: string | null;
+    unitCode: string;
+    unitType: string;
+    view: string | null;
+  }> = [];
+  const proposals: Array<{
+    content: string;
+    expiresAt: string | null;
+    kind: CommercialFactKind;
+    locale: SupportedLocale;
+    scope: CommercialFactUsageScope;
+    title: string;
+    unitCode: string | null;
+  }> = [];
+
+  if (!headerRow) {
+    return {
+      importErrors: [{ field: null, reason: "CSV is empty.", rowNumber: 1 }],
+      proposals,
+      rowCount: 0,
+      rows: normalizedRows,
+      sourceUpdatedAt: input.sourceUpdatedAt
+    };
+  }
+
+  const headerMap = new Map(headerRow.map((header, index) => [header.trim(), index]));
+  const requiredHeaders = ["projectCode", "unitCode", "unitType", "availabilityStatus", "sourceUpdatedAt"];
+
+  for (const requiredHeader of requiredHeaders) {
+    if (!headerMap.has(requiredHeader)) {
+      importErrors.push({
+        field: requiredHeader,
+        reason: `Missing required column ${requiredHeader}.`,
+        rowNumber: 1
+      });
+    }
+  }
+
+  if (importErrors.length > 0) {
+    return {
+      importErrors,
+      proposals,
+      rowCount: dataRows.length,
+      rows: normalizedRows,
+      sourceUpdatedAt: input.sourceUpdatedAt
+    };
+  }
+
+  const readCell = (row: string[], column: string) => row[headerMap.get(column) ?? -1]?.trim() ?? "";
+
+  dataRows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    let rowHasError = false;
+    const addRowError = (field: string, reason: string) => {
+      rowHasError = true;
+      importErrors.push({ field, reason, rowNumber });
+    };
+    const projectCode = normalizeCommercialProjectCode(readCell(row, "projectCode"));
+    const unitCode = readCell(row, "unitCode");
+    const unitType = readCell(row, "unitType");
+    const sourceUpdatedAt = parseOptionalDateTime(readCell(row, "sourceUpdatedAt")) ?? input.sourceUpdatedAt;
+    const availabilityStatus = normalizeInventoryAvailability(readCell(row, "availabilityStatus"));
+    const bedrooms = parseOptionalInteger(readCell(row, "bedrooms"));
+    const areaSqm = parseOptionalInteger(readCell(row, "areaSqm"));
+    const priceSar = parseOptionalInteger(readCell(row, "priceSar"));
+    const handoverDate = parseOptionalDateTime(readCell(row, "handoverDate"));
+    const paymentPlanCode = nullableTrim(readCell(row, "paymentPlanCode"));
+
+    if (!projectCode) {
+      addRowError("projectCode", "Project code is required.");
+    }
+
+    if (!unitCode) {
+      addRowError("unitCode", "Unit code is required.");
+    }
+
+    if (!unitType) {
+      addRowError("unitType", "Unit type is required.");
+    }
+
+    if (!availabilityStatus) {
+      addRowError("availabilityStatus", "Availability status must be available, reserved, sold, blocked, or unknown.");
+    }
+
+    if (!sourceUpdatedAt) {
+      addRowError("sourceUpdatedAt", "Source updated timestamp must be a valid date.");
+    }
+
+    if (priceSar === null && readCell(row, "priceSar")) {
+      addRowError("priceSar", "Price must be a whole SAR amount.");
+    }
+
+    if (areaSqm === null && readCell(row, "areaSqm")) {
+      addRowError("areaSqm", "Area must be a whole square-meter value.");
+    }
+
+    if (bedrooms === null && readCell(row, "bedrooms")) {
+      addRowError("bedrooms", "Bedrooms must be a whole number.");
+    }
+
+    if (handoverDate === null && readCell(row, "handoverDate")) {
+      addRowError("handoverDate", "Handover date must be a valid date.");
+    }
+
+    if (rowHasError) {
+      return;
+    }
+
+    if (!availabilityStatus) {
+      return;
+    }
+
+    const normalizedAvailabilityStatus = availabilityStatus;
+
+    normalizedRows.push({
+      areaSqm,
+      availabilityStatus: normalizedAvailabilityStatus,
+      bedrooms,
+      floor: nullableTrim(readCell(row, "floor")),
+      handoverDate,
+      paymentPlanCode,
+      priceSar,
+      projectCode,
+      sourceUpdatedAt,
+      unitCode,
+      unitType,
+      view: nullableTrim(readCell(row, "view"))
+    });
+
+    if (priceSar !== null) {
+      proposals.push(...buildLocalizedInventoryProposal({
+        contentEn: `Unit ${unitCode} in project ${projectCode} has an inventory price of SAR ${priceSar}.`,
+        contentAr: `الوحدة ${unitCode} في مشروع ${projectCode} سعرها في المخزون ${priceSar} ريال سعودي.`,
+        kind: "pricing",
+        titleEn: `${unitCode} price`,
+        titleAr: `سعر ${unitCode}`,
+        unitCode
+      }));
+    }
+
+    proposals.push(...buildLocalizedInventoryProposal({
+      contentEn: `Unit ${unitCode} in project ${projectCode} is currently ${availabilityStatus}.`,
+      contentAr: `الوحدة ${unitCode} في مشروع ${projectCode} حالتها الحالية ${availabilityStatus}.`,
+      kind: "availability",
+      titleEn: `${unitCode} availability`,
+      titleAr: `توفر ${unitCode}`,
+      unitCode
+    }));
+
+    proposals.push(...buildLocalizedInventoryProposal({
+      contentEn: `Unit ${unitCode} status is ${availabilityStatus}.`,
+      contentAr: `حالة الوحدة ${unitCode} هي ${availabilityStatus}.`,
+      kind: "unit_status",
+      titleEn: `${unitCode} unit status`,
+      titleAr: `حالة ${unitCode}`,
+      unitCode
+    }));
+
+    if (paymentPlanCode) {
+      proposals.push(...buildLocalizedInventoryProposal({
+        contentEn: `Unit ${unitCode} uses payment plan ${paymentPlanCode}.`,
+        contentAr: `الوحدة ${unitCode} مرتبطة بخطة الدفع ${paymentPlanCode}.`,
+        kind: "payment_plan",
+        titleEn: `${unitCode} payment plan`,
+        titleAr: `خطة دفع ${unitCode}`,
+        unitCode
+      }));
+    }
+
+    if (handoverDate) {
+      proposals.push(...buildLocalizedInventoryProposal({
+        contentEn: `Unit ${unitCode} has a planned handover date of ${handoverDate.slice(0, 10)}.`,
+        contentAr: `الوحدة ${unitCode} لها تاريخ تسليم مخطط في ${handoverDate.slice(0, 10)}.`,
+        kind: "handover_date",
+        titleEn: `${unitCode} handover date`,
+        titleAr: `تاريخ تسليم ${unitCode}`,
+        unitCode
+      }));
+    }
+  });
+
+  return {
+    importErrors,
+    proposals,
+    rowCount: dataRows.length,
+    rows: normalizedRows,
+    sourceUpdatedAt: normalizedRows[0]?.sourceUpdatedAt ?? input.sourceUpdatedAt
+  };
+}
+
+function parseCsvRows(csvText: string) {
+  const rows: string[][] = [];
+  let current = "";
+  let currentRow: string[] = [];
+  let inQuotes = false;
+
+  for (let index = 0; index < csvText.length; index += 1) {
+    const char = csvText[index];
+    const nextChar = csvText[index + 1];
+
+    if (char === '"' && nextChar === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      currentRow.push(current);
+      current = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        index += 1;
+      }
+      currentRow.push(current);
+      rows.push(currentRow);
+      current = "";
+      currentRow = [];
+      continue;
+    }
+
+    current += char;
+  }
+
+  currentRow.push(current);
+  rows.push(currentRow);
+
+  return rows.filter((row) => row.some((cell) => cell.trim().length > 0));
+}
+
+function parseOptionalInteger(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.replace(/,/g, "");
+  const parsed = Number(normalized);
+
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseOptionalDateTime(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = Date.parse(value);
+
+  return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
+}
+
+function nullableTrim(value: string) {
+  const trimmed = value.trim();
+
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeCommercialProjectCode(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function normalizeInventoryAvailability(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, "_");
+
+  if (normalized === "available" || normalized === "reserved" || normalized === "sold" || normalized === "blocked" || normalized === "unknown") {
+    return normalized;
+  }
+
+  return null;
+}
+
+function buildLocalizedInventoryProposal(input: {
+  contentAr: string;
+  contentEn: string;
+  kind: CommercialFactKind;
+  titleAr: string;
+  titleEn: string;
+  unitCode: string;
+}) {
+  return [
+    {
+      content: input.contentAr,
+      expiresAt: null,
+      kind: input.kind,
+      locale: "ar" as const,
+      scope: "whatsapp_reply" as const,
+      title: input.titleAr,
+      unitCode: input.unitCode
+    },
+    {
+      content: input.contentEn,
+      expiresAt: null,
+      kind: input.kind,
+      locale: "en" as const,
+      scope: "whatsapp_reply" as const,
+      title: input.titleEn,
+      unitCode: input.unitCode
+    }
+  ];
 }
 
 function preserveAdvancedHandoverStatus(currentStatus: HandoverCaseStatus, derivedStatus: HandoverCaseStatus): HandoverCaseStatus {
@@ -2694,16 +3100,27 @@ function applyCaseAgentDecisionGuardrails(
     input.commercialFactGrounding.status === "missing_required_evidence"
   ) {
     return {
-      ...decision,
-      actionType: "create_reply_draft",
-      escalationReason: null,
+      actionType: "request_manager_intervention",
+      blockedReason: "commercial_facts_missing",
+      confidence: Math.max(decision.confidence, 0.9),
+      escalationReason:
+        caseDetail.preferredLocale === "ar"
+          ? `لا توجد حقائق تجارية نشطة ومعتمدة تكفي للرد: ${input.commercialFactGrounding.warnings.join("، ")}.`
+          : `Approved active commercial facts are not sufficient for this reply: ${input.commercialFactGrounding.warnings.join(", ")}.`,
+      proposedMessage: null,
+      proposedNextAction:
+        caseDetail.preferredLocale === "ar"
+          ? "راجع مركز المصادر التجارية واعتمد الحقائق المطلوبة قبل الرد على العميل"
+          : "Review the Commercial Source Control Center and approve the required facts before replying to the customer",
+      proposedNextActionDueAt: createFutureTimestamp(1),
       rationaleSummary:
         caseDetail.preferredLocale === "ar"
-          ? `تم خفض الرد إلى مسودة لأن ${input.commercialFactGrounding.warnings.join("، ")}.`
-          : `Downgraded to a draft because ${input.commercialFactGrounding.warnings.join(", ")}.`,
-      riskLevel: "medium",
-      status: "waiting",
-      toolExecutionStatus: "executed"
+          ? "أوقف حد الحقائق التجارية رد واتساب لأن الرسالة قد تحمل سعراً أو توفراً أو التزاماً تجارياً من دون دليل نشط."
+          : "The commercial fact boundary blocked the WhatsApp reply because it may carry price, availability, or commercial commitment without active evidence.",
+      riskLevel: "high",
+      status: "escalated",
+      toolExecutionStatus: "executed",
+      triggerType: input.triggerType
     };
   }
 
@@ -3118,10 +3535,19 @@ function getRequiredCommercialFactKinds(
   conversationIntelligence: CaseConversationIntelligence
 ): CommercialFactKind[] {
   const requiredKinds = new Set<CommercialFactKind>();
+  const textCorpus = normalizeConversationText(
+    [
+      caseDetail.message,
+      ...caseDetail.auditEvents
+        .filter((event) => event.eventType === "whatsapp_inbound_received")
+        .map((event) => (typeof event.payload?.textBody === "string" ? event.payload.textBody : ""))
+    ].join(" ")
+  );
 
   if (
     conversationIntelligence.requestedNextStep === "share_pricing" ||
-    conversationIntelligence.objectionCategories.includes("pricing")
+    conversationIntelligence.objectionCategories.includes("pricing") ||
+    containsAnyKeyword(textCorpus, pricingCommitmentKeywords)
   ) {
     requiredKinds.add("pricing");
     requiredKinds.add("payment_plan");
@@ -3130,9 +3556,26 @@ function getRequiredCommercialFactKinds(
 
   if (
     conversationIntelligence.intentCategory === "availability" ||
-    conversationIntelligence.requestedNextStep === "share_details"
+    conversationIntelligence.requestedNextStep === "share_details" ||
+    containsAnyKeyword(textCorpus, availabilityKeywords)
   ) {
     requiredKinds.add("availability");
+    requiredKinds.add("unit_status");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, feeKeywords)) {
+    requiredKinds.add("fees");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, handoverDateKeywords)) {
+    requiredKinds.add("handover_date");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, visitTermKeywords)) {
+    requiredKinds.add("visit_terms");
     requiredKinds.add("policy");
   }
 
@@ -3169,14 +3612,22 @@ function buildMissingCommercialFactWarning(locale: SupportedLocale, kind: Commer
       document_requirement: "دليل متطلبات المستندات المعتمد مفقود",
       payment_plan: "دليل خطة الدفع المعتمد مفقود",
       policy: "دليل حدود السياسة المعتمد مفقود",
-      pricing: "دليل التسعير المعتمد مفقود"
+      fees: "دليل الرسوم المعتمد مفقود",
+      handover_date: "دليل تاريخ التسليم المعتمد مفقود",
+      pricing: "دليل التسعير المعتمد مفقود",
+      unit_status: "دليل حالة الوحدة المعتمد مفقود",
+      visit_terms: "دليل شروط الزيارة المعتمد مفقود"
     },
     en: {
       availability: "approved availability evidence is missing",
       document_requirement: "approved document-requirement evidence is missing",
       payment_plan: "approved payment-plan evidence is missing",
       policy: "approved policy-boundary evidence is missing",
-      pricing: "approved pricing evidence is missing"
+      fees: "approved fee evidence is missing",
+      handover_date: "approved handover-date evidence is missing",
+      pricing: "approved pricing evidence is missing",
+      unit_status: "approved unit-status evidence is missing",
+      visit_terms: "approved visit-term evidence is missing"
     }
   } as const;
 
@@ -3189,6 +3640,10 @@ function analyzeOutboundCommitmentRisk(message: string) {
   const requiresGrounding =
     unsafeCommitment ||
     containsAnyKeyword(normalizedMessage, pricingCommitmentKeywords) ||
+    containsAnyKeyword(normalizedMessage, availabilityKeywords) ||
+    containsAnyKeyword(normalizedMessage, feeKeywords) ||
+    containsAnyKeyword(normalizedMessage, handoverDateKeywords) ||
+    containsAnyKeyword(normalizedMessage, visitTermKeywords) ||
     /(?:sar|ريال|﷼|\$|usd)\s*\d|\d+\s*(?:sar|ريال|﷼|usd)|\d+\s*%/.test(normalizedMessage);
 
   return {
@@ -3420,6 +3875,9 @@ const availabilityKeywords = [
   "غرفتين",
   "المخطط"
 ];
+const feeKeywords = ["fee", "fees", "service charge", "admin fee", "رسوم", "مصاريف", "أتعاب"];
+const handoverDateKeywords = ["handover", "handover date", "delivery date", "possession", "تسليم", "تاريخ التسليم", "استلام"];
+const visitTermKeywords = ["visit terms", "viewing terms", "tour policy", "شروط الزيارة", "موعد الزيارة", "سياسة الزيارة"];
 const qualificationKeywords = [
   "interested",
   "reservation",

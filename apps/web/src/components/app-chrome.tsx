@@ -76,7 +76,11 @@ export function AppChrome(props: {
     qa:
       props.locale === "ar"
         ? "مراجعة الحدود الحساسة وتعليق الإرسال المؤتمت عند الحاجة."
-        : "Review sensitive boundaries and hold automated sends when needed."
+        : "Review sensitive boundaries and hold automated sends when needed.",
+    commercial:
+      props.locale === "ar"
+        ? "اعتماد مصادر الأسعار والتوفر قبل استخدامها في واتساب."
+        : "Approve price and availability sources before WhatsApp use."
   };
   const contextSignals =
     props.locale === "ar"
@@ -108,6 +112,12 @@ export function AppChrome(props: {
       visible:
         canOperatorRoleAccessWorkspace("manager_revenue", props.currentOperatorRole) ||
         canOperatorRoleAccessWorkspace("manager_handover", props.currentOperatorRole)
+    },
+    {
+      href: `/${props.locale}/commercial-sources`,
+      label: props.locale === "ar" ? "المصادر التجارية" : "Commercial sources",
+      summary: navigationSummary.commercial,
+      visible: canOperatorRoleAccessWorkspace("manager_revenue", props.currentOperatorRole)
     },
     {
       href: `/${props.locale}/qa`,

@@ -778,6 +778,14 @@ export function ManagerWorkspaceUnavailable(props: {
 
 export function RevenueManagerCommandCenter(props: {
   batchHistory: RevenueManagerBatchHistorySummary | null;
+  commercialReadiness?: {
+    activeApprovedFactsCount: number;
+    blockedAgentRepliesCount: number;
+    expiringSoonFactsCount: number;
+    latestInventorySourceVersion: string | null;
+    pendingApprovalsCount: number;
+    staleFactsCount: number;
+  };
   currentOperatorRole: OperatorRole;
   driftedBatchCaseIds: string[];
   filters: RevenueManagerFilters;
@@ -1034,6 +1042,65 @@ export function RevenueManagerCommandCenter(props: {
           </Link>
         </WorkflowPanelBody>
       </Panel>
+
+      {props.commercialReadiness ? (
+        <Panel title={props.locale === "ar" ? "جاهزية المصادر التجارية" : "Commercial readiness"}>
+          <WorkflowPanelBody
+            className="mt-4"
+            summary={
+              props.locale === "ar"
+                ? "يمنع هذا المؤشر ردود الوكيل التجارية عندما لا توجد حقائق نشطة ومعتمدة مرتبطة بمصدر."
+                : "This signal prevents commercial agent replies when active approved source-linked facts are missing."
+            }
+          >
+            <div className={metricGridClassName}>
+              <MetricTile
+                density="compact"
+                detail={props.locale === "ar" ? "حقائق يمكن استخدامها" : "Facts usable by the agent"}
+                label={props.locale === "ar" ? "نشطة" : "Active"}
+                tone="ocean"
+                value={String(props.commercialReadiness.activeApprovedFactsCount)}
+              />
+              <MetricTile
+                density="compact"
+                detail={props.locale === "ar" ? "تحتاج اعتماداً" : "Need approval"}
+                label={props.locale === "ar" ? "معلّقة" : "Pending"}
+                tone="sand"
+                value={String(props.commercialReadiness.pendingApprovalsCount)}
+              />
+              <MetricTile
+                density="compact"
+                detail={props.locale === "ar" ? "تنتهي قريباً" : "Expiring soon"}
+                label={props.locale === "ar" ? "قريبة الانتهاء" : "Expiring"}
+                tone="rose"
+                value={String(props.commercialReadiness.expiringSoonFactsCount)}
+              />
+              <MetricTile
+                density="compact"
+                detail={props.locale === "ar" ? "أوقفت ردوداً تجارية" : "Blocked commercial replies"}
+                label={props.locale === "ar" ? "محظورة" : "Blocked"}
+                tone="mint"
+                value={String(props.commercialReadiness.blockedAgentRepliesCount)}
+              />
+            </div>
+            <div className={statusRowWrapClassName}>
+              <StatusBadge tone={props.commercialReadiness.staleFactsCount > 0 ? "warning" : "success"}>
+                {props.locale === "ar"
+                  ? `${props.commercialReadiness.staleFactsCount} حقائق قديمة`
+                  : `${props.commercialReadiness.staleFactsCount} stale facts`}
+              </StatusBadge>
+              <StatusBadge>
+                {props.locale === "ar" ? "آخر نسخة مخزون" : "Latest inventory version"}
+                {": "}
+                {props.commercialReadiness.latestInventorySourceVersion ?? "-"}
+              </StatusBadge>
+              <Link className={inlineLinkClassName} href={`/${props.locale}/commercial-sources`}>
+                {props.locale === "ar" ? "فتح مركز المصادر" : "Open source center"}
+              </Link>
+            </div>
+          </WorkflowPanelBody>
+        </Panel>
+      ) : null}
 
       {hasScopedView ? (
         <Panel title={props.locale === "ar" ? "نطاق الطابور الحالي" : "Current queue scope"}>

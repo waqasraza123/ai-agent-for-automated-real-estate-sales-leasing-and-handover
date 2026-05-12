@@ -136,6 +136,95 @@ describe("lead capture api", () => {
     expect(downloadResponse.body).toBe(fileBytes.toString("utf8"));
   });
 
+  it("manages commercial source import, proposal approval, active facts, and readiness through manager APIs", async () => {
+    const headers = withOperatorSession("sales_manager");
+    const createSourceResponse = await app.inject({
+      headers,
+      method: "POST",
+      payload: {
+        projectCode: "Palm Horizon",
+        sourceName: "Manager inventory upload",
+        sourceType: "inventory_csv",
+        tenantId: "local-alpha"
+      },
+      url: "/v1/commercial-sources"
+    });
+
+    expect(createSourceResponse.statusCode).toBe(201);
+
+    const source = createSourceResponse.json();
+    const importResponse = await app.inject({
+      headers,
+      method: "POST",
+      payload: {
+        csvText: [
+          "projectCode,unitCode,unitType,bedrooms,areaSqm,floor,view,priceSar,availabilityStatus,paymentPlanCode,handoverDate,sourceUpdatedAt",
+          "Palm Horizon,U-301,Apartment,2,112,14,Sea,980000,available,PLAN-D,2027-09-01,2026-05-01T10:00:00.000Z",
+          "Palm Horizon,U-302,Apartment,2,101,9,City,not-a-price,available,PLAN-E,2027-09-01,2026-05-01T10:00:00.000Z"
+        ].join("\n"),
+        importedByName: "Revenue Manager",
+        sourceLabel: "api-inventory"
+      },
+      url: `/v1/commercial-sources/${source.sourceId}/inventory-import`
+    });
+
+    expect(importResponse.statusCode).toBe(200);
+    expect(importResponse.json().latestVersion.status).toBe("partially_imported");
+    expect(importResponse.json().latestVersion.importErrors).toEqual([
+      {
+        field: "priceSar",
+        reason: "Price must be a whole SAR amount.",
+        rowNumber: 3
+      }
+    ]);
+
+    const proposalsResponse = await app.inject({
+      headers,
+      method: "GET",
+      url: "/v1/commercial-fact-proposals?projectCode=Palm%20Horizon&state=pending_review"
+    });
+    const pricingProposal = proposalsResponse.json().proposals.find(
+      (proposal: { kind: string; locale: string }) => proposal.kind === "pricing" && proposal.locale === "en"
+    );
+
+    expect(proposalsResponse.statusCode).toBe(200);
+    expect(pricingProposal).toBeTruthy();
+
+    const approveResponse = await app.inject({
+      headers,
+      method: "POST",
+      payload: {
+        approvedByName: "Revenue Manager",
+        expiresAt: "2099-01-01T00:00:00.000Z"
+      },
+      url: `/v1/commercial-fact-proposals/${pricingProposal.proposalId}/approve`
+    });
+
+    expect(approveResponse.statusCode).toBe(200);
+    expect(approveResponse.json().state).toBe("approved");
+
+    const activeFactsResponse = await app.inject({
+      headers,
+      method: "GET",
+      url: "/v1/commercial-facts/active?projectCode=Palm%20Horizon&kind=pricing&locale=en"
+    });
+
+    expect(activeFactsResponse.statusCode).toBe(200);
+    expect(activeFactsResponse.json().facts).toHaveLength(1);
+    expect(activeFactsResponse.json().facts[0].evidence[0].sourceName).toBe("Manager inventory upload");
+
+    const readinessResponse = await app.inject({
+      headers,
+      method: "GET",
+      url: "/v1/projects/Palm%20Horizon/commercial-readiness"
+    });
+
+    expect(readinessResponse.statusCode).toBe(200);
+    expect(readinessResponse.json().activeApprovedFactsCount).toBe(1);
+    expect(readinessResponse.json().pendingApprovalsCount).toBe(9);
+    expect(readinessResponse.json().latestInventorySourceVersion.versionLabel).toBe("api-inventory");
+  });
+
   it("persists Google Calendar confirmation state after scheduling a visit", async () => {
     const calendarApp = buildApiApp({
       calendarClient: {

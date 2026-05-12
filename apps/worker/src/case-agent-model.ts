@@ -24,6 +24,7 @@ const caseAgentBlockedReasons = [
   "automation_paused",
   "qa_hold",
   "client_credentials_pending",
+  "commercial_facts_missing",
   "model_provider_error",
   "invalid_model_output"
 ] satisfies CaseAgentBlockedReason[];

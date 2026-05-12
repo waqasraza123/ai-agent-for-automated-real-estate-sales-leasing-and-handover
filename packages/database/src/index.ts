@@ -25,12 +25,26 @@ import type {
   CaseQaReviewSubjectType,
   CaseQaReviewTriggerSource,
   CompleteHandoverInput,
+  CommercialFact,
+  CommercialFactEvidenceReference,
+  CommercialFactFreshnessStatus,
   CommercialFactGroundingStatus,
   CommercialFactKind,
+  CommercialFactProposal,
+  CommercialFactProposalState,
+  CommercialFactUsageScope,
+  CommercialSourceDetail,
+  CommercialSourceLifecycleState,
+  CommercialSourceSummary,
+  CommercialSourceType,
+  CommercialSourceVersion,
+  CommercialSourceVersionImportError,
   ConfirmHandoverAppointmentInput,
+  CreateCommercialSourceInput,
   HandoverClosureState,
   HandoverArchiveOutcome,
   HandoverArchiveStatus,
+  CreateManualCommercialFactInput,
   CreateHandoverPostCompletionFollowUpInput,
   CreateHandoverIntakeInput,
   CreateHandoverBlockerInput,
@@ -68,6 +82,8 @@ import type {
   MessageDeliveryStatus,
   MessageProvider,
   ListGovernanceEventsQuery,
+  ListActiveCommercialFactsQuery,
+  ListCommercialFactProposalsQuery,
   PersistedCaseAgentMemory,
   PersistedCaseAgentRun,
   PersistedCaseAgentState,
@@ -114,6 +130,10 @@ import type {
   StartHandoverExecutionInput,
   SupportedLocale,
   PersistedVisitBooking,
+  ProjectCommercialReadinessSummary,
+  RejectCommercialFactProposalInput,
+  ApproveCommercialFactProposalInput,
+  InventoryUnitStatus,
   UpdateHandoverArchiveStatusInput,
   UpdateHandoverMilestoneInput,
   UpdateHandoverBlockerInput,
@@ -388,6 +408,150 @@ const approvedCommercialFacts = pgTable("approved_commercial_facts", {
   sourceReference: text("source_reference").notNull(),
   status: text("status").notNull(),
   title: text("title").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const commercialSources = pgTable("commercial_sources", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  description: text("description"),
+  id: uuid("id").primaryKey(),
+  projectCode: text("project_code").notNull(),
+  sourceName: text("source_name").notNull(),
+  sourceType: text("source_type").notNull(),
+  state: text("state").notNull(),
+  tenantId: text("tenant_id").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const commercialSourceVersions = pgTable("commercial_source_versions", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  id: uuid("id").primaryKey(),
+  importErrors: jsonb("import_errors").$type<CommercialSourceVersionImportError[]>().notNull().default(sql`'[]'::jsonb`),
+  importedByName: text("imported_by_name"),
+  rowCount: integer("row_count").notNull(),
+  sourceId: uuid("source_id")
+    .notNull()
+    .references(() => commercialSources.id, { onDelete: "cascade" }),
+  sourceUpdatedAt: timestamp("source_updated_at", { mode: "string", withTimezone: true }),
+  status: text("status").notNull(),
+  versionLabel: text("version_label").notNull()
+});
+
+const commercialFactProposals = pgTable("commercial_fact_proposals", {
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { mode: "string", withTimezone: true }),
+  id: uuid("id").primaryKey(),
+  kind: text("kind").notNull(),
+  locale: text("locale").notNull(),
+  projectCode: text("project_code").notNull(),
+  proposedByName: text("proposed_by_name"),
+  rejectionReason: text("rejection_reason"),
+  scope: text("scope").notNull(),
+  sourceId: uuid("source_id").references(() => commercialSources.id, { onDelete: "set null" }),
+  sourceVersionId: uuid("source_version_id").references(() => commercialSourceVersions.id, { onDelete: "set null" }),
+  state: text("state").notNull(),
+  tenantId: text("tenant_id").notNull(),
+  title: text("title").notNull(),
+  unitCode: text("unit_code"),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const commercialFacts = pgTable("commercial_facts", {
+  approvedAt: timestamp("approved_at", { mode: "string", withTimezone: true }).notNull(),
+  approvedByName: text("approved_by_name"),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { mode: "string", withTimezone: true }),
+  freshnessStatus: text("freshness_status").notNull(),
+  id: uuid("id").primaryKey(),
+  kind: text("kind").notNull(),
+  locale: text("locale").notNull(),
+  projectCode: text("project_code").notNull(),
+  proposalId: uuid("proposal_id").references(() => commercialFactProposals.id, { onDelete: "set null" }),
+  scope: text("scope").notNull(),
+  sourceId: uuid("source_id").references(() => commercialSources.id, { onDelete: "set null" }),
+  sourceVersionId: uuid("source_version_id").references(() => commercialSourceVersions.id, { onDelete: "set null" }),
+  status: text("status").notNull(),
+  tenantId: text("tenant_id").notNull(),
+  title: text("title").notNull(),
+  unitCode: text("unit_code"),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const commercialFactEvidence = pgTable("commercial_fact_evidence", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  evidenceLabel: text("evidence_label").notNull(),
+  factId: uuid("fact_id").references(() => commercialFacts.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey(),
+  proposalId: uuid("proposal_id").references(() => commercialFactProposals.id, { onDelete: "cascade" }),
+  sourceId: uuid("source_id")
+    .notNull()
+    .references(() => commercialSources.id, { onDelete: "cascade" }),
+  sourceVersionId: uuid("source_version_id").references(() => commercialSourceVersions.id, { onDelete: "set null" }),
+  unitCode: text("unit_code")
+});
+
+const commercialFactApprovals = pgTable("commercial_fact_approvals", {
+  approvedAt: timestamp("approved_at", { mode: "string", withTimezone: true }).notNull(),
+  approvedByName: text("approved_by_name"),
+  factId: uuid("fact_id")
+    .notNull()
+    .references(() => commercialFacts.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey(),
+  proposalId: uuid("proposal_id").references(() => commercialFactProposals.id, { onDelete: "set null" })
+});
+
+const commercialFactExpiryReviews = pgTable("commercial_fact_expiry_reviews", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  factId: uuid("fact_id")
+    .notNull()
+    .references(() => commercialFacts.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey(),
+  outcome: text("outcome").notNull(),
+  reviewedByName: text("reviewed_by_name"),
+  summary: text("summary").notNull()
+});
+
+const inventoryUnits = pgTable("inventory_units", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  id: uuid("id").primaryKey(),
+  projectCode: text("project_code").notNull(),
+  tenantId: text("tenant_id").notNull(),
+  unitCode: text("unit_code").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
+});
+
+const inventoryUnitSnapshots = pgTable("inventory_unit_snapshots", {
+  areaSqm: integer("area_sqm"),
+  availabilityStatus: text("availability_status").notNull(),
+  bedrooms: integer("bedrooms"),
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  floor: text("floor"),
+  handoverDate: timestamp("handover_date", { mode: "string", withTimezone: true }),
+  id: uuid("id").primaryKey(),
+  paymentPlanCode: text("payment_plan_code"),
+  priceSar: integer("price_sar"),
+  projectCode: text("project_code").notNull(),
+  sourceUpdatedAt: timestamp("source_updated_at", { mode: "string", withTimezone: true }),
+  sourceVersionId: uuid("source_version_id")
+    .notNull()
+    .references(() => commercialSourceVersions.id, { onDelete: "cascade" }),
+  unitId: uuid("unit_id")
+    .notNull()
+    .references(() => inventoryUnits.id, { onDelete: "cascade" }),
+  unitType: text("unit_type").notNull(),
+  view: text("view")
+});
+
+const projectComplianceRefs = pgTable("project_compliance_refs", {
+  createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
+  id: uuid("id").primaryKey(),
+  projectCode: text("project_code").notNull(),
+  referenceLabel: text("reference_label").notNull(),
+  referenceValue: text("reference_value").notNull(),
+  sourceId: uuid("source_id").references(() => commercialSources.id, { onDelete: "set null" }),
+  tenantId: text("tenant_id").notNull(),
   updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }).defaultNow().notNull()
 });
 
@@ -792,6 +956,56 @@ export interface LeadCaptureStore {
     now: string;
     projectInterest: string;
   }): Promise<ApprovedCommercialFact[]>;
+  approveCommercialFactProposal(proposalId: string, input: ApproveCommercialFactProposalInput): Promise<CommercialFactProposal | null>;
+  createCommercialSource(input: CreateCommercialSourceInput): Promise<CommercialSourceDetail>;
+  createManualCommercialFact(input: CreateManualCommercialFactInput): Promise<CommercialFact>;
+  getCommercialSourceDetail(sourceId: string): Promise<CommercialSourceDetail | null>;
+  getProjectCommercialReadinessSummary(input: {
+    projectCode: string;
+    tenantId?: string;
+  }): Promise<ProjectCommercialReadinessSummary>;
+  listActiveCommercialFacts(input: Partial<ListActiveCommercialFactsQuery> & {
+    now?: string;
+  }): Promise<CommercialFact[]>;
+  listCommercialFactProposals(input: ListCommercialFactProposalsQuery): Promise<CommercialFactProposal[]>;
+  listCommercialSources(input?: {
+    projectCode?: string;
+    tenantId?: string;
+  }): Promise<CommercialSourceSummary[]>;
+  recordCommercialInventoryImport(
+    sourceId: string,
+    input: {
+      importErrors: CommercialSourceVersionImportError[];
+      importedByName: string | null;
+      proposals: Array<{
+        content: string;
+        expiresAt: string | null;
+        kind: CommercialFactKind;
+        locale: SupportedLocale;
+        scope: CommercialFactUsageScope;
+        title: string;
+        unitCode: string | null;
+      }>;
+      rowCount: number;
+      rows: Array<{
+        areaSqm: number | null;
+        availabilityStatus: string;
+        bedrooms: number | null;
+        floor: string | null;
+        handoverDate: string | null;
+        paymentPlanCode: string | null;
+        priceSar: number | null;
+        projectCode: string;
+        sourceUpdatedAt: string | null;
+        unitCode: string;
+        unitType: string;
+        view: string | null;
+      }>;
+      sourceUpdatedAt: string | null;
+      versionLabel: string;
+    }
+  ): Promise<CommercialSourceDetail | null>;
+  rejectCommercialFactProposal(proposalId: string, input: RejectCommercialFactProposalInput): Promise<CommercialFactProposal | null>;
   getDocumentUploadRecord(
     caseId: string,
     documentRequestId: string,
@@ -1164,6 +1378,13 @@ export async function createAlphaLeadCaptureStore(options?: {
       caseChannelStates,
       caseQaReviews,
       cases,
+      commercialFactApprovals,
+      commercialFactEvidence,
+      commercialFactExpiryReviews,
+      commercialFactProposals,
+      commercialFacts,
+      commercialSources,
+      commercialSourceVersions,
       documentRequests,
       documentUploadAnalyses,
       documentUploads,
@@ -1179,6 +1400,9 @@ export async function createAlphaLeadCaptureStore(options?: {
       handoverTasks,
       leads,
       managerInterventions,
+      inventoryUnits,
+      inventoryUnitSnapshots,
+      projectComplianceRefs,
       qualificationSnapshots,
       visitBookings,
       visits
@@ -1305,6 +1529,138 @@ export async function createAlphaLeadCaptureStore(options?: {
       status text not null,
       approved_at timestamptz not null,
       expires_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists commercial_sources (
+      id uuid primary key,
+      tenant_id text not null,
+      project_code text not null,
+      source_name text not null,
+      source_type text not null,
+      state text not null,
+      description text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists commercial_source_versions (
+      id uuid primary key,
+      source_id uuid not null references commercial_sources(id) on delete cascade,
+      version_label text not null,
+      row_count integer not null,
+      import_errors jsonb not null default '[]'::jsonb,
+      imported_by_name text,
+      source_updated_at timestamptz,
+      status text not null,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists commercial_fact_proposals (
+      id uuid primary key,
+      tenant_id text not null,
+      project_code text not null,
+      source_id uuid references commercial_sources(id) on delete set null,
+      source_version_id uuid references commercial_source_versions(id) on delete set null,
+      unit_code text,
+      locale text not null,
+      kind text not null,
+      scope text not null,
+      title text not null,
+      content text not null,
+      state text not null,
+      proposed_by_name text,
+      rejection_reason text,
+      expires_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists commercial_facts (
+      id uuid primary key,
+      tenant_id text not null,
+      project_code text not null,
+      source_id uuid references commercial_sources(id) on delete set null,
+      source_version_id uuid references commercial_source_versions(id) on delete set null,
+      proposal_id uuid references commercial_fact_proposals(id) on delete set null,
+      unit_code text,
+      locale text not null,
+      kind text not null,
+      scope text not null,
+      title text not null,
+      content text not null,
+      status text not null,
+      freshness_status text not null,
+      approved_by_name text,
+      approved_at timestamptz not null,
+      expires_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists commercial_fact_evidence (
+      id uuid primary key,
+      fact_id uuid references commercial_facts(id) on delete cascade,
+      proposal_id uuid references commercial_fact_proposals(id) on delete cascade,
+      source_id uuid not null references commercial_sources(id) on delete cascade,
+      source_version_id uuid references commercial_source_versions(id) on delete set null,
+      unit_code text,
+      evidence_label text not null,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists commercial_fact_approvals (
+      id uuid primary key,
+      fact_id uuid not null references commercial_facts(id) on delete cascade,
+      proposal_id uuid references commercial_fact_proposals(id) on delete set null,
+      approved_by_name text,
+      approved_at timestamptz not null
+    );
+
+    create table if not exists commercial_fact_expiry_reviews (
+      id uuid primary key,
+      fact_id uuid not null references commercial_facts(id) on delete cascade,
+      outcome text not null,
+      summary text not null,
+      reviewed_by_name text,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists inventory_units (
+      id uuid primary key,
+      tenant_id text not null,
+      project_code text not null,
+      unit_code text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists inventory_unit_snapshots (
+      id uuid primary key,
+      unit_id uuid not null references inventory_units(id) on delete cascade,
+      source_version_id uuid not null references commercial_source_versions(id) on delete cascade,
+      project_code text not null,
+      unit_type text not null,
+      bedrooms integer,
+      area_sqm integer,
+      floor text,
+      view text,
+      price_sar integer,
+      availability_status text not null,
+      payment_plan_code text,
+      handover_date timestamptz,
+      source_updated_at timestamptz,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists project_compliance_refs (
+      id uuid primary key,
+      tenant_id text not null,
+      project_code text not null,
+      source_id uuid references commercial_sources(id) on delete set null,
+      reference_label text not null,
+      reference_value text not null,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
@@ -1643,6 +1999,14 @@ export async function createAlphaLeadCaptureStore(options?: {
     create index if not exists case_qa_reviews_case_id_idx on case_qa_reviews (case_id, created_at desc);
     create index if not exists automation_jobs_due_idx on automation_jobs (status, run_after asc);
     create index if not exists approved_commercial_facts_lookup_idx on approved_commercial_facts (status, locale, kind, project_interest);
+    create index if not exists commercial_sources_project_idx on commercial_sources (tenant_id, project_code, updated_at desc);
+    create index if not exists commercial_source_versions_source_idx on commercial_source_versions (source_id, created_at desc);
+    create index if not exists commercial_fact_proposals_lookup_idx on commercial_fact_proposals (tenant_id, project_code, state, updated_at desc);
+    create index if not exists commercial_facts_lookup_idx on commercial_facts (tenant_id, project_code, status, locale, kind, updated_at desc);
+    create index if not exists commercial_fact_evidence_fact_idx on commercial_fact_evidence (fact_id);
+    create index if not exists commercial_fact_evidence_proposal_idx on commercial_fact_evidence (proposal_id);
+    create index if not exists inventory_units_lookup_idx on inventory_units (tenant_id, project_code, unit_code);
+    create index if not exists inventory_unit_snapshots_source_idx on inventory_unit_snapshots (source_version_id, created_at desc);
   `);
 
   type AlphaTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -3348,6 +3712,177 @@ export async function createAlphaLeadCaptureStore(options?: {
     return null;
   };
 
+  const listCommercialSourcesLocal = async (input: { projectCode?: string; tenantId?: string } = {}): Promise<CommercialSourceSummary[]> => {
+    const tenantId = input.tenantId ?? "local-alpha";
+    const projectCode = input.projectCode ? normalizeProjectCode(input.projectCode) : null;
+    const [sourceRecords, versionRecords, proposalRecords, factRecords] = await Promise.all([
+      db.select().from(commercialSources).orderBy(desc(commercialSources.updatedAt), asc(commercialSources.sourceName)),
+      db.select().from(commercialSourceVersions).orderBy(desc(commercialSourceVersions.createdAt)),
+      db.select().from(commercialFactProposals),
+      db.select().from(commercialFacts)
+    ]);
+
+    return sourceRecords
+      .filter((source) => source.tenantId === tenantId)
+      .filter((source) => !projectCode || normalizeProjectCode(source.projectCode) === projectCode)
+      .map((source) => {
+        const latestVersion = versionRecords.find((version) => version.sourceId === source.id) ?? null;
+
+        return {
+          activeFactsCount: factRecords.filter((fact) => fact.sourceId === source.id && fact.status === "active").length,
+          createdAt: source.createdAt,
+          description: source.description,
+          latestVersion: latestVersion ? hydrateCommercialSourceVersion(latestVersion) : null,
+          pendingProposalsCount: proposalRecords.filter((proposal) => proposal.sourceId === source.id && proposal.state === "pending_review").length,
+          projectCode: source.projectCode,
+          sourceId: source.id,
+          sourceName: source.sourceName,
+          sourceType: toCommercialSourceType(source.sourceType),
+          state: toCommercialSourceLifecycleState(source.state),
+          tenantId: source.tenantId,
+          updatedAt: source.updatedAt
+        };
+      });
+  };
+
+  const listCommercialFactProposalsLocal = async (input: ListCommercialFactProposalsQuery): Promise<CommercialFactProposal[]> => {
+    const tenantId = input.tenantId ?? "local-alpha";
+    const projectCode = input.projectCode ? normalizeProjectCode(input.projectCode) : null;
+    const [proposalRecords, evidenceRecords, sourceRecords, versionRecords] = await Promise.all([
+      db.select().from(commercialFactProposals).orderBy(desc(commercialFactProposals.updatedAt)),
+      db.select().from(commercialFactEvidence),
+      db.select().from(commercialSources),
+      db.select().from(commercialSourceVersions)
+    ]);
+    const sourceLookup = new Map(sourceRecords.map((source) => [source.id, source]));
+    const versionLookup = new Map(versionRecords.map((version) => [version.id, version]));
+
+    return proposalRecords
+      .filter((proposal) => proposal.tenantId === tenantId)
+      .filter((proposal) => !projectCode || normalizeProjectCode(proposal.projectCode) === projectCode)
+      .filter((proposal) => !input.state || proposal.state === input.state)
+      .map((proposal) =>
+        hydrateCommercialFactProposal(
+          proposal,
+          evidenceRecords.filter((evidence) => evidence.proposalId === proposal.id),
+          sourceLookup,
+          versionLookup
+        )
+      );
+  };
+
+  const listActiveCommercialFactsLocal = async (
+    input: Partial<ListActiveCommercialFactsQuery> & { now?: string }
+  ): Promise<CommercialFact[]> => {
+    const tenantId = input.tenantId ?? "local-alpha";
+    const projectCode = input.projectCode ? normalizeProjectCode(input.projectCode) : null;
+    const now = input.now ?? new Date().toISOString();
+    const [factRecords, evidenceRecords, sourceRecords, versionRecords] = await Promise.all([
+      db.select().from(commercialFacts).orderBy(desc(commercialFacts.updatedAt), asc(commercialFacts.title)),
+      db.select().from(commercialFactEvidence),
+      db.select().from(commercialSources),
+      db.select().from(commercialSourceVersions)
+    ]);
+    const sourceLookup = new Map(sourceRecords.map((source) => [source.id, source]));
+    const versionLookup = new Map(versionRecords.map((version) => [version.id, version]));
+
+    return factRecords
+      .filter((fact) => fact.tenantId === tenantId && fact.status === "active")
+      .filter((fact) => !projectCode || normalizeProjectCode(fact.projectCode) === projectCode)
+      .filter((fact) => !input.locale || fact.locale === input.locale)
+      .filter((fact) => !input.kind || fact.kind === input.kind)
+      .map((fact) =>
+        hydrateCommercialFact(
+          fact,
+          evidenceRecords.filter((evidence) => evidence.factId === fact.id),
+          sourceLookup,
+          versionLookup,
+          now
+        )
+      );
+  };
+
+  const getCommercialSourceDetailLocal = async (sourceId: string): Promise<CommercialSourceDetail | null> => {
+    const sourceRecord = (await db.select().from(commercialSources).where(eq(commercialSources.id, sourceId))).at(0);
+
+    if (!sourceRecord) {
+      return null;
+    }
+
+    const [versionRecords, proposalRecords, factRecords, evidenceRecords, inventoryRecords, unitRecords] = await Promise.all([
+      db.select().from(commercialSourceVersions).where(eq(commercialSourceVersions.sourceId, sourceId)).orderBy(desc(commercialSourceVersions.createdAt)),
+      db.select().from(commercialFactProposals).where(eq(commercialFactProposals.sourceId, sourceId)).orderBy(desc(commercialFactProposals.updatedAt)),
+      db.select().from(commercialFacts).where(eq(commercialFacts.sourceId, sourceId)).orderBy(desc(commercialFacts.updatedAt)),
+      db.select().from(commercialFactEvidence).where(eq(commercialFactEvidence.sourceId, sourceId)),
+      db.select().from(inventoryUnitSnapshots).orderBy(desc(inventoryUnitSnapshots.createdAt)),
+      db.select().from(inventoryUnits)
+    ]);
+    const sourceLookup = new Map([[sourceRecord.id, sourceRecord]]);
+    const versionLookup = new Map(versionRecords.map((version) => [version.id, version]));
+    const unitLookup = new Map(unitRecords.map((unit) => [unit.id, unit]));
+    const versions = versionRecords.map((version) => hydrateCommercialSourceVersion(version));
+    const proposals = proposalRecords.map((proposal) =>
+      hydrateCommercialFactProposal(
+        proposal,
+        evidenceRecords.filter((evidence) => evidence.proposalId === proposal.id),
+        sourceLookup,
+        versionLookup
+      )
+    );
+    const activeFacts = factRecords
+      .filter((fact) => fact.status === "active")
+      .map((fact) =>
+        hydrateCommercialFact(
+          fact,
+          evidenceRecords.filter((evidence) => evidence.factId === fact.id),
+          sourceLookup,
+          versionLookup,
+          new Date().toISOString()
+        )
+      );
+
+    return {
+      activeFacts,
+      activeFactsCount: activeFacts.length,
+      createdAt: sourceRecord.createdAt,
+      description: sourceRecord.description,
+      inventorySnapshots: inventoryRecords
+        .filter((snapshot) => versionLookup.has(snapshot.sourceVersionId))
+        .map((snapshot) => {
+          const unit = unitLookup.get(snapshot.unitId);
+
+          return {
+            areaSqm: snapshot.areaSqm,
+            availabilityStatus: toInventoryUnitStatus(snapshot.availabilityStatus),
+            bedrooms: snapshot.bedrooms,
+            floor: snapshot.floor,
+            handoverDate: snapshot.handoverDate,
+            paymentPlanCode: snapshot.paymentPlanCode,
+            priceSar: snapshot.priceSar,
+            projectCode: snapshot.projectCode,
+            snapshotId: snapshot.id,
+            sourceUpdatedAt: snapshot.sourceUpdatedAt,
+            sourceVersionId: snapshot.sourceVersionId,
+            unitCode: unit?.unitCode ?? "unknown",
+            unitId: snapshot.unitId,
+            unitType: snapshot.unitType,
+            view: snapshot.view
+          };
+        }),
+      latestVersion: versions[0] ?? null,
+      pendingProposalsCount: proposals.filter((proposal) => proposal.state === "pending_review").length,
+      projectCode: sourceRecord.projectCode,
+      proposals,
+      sourceId: sourceRecord.id,
+      sourceName: sourceRecord.sourceName,
+      sourceType: toCommercialSourceType(sourceRecord.sourceType),
+      state: toCommercialSourceLifecycleState(sourceRecord.state),
+      tenantId: sourceRecord.tenantId,
+      updatedAt: sourceRecord.updatedAt,
+      versions
+    };
+  };
+
   return {
     async applyQualification(caseId, input) {
       const caseRecord = await getPersistedCaseDetail(caseId);
@@ -3419,34 +3954,512 @@ export async function createAlphaLeadCaptureStore(options?: {
     async close() {
       await client.close();
     },
+    async createCommercialSource(input) {
+      const now = new Date().toISOString();
+      const sourceId = randomUUID();
+
+      await db.insert(commercialSources).values({
+        createdAt: now,
+        description: input.description ?? null,
+        id: sourceId,
+        projectCode: normalizeProjectCode(input.projectCode),
+        sourceName: input.sourceName,
+        sourceType: input.sourceType,
+        state: "draft",
+        tenantId: input.tenantId,
+        updatedAt: now
+      });
+
+      const detail = await getCommercialSourceDetailLocal(sourceId);
+
+      if (!detail) {
+        throw new Error("commercial_source_create_failed");
+      }
+
+      return detail;
+    },
+    async listCommercialSources(input = {}) {
+      const tenantId = input.tenantId ?? "local-alpha";
+      const projectCode = input.projectCode ? normalizeProjectCode(input.projectCode) : null;
+      const [sourceRecords, versionRecords, proposalRecords, factRecords] = await Promise.all([
+        db.select().from(commercialSources).orderBy(desc(commercialSources.updatedAt), asc(commercialSources.sourceName)),
+        db.select().from(commercialSourceVersions).orderBy(desc(commercialSourceVersions.createdAt)),
+        db.select().from(commercialFactProposals),
+        db.select().from(commercialFacts)
+      ]);
+
+      return sourceRecords
+        .filter((source) => source.tenantId === tenantId)
+        .filter((source) => !projectCode || normalizeProjectCode(source.projectCode) === projectCode)
+        .map((source) => {
+          const latestVersion = versionRecords.find((version) => version.sourceId === source.id) ?? null;
+
+          return {
+            activeFactsCount: factRecords.filter((fact) => fact.sourceId === source.id && fact.status === "active").length,
+            createdAt: source.createdAt,
+            description: source.description,
+            latestVersion: latestVersion ? hydrateCommercialSourceVersion(latestVersion) : null,
+            pendingProposalsCount: proposalRecords.filter((proposal) => proposal.sourceId === source.id && proposal.state === "pending_review").length,
+            projectCode: source.projectCode,
+            sourceId: source.id,
+            sourceName: source.sourceName,
+            sourceType: toCommercialSourceType(source.sourceType),
+            state: toCommercialSourceLifecycleState(source.state),
+            tenantId: source.tenantId,
+            updatedAt: source.updatedAt
+          } satisfies CommercialSourceSummary;
+        });
+    },
+    async getCommercialSourceDetail(sourceId) {
+      const sourceRecord = (await db.select().from(commercialSources).where(eq(commercialSources.id, sourceId))).at(0);
+
+      if (!sourceRecord) {
+        return null;
+      }
+
+      const [versionRecords, proposalRecords, factRecords, evidenceRecords, inventoryRecords, unitRecords] = await Promise.all([
+        db.select().from(commercialSourceVersions).where(eq(commercialSourceVersions.sourceId, sourceId)).orderBy(desc(commercialSourceVersions.createdAt)),
+        db.select().from(commercialFactProposals).where(eq(commercialFactProposals.sourceId, sourceId)).orderBy(desc(commercialFactProposals.updatedAt)),
+        db.select().from(commercialFacts).where(eq(commercialFacts.sourceId, sourceId)).orderBy(desc(commercialFacts.updatedAt)),
+        db.select().from(commercialFactEvidence).where(eq(commercialFactEvidence.sourceId, sourceId)),
+        db.select().from(inventoryUnitSnapshots).orderBy(desc(inventoryUnitSnapshots.createdAt)),
+        db.select().from(inventoryUnits)
+      ]);
+      const sourceLookup = new Map([[sourceRecord.id, sourceRecord]]);
+      const versionLookup = new Map(versionRecords.map((version) => [version.id, version]));
+      const unitLookup = new Map(unitRecords.map((unit) => [unit.id, unit]));
+      const versions = versionRecords.map((version) => hydrateCommercialSourceVersion(version));
+      const proposals = proposalRecords.map((proposal) =>
+        hydrateCommercialFactProposal(
+          proposal,
+          evidenceRecords.filter((evidence) => evidence.proposalId === proposal.id),
+          sourceLookup,
+          versionLookup
+        )
+      );
+      const activeFacts = factRecords
+        .filter((fact) => fact.status === "active")
+        .map((fact) =>
+          hydrateCommercialFact(
+            fact,
+            evidenceRecords.filter((evidence) => evidence.factId === fact.id),
+            sourceLookup,
+            versionLookup,
+            new Date().toISOString()
+          )
+        );
+
+      return {
+        activeFacts,
+        activeFactsCount: activeFacts.length,
+        createdAt: sourceRecord.createdAt,
+        description: sourceRecord.description,
+        inventorySnapshots: inventoryRecords
+          .filter((snapshot) => versionLookup.has(snapshot.sourceVersionId))
+          .map((snapshot) => {
+            const unit = unitLookup.get(snapshot.unitId);
+
+            return {
+              areaSqm: snapshot.areaSqm,
+              availabilityStatus: toInventoryUnitStatus(snapshot.availabilityStatus),
+              bedrooms: snapshot.bedrooms,
+              floor: snapshot.floor,
+              handoverDate: snapshot.handoverDate,
+              paymentPlanCode: snapshot.paymentPlanCode,
+              priceSar: snapshot.priceSar,
+              projectCode: snapshot.projectCode,
+              snapshotId: snapshot.id,
+              sourceUpdatedAt: snapshot.sourceUpdatedAt,
+              sourceVersionId: snapshot.sourceVersionId,
+              unitCode: unit?.unitCode ?? "unknown",
+              unitId: snapshot.unitId,
+              unitType: snapshot.unitType,
+              view: snapshot.view
+            };
+          }),
+        latestVersion: versions[0] ?? null,
+        pendingProposalsCount: proposals.filter((proposal) => proposal.state === "pending_review").length,
+        projectCode: sourceRecord.projectCode,
+        proposals,
+        sourceId: sourceRecord.id,
+        sourceName: sourceRecord.sourceName,
+        sourceType: toCommercialSourceType(sourceRecord.sourceType),
+        state: toCommercialSourceLifecycleState(sourceRecord.state),
+        tenantId: sourceRecord.tenantId,
+        updatedAt: sourceRecord.updatedAt,
+        versions
+      } satisfies CommercialSourceDetail;
+    },
+    async recordCommercialInventoryImport(sourceId, input) {
+      const sourceRecord = (await db.select().from(commercialSources).where(eq(commercialSources.id, sourceId))).at(0);
+
+      if (!sourceRecord) {
+        return null;
+      }
+
+      const now = new Date().toISOString();
+      const versionId = randomUUID();
+      const status = input.rows.length === 0 && input.importErrors.length > 0 ? "failed" : input.importErrors.length > 0 ? "partially_imported" : "imported";
+
+      await db.transaction(async (transaction) => {
+        await transaction.insert(commercialSourceVersions).values({
+          createdAt: now,
+          id: versionId,
+          importErrors: input.importErrors,
+          importedByName: input.importedByName,
+          rowCount: input.rowCount,
+          sourceId,
+          sourceUpdatedAt: input.sourceUpdatedAt,
+          status,
+          versionLabel: input.versionLabel
+        });
+
+        await transaction
+          .update(commercialSources)
+          .set({
+            state: status === "failed" ? "draft" : "reviewing",
+            updatedAt: now
+          })
+          .where(eq(commercialSources.id, sourceId));
+
+        for (const row of input.rows) {
+          const existingUnit = (
+            await transaction
+              .select()
+              .from(inventoryUnits)
+              .where(
+                and(
+                  eq(inventoryUnits.tenantId, sourceRecord.tenantId),
+                  eq(inventoryUnits.projectCode, row.projectCode),
+                  eq(inventoryUnits.unitCode, row.unitCode)
+                )
+              )
+          ).at(0);
+          const unitId = existingUnit?.id ?? randomUUID();
+
+          if (!existingUnit) {
+            await transaction.insert(inventoryUnits).values({
+              createdAt: now,
+              id: unitId,
+              projectCode: row.projectCode,
+              tenantId: sourceRecord.tenantId,
+              unitCode: row.unitCode,
+              updatedAt: now
+            });
+          } else {
+            await transaction.update(inventoryUnits).set({ updatedAt: now }).where(eq(inventoryUnits.id, unitId));
+          }
+
+          await transaction.insert(inventoryUnitSnapshots).values({
+            areaSqm: row.areaSqm,
+            availabilityStatus: row.availabilityStatus,
+            bedrooms: row.bedrooms,
+            createdAt: now,
+            floor: row.floor,
+            handoverDate: row.handoverDate,
+            id: randomUUID(),
+            paymentPlanCode: row.paymentPlanCode,
+            priceSar: row.priceSar,
+            projectCode: row.projectCode,
+            sourceUpdatedAt: row.sourceUpdatedAt,
+            sourceVersionId: versionId,
+            unitId,
+            unitType: row.unitType,
+            view: row.view
+          });
+        }
+
+        for (const proposal of input.proposals) {
+          const proposalId = randomUUID();
+          await transaction.insert(commercialFactProposals).values({
+            content: proposal.content,
+            createdAt: now,
+            expiresAt: proposal.expiresAt,
+            id: proposalId,
+            kind: proposal.kind,
+            locale: proposal.locale,
+            projectCode: sourceRecord.projectCode,
+            proposedByName: input.importedByName,
+            rejectionReason: null,
+            scope: proposal.scope,
+            sourceId,
+            sourceVersionId: versionId,
+            state: "pending_review",
+            tenantId: sourceRecord.tenantId,
+            title: proposal.title,
+            unitCode: proposal.unitCode,
+            updatedAt: now
+          });
+          await transaction.insert(commercialFactEvidence).values({
+            createdAt: now,
+            evidenceLabel: `${sourceRecord.sourceName} · ${input.versionLabel}${proposal.unitCode ? ` · ${proposal.unitCode}` : ""}`,
+            factId: null,
+            id: randomUUID(),
+            proposalId,
+            sourceId,
+            sourceVersionId: versionId,
+            unitCode: proposal.unitCode
+          });
+        }
+      });
+
+      return getCommercialSourceDetailLocal(sourceId);
+    },
     async listApprovedCommercialFacts(input) {
-      const records = await db
-        .select({
-          approvedAt: approvedCommercialFacts.approvedAt,
-          content: approvedCommercialFacts.content,
-          expiresAt: approvedCommercialFacts.expiresAt,
-          factId: approvedCommercialFacts.id,
-          kind: approvedCommercialFacts.kind,
-          locale: approvedCommercialFacts.locale,
-          projectInterest: approvedCommercialFacts.projectInterest,
-          sourceLabel: approvedCommercialFacts.sourceLabel,
-          sourceReference: approvedCommercialFacts.sourceReference,
-          title: approvedCommercialFacts.title,
-          updatedAt: approvedCommercialFacts.updatedAt
-        })
-        .from(approvedCommercialFacts)
-        .where(and(eq(approvedCommercialFacts.status, "active"), eq(approvedCommercialFacts.locale, input.locale)))
-        .orderBy(desc(approvedCommercialFacts.updatedAt), asc(approvedCommercialFacts.title));
-
+      const facts = await listActiveCommercialFactsLocal({
+        kind: undefined,
+        locale: input.locale,
+        now: input.now,
+        projectCode: input.projectInterest,
+        tenantId: "local-alpha"
+      });
       const allowedKinds = new Set(input.kinds ?? []);
-      const normalizedProject = normalizeProjectInterest(input.projectInterest);
-      const nowTime = new Date(input.now).getTime();
 
-      return records
-        .filter((record) => allowedKinds.size === 0 || allowedKinds.has(toCommercialFactKind(record.kind)))
-        .filter((record) => record.projectInterest === globalCommercialFactProject || normalizeProjectInterest(record.projectInterest) === normalizedProject)
-        .filter((record) => !record.expiresAt || new Date(record.expiresAt).getTime() > nowTime)
-        .map((record) => hydrateApprovedCommercialFact(record));
+      return facts
+        .filter((fact) => allowedKinds.size === 0 || allowedKinds.has(fact.kind))
+        .filter((fact) => fact.freshnessStatus === "active" || fact.freshnessStatus === "expiring_soon")
+        .map((fact) => ({
+          approvedAt: fact.approvedAt,
+          content: fact.content,
+          expiresAt: fact.expiresAt,
+          factId: fact.factId,
+          kind: fact.kind,
+          locale: fact.locale,
+          projectInterest: fact.projectCode,
+          sourceLabel: fact.evidence[0]?.sourceName ?? fact.title,
+          sourceReference: fact.evidence[0]?.sourceVersionLabel ?? fact.factId,
+          title: fact.title,
+          updatedAt: fact.updatedAt
+        }));
+    },
+    async listCommercialFactProposals(input) {
+      const tenantId = input.tenantId ?? "local-alpha";
+      const projectCode = input.projectCode ? normalizeProjectCode(input.projectCode) : null;
+      const [proposalRecords, evidenceRecords, sourceRecords, versionRecords] = await Promise.all([
+        db.select().from(commercialFactProposals).orderBy(desc(commercialFactProposals.updatedAt)),
+        db.select().from(commercialFactEvidence),
+        db.select().from(commercialSources),
+        db.select().from(commercialSourceVersions)
+      ]);
+      const sourceLookup = new Map(sourceRecords.map((source) => [source.id, source]));
+      const versionLookup = new Map(versionRecords.map((version) => [version.id, version]));
+
+      return proposalRecords
+        .filter((proposal) => proposal.tenantId === tenantId)
+        .filter((proposal) => !projectCode || normalizeProjectCode(proposal.projectCode) === projectCode)
+        .filter((proposal) => !input.state || proposal.state === input.state)
+        .map((proposal) =>
+          hydrateCommercialFactProposal(
+            proposal,
+            evidenceRecords.filter((evidence) => evidence.proposalId === proposal.id),
+            sourceLookup,
+            versionLookup
+          )
+        );
+    },
+    async approveCommercialFactProposal(proposalId, input) {
+      const proposal = (await db.select().from(commercialFactProposals).where(eq(commercialFactProposals.id, proposalId))).at(0);
+
+      if (!proposal || proposal.state !== "pending_review") {
+        return proposal ? (await listCommercialFactProposalsLocal({ tenantId: proposal.tenantId })).find((item) => item.proposalId === proposalId) ?? null : null;
+      }
+
+      const now = new Date().toISOString();
+      const factId = randomUUID();
+      const proposalEvidence = await db.select().from(commercialFactEvidence).where(eq(commercialFactEvidence.proposalId, proposalId));
+
+      await db.transaction(async (transaction) => {
+        await transaction
+          .update(commercialFactProposals)
+          .set({
+            state: "approved",
+            updatedAt: now
+          })
+          .where(eq(commercialFactProposals.id, proposalId));
+        await transaction.insert(commercialFacts).values({
+          approvedAt: now,
+          approvedByName: input.approvedByName ?? null,
+          content: proposal.content,
+          createdAt: now,
+          expiresAt: input.expiresAt === undefined ? proposal.expiresAt : input.expiresAt,
+          freshnessStatus: "active",
+          id: factId,
+          kind: proposal.kind,
+          locale: proposal.locale,
+          projectCode: proposal.projectCode,
+          proposalId,
+          scope: proposal.scope,
+          sourceId: proposal.sourceId,
+          sourceVersionId: proposal.sourceVersionId,
+          status: "active",
+          tenantId: proposal.tenantId,
+          title: proposal.title,
+          unitCode: proposal.unitCode,
+          updatedAt: now
+        });
+        await transaction.insert(commercialFactApprovals).values({
+          approvedAt: now,
+          approvedByName: input.approvedByName ?? null,
+          factId,
+          id: randomUUID(),
+          proposalId
+        });
+
+        for (const evidence of proposalEvidence) {
+          await transaction.insert(commercialFactEvidence).values({
+            createdAt: now,
+            evidenceLabel: evidence.evidenceLabel,
+            factId,
+            id: randomUUID(),
+            proposalId: null,
+            sourceId: evidence.sourceId,
+            sourceVersionId: evidence.sourceVersionId,
+            unitCode: evidence.unitCode
+          });
+        }
+      });
+
+      return (await listCommercialFactProposalsLocal({ tenantId: proposal.tenantId })).find((item) => item.proposalId === proposalId) ?? null;
+    },
+    async rejectCommercialFactProposal(proposalId, input) {
+      const proposal = (await db.select().from(commercialFactProposals).where(eq(commercialFactProposals.id, proposalId))).at(0);
+
+      if (!proposal) {
+        return null;
+      }
+
+      await db
+        .update(commercialFactProposals)
+        .set({
+          rejectionReason: input.rejectionReason,
+          state: "rejected",
+          updatedAt: new Date().toISOString()
+        })
+        .where(eq(commercialFactProposals.id, proposalId));
+
+      return (await listCommercialFactProposalsLocal({ tenantId: proposal.tenantId })).find((item) => item.proposalId === proposalId) ?? null;
+    },
+    async createManualCommercialFact(input) {
+      const now = new Date().toISOString();
+      const projectCode = normalizeProjectCode(input.projectCode);
+      let sourceId = input.sourceId ?? null;
+
+      if (!sourceId) {
+        sourceId = randomUUID();
+        await db.insert(commercialSources).values({
+          createdAt: now,
+          description: "Manual commercial fact entry",
+          id: sourceId,
+          projectCode,
+          sourceName: input.evidenceLabel,
+          sourceType: "manual_entry",
+          state: "approved",
+          tenantId: input.tenantId,
+          updatedAt: now
+        });
+      }
+
+      const versionId = randomUUID();
+      const factId = randomUUID();
+      await db.transaction(async (transaction) => {
+        await transaction.insert(commercialSourceVersions).values({
+          createdAt: now,
+          id: versionId,
+          importErrors: [],
+          importedByName: input.evidenceLabel,
+          rowCount: 1,
+          sourceId,
+          sourceUpdatedAt: now,
+          status: "imported",
+          versionLabel: "manual-entry"
+        });
+        await transaction.insert(commercialFacts).values({
+          approvedAt: now,
+          approvedByName: input.evidenceLabel,
+          content: input.content,
+          createdAt: now,
+          expiresAt: input.expiresAt ?? null,
+          freshnessStatus: "active",
+          id: factId,
+          kind: input.kind,
+          locale: input.locale,
+          projectCode,
+          proposalId: null,
+          scope: input.scope,
+          sourceId,
+          sourceVersionId: versionId,
+          status: "active",
+          tenantId: input.tenantId,
+          title: input.title,
+          unitCode: input.unitCode ?? null,
+          updatedAt: now
+        });
+        await transaction.insert(commercialFactEvidence).values({
+          createdAt: now,
+          evidenceLabel: input.evidenceLabel,
+          factId,
+          id: randomUUID(),
+          proposalId: null,
+          sourceId,
+          sourceVersionId: versionId,
+          unitCode: input.unitCode ?? null
+        });
+      });
+
+      return (await listActiveCommercialFactsLocal({ tenantId: input.tenantId })).find((fact) => fact.factId === factId)!;
+    },
+    async listActiveCommercialFacts(input) {
+      const tenantId = input.tenantId ?? "local-alpha";
+      const projectCode = input.projectCode ? normalizeProjectCode(input.projectCode) : null;
+      const now = input.now ?? new Date().toISOString();
+      const [factRecords, evidenceRecords, sourceRecords, versionRecords] = await Promise.all([
+        db.select().from(commercialFacts).orderBy(desc(commercialFacts.updatedAt), asc(commercialFacts.title)),
+        db.select().from(commercialFactEvidence),
+        db.select().from(commercialSources),
+        db.select().from(commercialSourceVersions)
+      ]);
+      const sourceLookup = new Map(sourceRecords.map((source) => [source.id, source]));
+      const versionLookup = new Map(versionRecords.map((version) => [version.id, version]));
+
+      return factRecords
+        .filter((fact) => fact.tenantId === tenantId && fact.status === "active")
+        .filter((fact) => !projectCode || normalizeProjectCode(fact.projectCode) === projectCode)
+        .filter((fact) => !input.locale || fact.locale === input.locale)
+        .filter((fact) => !input.kind || fact.kind === input.kind)
+        .map((fact) =>
+          hydrateCommercialFact(
+            fact,
+            evidenceRecords.filter((evidence) => evidence.factId === fact.id),
+            sourceLookup,
+            versionLookup,
+            now
+          )
+        );
+    },
+    async getProjectCommercialReadinessSummary(input) {
+      const tenantId = input.tenantId ?? "local-alpha";
+      const projectCode = normalizeProjectCode(input.projectCode);
+      const [facts, proposals, sources, runs] = await Promise.all([
+        listActiveCommercialFactsLocal({ now: new Date().toISOString(), projectCode, tenantId }),
+        listCommercialFactProposalsLocal({ projectCode, tenantId }),
+        listCommercialSourcesLocal({ projectCode, tenantId }),
+        db.select().from(caseAgentRuns).orderBy(desc(caseAgentRuns.createdAt))
+      ]);
+      const staleFacts = facts.filter((fact) => fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired");
+      const expiringSoonFacts = facts.filter((fact) => fact.freshnessStatus === "expiring_soon");
+
+      return {
+        activeApprovedFactsCount: facts.filter((fact) => fact.freshnessStatus === "active" || fact.freshnessStatus === "expiring_soon").length,
+        blockedAgentRepliesCount: runs.filter(
+          (run) => run.commercialFactGroundingStatus === "missing_required_evidence" && run.status === "escalated"
+        ).length,
+        expiringSoonFactsCount: expiringSoonFacts.length,
+        latestInventorySourceVersion: sources.find((source) => source.sourceType === "inventory_csv")?.latestVersion ?? null,
+        pendingApprovalsCount: proposals.filter((proposal) => proposal.state === "pending_review").length,
+        projectCode,
+        staleFactsCount: staleFacts.length,
+        tenantId
+      } satisfies ProjectCommercialReadinessSummary;
     },
     async createWebsiteLeadCase(input) {
       const createdLeadId = randomUUID();
@@ -7671,34 +8684,6 @@ function hydrateCaseAgentMemory(value: {
   };
 }
 
-function hydrateApprovedCommercialFact(value: {
-  approvedAt: string;
-  content: string;
-  expiresAt: string | null;
-  factId: string;
-  kind: string;
-  locale: string;
-  projectInterest: string;
-  sourceLabel: string;
-  sourceReference: string;
-  title: string;
-  updatedAt: string;
-}): ApprovedCommercialFact {
-  return {
-    approvedAt: value.approvedAt,
-    content: value.content,
-    expiresAt: value.expiresAt,
-    factId: value.factId,
-    kind: toCommercialFactKind(value.kind),
-    locale: toSupportedLocale(value.locale),
-    projectInterest: value.projectInterest,
-    sourceLabel: value.sourceLabel,
-    sourceReference: value.sourceReference,
-    title: value.title,
-    updatedAt: value.updatedAt
-  };
-}
-
 function hydratePersistedCommercialFactReference(value: PersistedCommercialFactReference): PersistedCommercialFactReference {
   return {
     approvedAt: value.approvedAt,
@@ -8160,6 +9145,7 @@ function toCaseAgentBlockedReason(value: string): CaseAgentBlockedReason {
     value === "automation_paused" ||
     value === "qa_hold" ||
     value === "client_credentials_pending" ||
+    value === "commercial_facts_missing" ||
     value === "model_provider_error" ||
     value === "invalid_model_output"
   ) {
@@ -8261,7 +9247,11 @@ function toCommercialFactKind(value: string): CommercialFactKind {
     value === "payment_plan" ||
     value === "availability" ||
     value === "policy" ||
-    value === "document_requirement"
+    value === "document_requirement" ||
+    value === "fees" ||
+    value === "handover_date" ||
+    value === "unit_status" ||
+    value === "visit_terms"
   ) {
     return value;
   }
@@ -8277,6 +9267,245 @@ function toCommercialFactGroundingStatus(value: string): CommercialFactGrounding
   throw new Error(`unsupported_commercial_fact_grounding_status:${value}`);
 }
 
+function toCommercialSourceType(value: string): CommercialSourceType {
+  if (
+    value === "inventory_csv" ||
+    value === "sales_sheet" ||
+    value === "policy_pack" ||
+    value === "manual_entry" ||
+    value === "compliance_reference"
+  ) {
+    return value;
+  }
+
+  throw new Error(`unsupported_commercial_source_type:${value}`);
+}
+
+function toCommercialSourceLifecycleState(value: string): CommercialSourceLifecycleState {
+  if (value === "draft" || value === "imported" || value === "reviewing" || value === "approved" || value === "superseded" || value === "archived") {
+    return value;
+  }
+
+  throw new Error(`unsupported_commercial_source_state:${value}`);
+}
+
+function toCommercialFactProposalState(value: string): CommercialFactProposalState {
+  if (value === "pending_review" || value === "approved" || value === "rejected") {
+    return value;
+  }
+
+  throw new Error(`unsupported_commercial_fact_proposal_state:${value}`);
+}
+
+function toCommercialFactUsageScope(value: string): CommercialFactUsageScope {
+  if (value === "whatsapp_reply" || value === "manager_review" || value === "document_follow_up" || value === "visit_scheduling") {
+    return value;
+  }
+
+  throw new Error(`unsupported_commercial_fact_usage_scope:${value}`);
+}
+
+function toInventoryUnitStatus(value: string): InventoryUnitStatus {
+  if (value === "available" || value === "reserved" || value === "sold" || value === "blocked" || value === "unknown") {
+    return value;
+  }
+
+  return "unknown";
+}
+
+function hydrateCommercialSourceVersion(value: {
+  createdAt: string;
+  id: string;
+  importErrors: CommercialSourceVersionImportError[];
+  importedByName: string | null;
+  rowCount: number;
+  sourceId: string;
+  sourceUpdatedAt: string | null;
+  status: string;
+  versionLabel: string;
+}): CommercialSourceVersion {
+  return {
+    createdAt: value.createdAt,
+    importErrors: value.importErrors ?? [],
+    importedByName: value.importedByName,
+    rowCount: value.rowCount,
+    sourceId: value.sourceId,
+    sourceUpdatedAt: value.sourceUpdatedAt,
+    status:
+      value.status === "imported" || value.status === "partially_imported" || value.status === "failed"
+        ? value.status
+        : "failed",
+    versionId: value.id,
+    versionLabel: value.versionLabel
+  };
+}
+
+function hydrateCommercialFactEvidence(
+  value: {
+    factId: string | null;
+    id: string;
+    proposalId: string | null;
+    sourceId: string;
+    sourceVersionId: string | null;
+    unitCode: string | null;
+  },
+  sources: Map<string, { sourceName: string }>,
+  versions: Map<string, { versionLabel: string }>
+): CommercialFactEvidenceReference {
+  return {
+    evidenceId: value.id,
+    factId: value.factId,
+    proposalId: value.proposalId,
+    sourceId: value.sourceId,
+    sourceName: sources.get(value.sourceId)?.sourceName ?? "Commercial source",
+    sourceVersionId: value.sourceVersionId,
+    sourceVersionLabel: value.sourceVersionId ? versions.get(value.sourceVersionId)?.versionLabel ?? null : null,
+    unitCode: value.unitCode
+  };
+}
+
+function hydrateCommercialFactProposal(
+  value: {
+    content: string;
+    createdAt: string;
+    expiresAt: string | null;
+    id: string;
+    kind: string;
+    locale: string;
+    projectCode: string;
+    proposedByName: string | null;
+    rejectionReason: string | null;
+    scope: string;
+    sourceId: string | null;
+    sourceVersionId: string | null;
+    state: string;
+    tenantId: string;
+    title: string;
+    unitCode: string | null;
+    updatedAt: string;
+  },
+  evidence: Array<{
+    factId: string | null;
+    id: string;
+    proposalId: string | null;
+    sourceId: string;
+    sourceVersionId: string | null;
+    unitCode: string | null;
+  }>,
+  sources: Map<string, { sourceName: string }>,
+  versions: Map<string, { versionLabel: string }>
+): CommercialFactProposal {
+  return {
+    content: value.content,
+    createdAt: value.createdAt,
+    evidence: evidence.map((item) => hydrateCommercialFactEvidence(item, sources, versions)),
+    expiresAt: value.expiresAt,
+    kind: toCommercialFactKind(value.kind),
+    locale: toSupportedLocale(value.locale),
+    projectCode: value.projectCode,
+    proposalId: value.id,
+    proposedByName: value.proposedByName,
+    rejectionReason: value.rejectionReason,
+    scope: toCommercialFactUsageScope(value.scope),
+    sourceId: value.sourceId,
+    sourceVersionId: value.sourceVersionId,
+    state: toCommercialFactProposalState(value.state),
+    tenantId: value.tenantId,
+    title: value.title,
+    unitCode: value.unitCode,
+    updatedAt: value.updatedAt
+  };
+}
+
+function hydrateCommercialFact(
+  value: {
+    approvedAt: string;
+    approvedByName: string | null;
+    content: string;
+    expiresAt: string | null;
+    freshnessStatus: string;
+    id: string;
+    kind: string;
+    locale: string;
+    projectCode: string;
+    scope: string;
+    sourceId: string | null;
+    sourceVersionId: string | null;
+    tenantId: string;
+    title: string;
+    unitCode: string | null;
+    updatedAt: string;
+  },
+  evidence: Array<{
+    factId: string | null;
+    id: string;
+    proposalId: string | null;
+    sourceId: string;
+    sourceVersionId: string | null;
+    unitCode: string | null;
+  }>,
+  sources: Map<string, { sourceName: string }>,
+  versions: Map<string, { versionLabel: string }>,
+  now: string
+): CommercialFact {
+  return {
+    approvedAt: value.approvedAt,
+    approvedByName: value.approvedByName,
+    content: value.content,
+    evidence: evidence.map((item) => hydrateCommercialFactEvidence(item, sources, versions)),
+    expiresAt: value.expiresAt,
+    factId: value.id,
+    freshnessStatus: computeCommercialFactFreshness({
+      expiresAt: value.expiresAt,
+      now,
+      updatedAt: value.updatedAt
+    }),
+    kind: toCommercialFactKind(value.kind),
+    locale: toSupportedLocale(value.locale),
+    projectCode: value.projectCode,
+    scope: toCommercialFactUsageScope(value.scope),
+    sourceId: value.sourceId,
+    sourceVersionId: value.sourceVersionId,
+    tenantId: value.tenantId,
+    title: value.title,
+    unitCode: value.unitCode,
+    updatedAt: value.updatedAt
+  };
+}
+
+function computeCommercialFactFreshness(input: {
+  expiresAt: string | null;
+  now: string;
+  updatedAt: string;
+}): CommercialFactFreshnessStatus {
+  const nowTime = new Date(input.now).getTime();
+  const updatedAtTime = new Date(input.updatedAt).getTime();
+  const staleAfterMs = 30 * 24 * 60 * 60 * 1000;
+  const expiringSoonMs = 14 * 24 * 60 * 60 * 1000;
+
+  if (input.expiresAt) {
+    const expiresAtTime = new Date(input.expiresAt).getTime();
+
+    if (expiresAtTime <= nowTime) {
+      return "expired";
+    }
+
+    if (expiresAtTime - nowTime <= expiringSoonMs) {
+      return "expiring_soon";
+    }
+  }
+
+  if (nowTime - updatedAtTime > staleAfterMs) {
+    return "stale";
+  }
+
+  return "active";
+}
+
+function normalizeProjectCode(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 function toCaseAgentTriggerType(value: string): CaseAgentTriggerType {
   if (
     value === "new_lead" ||
@@ -8288,10 +9517,6 @@ function toCaseAgentTriggerType(value: string): CaseAgentTriggerType {
   }
 
   throw new Error(`unsupported_case_agent_trigger_type:${value}`);
-}
-
-function normalizeProjectInterest(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function inferSupportedLocaleFromText(value: string): SupportedLocale {

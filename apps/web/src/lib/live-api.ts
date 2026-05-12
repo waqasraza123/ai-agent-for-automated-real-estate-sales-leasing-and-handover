@@ -2,13 +2,21 @@ import { cookies } from "next/headers";
 
 import type {
   ApproveHandoverCustomerUpdateInput,
+  ApproveCommercialFactProposalInput,
+  CommercialFact,
+  CommercialFactProposal,
+  CommercialSourceDetail,
+  CommercialSourceSummary,
   CompleteHandoverInput,
   ConfirmHandoverAppointmentInput,
+  CreateCommercialSourceInput,
   CreateHandoverBlockerInput,
   CreateHandoverPostCompletionFollowUpInput,
   CreateHandoverIntakeInput,
+  CreateManualCommercialFactInput,
   CreateWebsiteLeadInput,
   CreateWebsiteLeadResult,
+  ImportInventoryCsvInput,
   ListGovernanceEventsQuery,
   ManageBulkCaseFollowUpInput,
   ManageBulkCaseFollowUpResult,
@@ -22,7 +30,9 @@ import type {
   PersistedGovernanceEventList,
   PersistedGovernanceSummary,
   PersistedHandoverCaseDetail,
+  ProjectCommercialReadinessSummary,
   QualifyCaseInput,
+  RejectCommercialFactProposalInput,
   RequestCaseQaReviewInput,
   ResolveCaseQaReviewInput,
   ResolveHandoverCustomerUpdateQaReviewInput,
@@ -97,6 +107,101 @@ export async function listPersistedCasesFromApi() {
   });
 
   return payload.cases;
+}
+
+export async function listCommercialSourcesFromApi(operatorRole?: OperatorRole) {
+  const payload = await requestJson<{
+    sources: CommercialSourceSummary[];
+  }>("/v1/commercial-sources", {
+    cache: "no-store",
+    headers: await getOperatorSessionHeaders(operatorRole)
+  });
+
+  return payload.sources;
+}
+
+export async function getCommercialSourceDetailFromApi(sourceId: string, operatorRole?: OperatorRole) {
+  return requestJson<CommercialSourceDetail>(`/v1/commercial-sources/${sourceId}`, {
+    cache: "no-store",
+    headers: await getOperatorSessionHeaders(operatorRole)
+  });
+}
+
+export async function createCommercialSource(input: CreateCommercialSourceInput, operatorRole?: OperatorRole) {
+  return requestJson<CommercialSourceDetail>("/v1/commercial-sources", {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function importCommercialInventoryCsv(sourceId: string, input: ImportInventoryCsvInput, operatorRole?: OperatorRole) {
+  return requestJson<CommercialSourceDetail>(`/v1/commercial-sources/${sourceId}/inventory-import`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function listCommercialFactProposalsFromApi(operatorRole?: OperatorRole) {
+  const payload = await requestJson<{
+    proposals: CommercialFactProposal[];
+  }>("/v1/commercial-fact-proposals", {
+    cache: "no-store",
+    headers: await getOperatorSessionHeaders(operatorRole)
+  });
+
+  return payload.proposals;
+}
+
+export async function approveCommercialFactProposal(
+  proposalId: string,
+  input: ApproveCommercialFactProposalInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<CommercialFactProposal>(`/v1/commercial-fact-proposals/${proposalId}/approve`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function rejectCommercialFactProposal(
+  proposalId: string,
+  input: RejectCommercialFactProposalInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<CommercialFactProposal>(`/v1/commercial-fact-proposals/${proposalId}/reject`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function listActiveCommercialFactsFromApi(operatorRole?: OperatorRole) {
+  const payload = await requestJson<{
+    facts: CommercialFact[];
+  }>("/v1/commercial-facts/active", {
+    cache: "no-store",
+    headers: await getOperatorSessionHeaders(operatorRole)
+  });
+
+  return payload.facts;
+}
+
+export async function createManualCommercialFact(input: CreateManualCommercialFactInput, operatorRole?: OperatorRole) {
+  return requestJson<CommercialFact>("/v1/commercial-facts/manual", {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function getProjectCommercialReadinessFromApi(projectCode: string, operatorRole?: OperatorRole) {
+  return requestJson<ProjectCommercialReadinessSummary>(`/v1/projects/${encodeURIComponent(projectCode)}/commercial-readiness`, {
+    cache: "no-store",
+    headers: await getOperatorSessionHeaders(operatorRole)
+  });
 }
 
 export async function getPersistedGovernanceSummaryFromApi(operatorRole?: OperatorRole) {
@@ -213,6 +318,46 @@ export async function tryListPersistedCases() {
     return await listPersistedCasesFromApi();
   } catch {
     return [];
+  }
+}
+
+export async function tryListCommercialSources(operatorRole?: OperatorRole) {
+  try {
+    return await listCommercialSourcesFromApi(operatorRole);
+  } catch {
+    return [];
+  }
+}
+
+export async function tryGetCommercialSourceDetail(sourceId: string, operatorRole?: OperatorRole) {
+  try {
+    return await getCommercialSourceDetailFromApi(sourceId, operatorRole);
+  } catch {
+    return null;
+  }
+}
+
+export async function tryListCommercialFactProposals(operatorRole?: OperatorRole) {
+  try {
+    return await listCommercialFactProposalsFromApi(operatorRole);
+  } catch {
+    return [];
+  }
+}
+
+export async function tryListActiveCommercialFacts(operatorRole?: OperatorRole) {
+  try {
+    return await listActiveCommercialFactsFromApi(operatorRole);
+  } catch {
+    return [];
+  }
+}
+
+export async function tryGetProjectCommercialReadiness(projectCode: string, operatorRole?: OperatorRole) {
+  try {
+    return await getProjectCommercialReadinessFromApi(projectCode, operatorRole);
+  } catch {
+    return null;
   }
 }
 

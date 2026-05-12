@@ -296,7 +296,12 @@ export async function runCaseAgentEvalScenarios(): Promise<CaseAgentEvalResult[]
         const caseDetail = await store.getCaseDetail(createdCase.caseId);
 
         if (
-          caseDetail?.agentState?.latestRunStatus !== "completed" ||
+          caseDetail?.agentState?.latestRunStatus !== "escalated" ||
+          caseDetail.agentState.latestBlockedReason !== "commercial_facts_missing" ||
+          caseDetail.agentRuns?.[0]?.commercialFactGroundingStatus !== "missing_required_evidence" ||
+          !caseDetail.agentRuns[0]?.commercialFactRequiredKinds.includes("pricing") ||
+          !caseDetail.agentRuns[0]?.commercialFactRequiredKinds.includes("payment_plan") ||
+          !caseDetail.agentRuns[0]?.commercialFactRequiredKinds.includes("policy") ||
           caseDetail.agentMemory?.lastIntentCategory !== "pricing" ||
           caseDetail.agentMemory?.requestedNextStep !== "share_pricing" ||
           caseDetail.agentMemory?.objectionCategories.includes("trust")
@@ -304,7 +309,7 @@ export async function runCaseAgentEvalScenarios(): Promise<CaseAgentEvalResult[]
           throw new Error("pricing_intelligence_assertion_failed");
         }
 
-        return "Treats ordinary pricing questions as structured clarification work instead of escalating them as exceptions.";
+        return "Treats ordinary pricing questions as structured commercial work and blocks controlled replies until approved facts exist.";
       } finally {
         await store.close();
       }

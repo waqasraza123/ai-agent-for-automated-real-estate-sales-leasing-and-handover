@@ -1,7 +1,14 @@
 import { canOperatorRoleAccessWorkspace, type PersistedCaseDetail, type SupportedLocale } from "@real-estate-ai/contracts";
 
 import { ManagerWorkspaceUnavailable, RevenueManagerCommandCenter } from "@/components/manager-command-center";
-import { tryGetPersistedCaseDetail, tryGetPersistedGovernanceSummary, tryListPersistedCases } from "@/lib/live-api";
+import {
+  tryGetPersistedCaseDetail,
+  tryGetPersistedGovernanceSummary,
+  tryListActiveCommercialFacts,
+  tryListCommercialFactProposals,
+  tryListCommercialSources,
+  tryListPersistedCases
+} from "@/lib/live-api";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import {
   buildRevenueManagerBatchHistory,
@@ -27,7 +34,13 @@ export default async function RevenueManagerPage(props: PageProps) {
   }
 
   const filters = parseRevenueManagerFilters(rawSearchParams);
-  const [persistedCases, governanceReport] = await Promise.all([tryListPersistedCases(), tryGetPersistedGovernanceSummary()]);
+  const [persistedCases, governanceReport, commercialSources, commercialProposals, commercialFacts] = await Promise.all([
+    tryListPersistedCases(),
+    tryGetPersistedGovernanceSummary(),
+    tryListCommercialSources(currentOperatorRole),
+    tryListCommercialFactProposals(currentOperatorRole),
+    tryListActiveCommercialFacts(currentOperatorRole)
+  ]);
   const baseRevenueScope = buildRevenueManagerScope(persistedCases, filters);
   const batchCaseDetails =
     filters.bulkBatchId && baseRevenueScope.focusedCases.length > 0
@@ -56,6 +69,14 @@ export default async function RevenueManagerPage(props: PageProps) {
   return (
     <RevenueManagerCommandCenter
       batchHistory={batchHistory}
+      commercialReadiness={{
+        activeApprovedFactsCount: commercialFacts.filter((fact) => fact.freshnessStatus === "active" || fact.freshnessStatus === "expiring_soon").length,
+        blockedAgentRepliesCount: persistedCases.filter((caseItem) => caseItem.agentState?.latestBlockedReason === "commercial_facts_missing").length,
+        expiringSoonFactsCount: commercialFacts.filter((fact) => fact.freshnessStatus === "expiring_soon").length,
+        latestInventorySourceVersion: commercialSources.find((source) => source.sourceType === "inventory_csv")?.latestVersion?.versionLabel ?? null,
+        pendingApprovalsCount: commercialProposals.filter((proposal) => proposal.state === "pending_review").length,
+        staleFactsCount: commercialFacts.filter((fact) => fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired").length
+      }}
       currentOperatorRole={currentOperatorRole}
       driftedBatchCaseIds={driftedBatchCaseIds}
       filters={filters}
