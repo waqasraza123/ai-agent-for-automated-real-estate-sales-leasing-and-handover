@@ -778,9 +778,16 @@ export function buildApiApp(dependencies: {
       return reply.status(200).send(caseDetail);
     } catch (error) {
       if (error instanceof WorkflowRuleError) {
-        return reply.status(409).send({
-          error: error.code
-        });
+        return reply.status(409).send(
+          error.details
+            ? {
+                details: error.details,
+                error: error.code
+              }
+            : {
+                error: error.code
+              }
+        );
       }
 
       throw error;

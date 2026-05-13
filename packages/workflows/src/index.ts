@@ -94,10 +94,12 @@ import type { HandoverCaseStatus } from "@real-estate-ai/contracts";
 
 export class WorkflowRuleError extends Error {
   code: string;
+  details: unknown;
 
-  constructor(code: string) {
+  constructor(code: string, details?: unknown) {
     super(code);
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -645,6 +647,14 @@ export async function preparePersistedCaseReplyDraftQaReview(
 
   if (!commercialFactPreview) {
     return null;
+  }
+
+  if (commercialFactPreview.status === "missing_required_evidence") {
+    throw new WorkflowRuleError("reply_draft_missing_commercial_evidence", {
+      checkedAt: commercialFactPreview.checkedAt,
+      requiredKinds: commercialFactPreview.requiredKinds,
+      warnings: commercialFactPreview.warnings
+    });
   }
 
   return store.prepareCaseReplyDraftQaReview(caseId, {

@@ -644,6 +644,30 @@ export async function prepareCaseReplyDraftQaReviewAction(_: FormActionState, fo
     };
   } catch (error) {
     if (error instanceof WebApiError && error.status === 409) {
+      const errorCode =
+        typeof error.body === "object" && error.body !== null && "error" in error.body && typeof error.body.error === "string"
+          ? error.body.error
+          : null;
+
+      if (errorCode === "reply_draft_missing_commercial_evidence") {
+        const details =
+          typeof error.body === "object" && error.body !== null && "details" in error.body && typeof error.body.details === "object"
+            ? error.body.details
+            : null;
+        const warnings =
+          details !== null && "warnings" in details && Array.isArray(details.warnings)
+            ? details.warnings.filter((warning): warning is string => typeof warning === "string")
+            : [];
+
+        return {
+          message:
+            locale === "ar"
+              ? `لا يمكن إرسال مسودة الرد إلى الجودة قبل اعتماد الأدلة التجارية المطلوبة.${warnings.length > 0 ? ` ${warnings.join("، ")}` : ""}`
+              : `The reply draft cannot enter QA until the required commercial evidence is approved.${warnings.length > 0 ? ` ${warnings.join(", ")}` : ""}`,
+          status: "error"
+        };
+      }
+
       return {
         message:
           locale === "ar"

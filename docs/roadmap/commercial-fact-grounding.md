@@ -121,6 +121,17 @@ Prepared customer-reply QA records now persist the commercial evidence snapshot 
 - The sales conversation surface shows the same snapshot on the current reply-draft state so managers can confirm what evidence will travel with the QA gate.
 - The snapshot is intentionally immutable review context. It helps reviewers inspect the exact source facts used when the draft entered QA without re-running preview against a later source-store state.
 
+## Missing-Evidence Submit Policy
+
+Prepared reply drafts now fail closed before QA when they make commercial commitments that cannot be grounded.
+
+- Draft preparation always runs commercial grounding before creating the QA record.
+- Drafts with `missing_required_evidence` do not create a `case_qa_reviews` row.
+- The API returns a specific `reply_draft_missing_commercial_evidence` conflict with the checked timestamp, required fact kinds, and missing-evidence warnings.
+- The web action renders a localized blocking message and preserves the existing preview panel as the operator path for diagnosing what needs source approval.
+- The draft request form now states the rule directly: commercial promises must be backed by approved facts before the draft can enter QA.
+- This keeps QA from becoming a workaround around missing source governance. Operators must add, renew, or approve the relevant commercial facts before asking QA to approve customer-facing wording.
+
 ## API Boundaries
 
 The source center is exposed only through trusted manager-session routes.

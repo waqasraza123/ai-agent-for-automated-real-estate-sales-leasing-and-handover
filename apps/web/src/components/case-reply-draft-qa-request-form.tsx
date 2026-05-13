@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import type { SupportedLocale } from "@real-estate-ai/contracts";
 import {
+  caseMetaClassName,
   cx,
   fieldGridClassName,
   fieldLabelClassName,
@@ -57,6 +58,11 @@ export function CaseReplyDraftQaRequestForm(props: {
             required
             rows={5}
           />
+          <span className={caseMetaClassName}>
+            {props.locale === "ar"
+              ? "يجب أن تكون أي وعود تجارية في المسودة مدعومة بحقائق معتمدة قبل دخولها اعتماد الجودة."
+              : "Any commercial promises in this draft must be backed by approved facts before it can enter QA."}
+          </span>
         </label>
       </div>
 
