@@ -32,6 +32,7 @@ import type {
   DocumentUploadAnalysisStatus,
   ImportInventoryCsvInput,
   ListActiveCommercialFactsQuery,
+  ListCommercialFactExpiryReviewsQuery,
   ListCommercialFactProposalsQuery,
   ListGovernanceEventsQuery,
   ManageBulkCaseFollowUpInput,
@@ -49,6 +50,7 @@ import type {
   PersistedGovernanceSummary,
   PersistedHandoverCaseDetail,
   ProjectCommercialReadinessSummary,
+  ReviewCommercialFactExpiryInput,
   SupportedLocale,
   QualifyCaseInput,
   ResolveCaseQaReviewInput,
@@ -66,6 +68,8 @@ import type {
   UpdateHandoverBlockerInput,
   UpdateDocumentRequestInput,
   HandoverCustomerUpdateQaReviewStatus,
+  BulkApproveCommercialFactProposalsInput,
+  BulkRejectCommercialFactProposalsInput,
   UpdateHandoverMilestoneInput,
   UpdateHandoverTaskStatusInput
 } from "@real-estate-ai/contracts";
@@ -138,6 +142,13 @@ export async function approvePersistedCommercialFactProposal(
   return store.approveCommercialFactProposal(proposalId, input);
 }
 
+export async function bulkApprovePersistedCommercialFactProposals(
+  store: LeadCaptureStore,
+  input: BulkApproveCommercialFactProposalsInput
+) {
+  return store.bulkApproveCommercialFactProposals(input);
+}
+
 export async function rejectPersistedCommercialFactProposal(
   store: LeadCaptureStore,
   proposalId: string,
@@ -146,11 +157,33 @@ export async function rejectPersistedCommercialFactProposal(
   return store.rejectCommercialFactProposal(proposalId, input);
 }
 
+export async function bulkRejectPersistedCommercialFactProposals(
+  store: LeadCaptureStore,
+  input: BulkRejectCommercialFactProposalsInput
+) {
+  return store.bulkRejectCommercialFactProposals(input);
+}
+
 export async function listPersistedActiveCommercialFacts(
   store: LeadCaptureStore,
   input: Partial<ListActiveCommercialFactsQuery> & { now?: string }
 ) {
   return store.listActiveCommercialFacts(input);
+}
+
+export async function listPersistedCommercialFactExpiryReviews(
+  store: LeadCaptureStore,
+  input: ListCommercialFactExpiryReviewsQuery
+) {
+  return store.listCommercialFactExpiryReviews(input);
+}
+
+export async function reviewPersistedCommercialFactExpiry(
+  store: LeadCaptureStore,
+  factId: string,
+  input: ReviewCommercialFactExpiryInput
+) {
+  return store.reviewCommercialFactExpiry(factId, input);
 }
 
 export async function getPersistedProjectCommercialReadinessSummary(

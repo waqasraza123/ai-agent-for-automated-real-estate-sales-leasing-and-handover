@@ -3,7 +3,11 @@ import { cookies } from "next/headers";
 import type {
   ApproveHandoverCustomerUpdateInput,
   ApproveCommercialFactProposalInput,
+  BulkApproveCommercialFactProposalsInput,
+  BulkRejectCommercialFactProposalsInput,
   CommercialFact,
+  CommercialFactExpiryReview,
+  CommercialFactProposalBulkDecisionResult,
   CommercialFactProposal,
   CommercialSourceDetail,
   CommercialSourceSummary,
@@ -33,6 +37,7 @@ import type {
   ProjectCommercialReadinessSummary,
   QualifyCaseInput,
   RejectCommercialFactProposalInput,
+  ReviewCommercialFactExpiryInput,
   RequestCaseQaReviewInput,
   ResolveCaseQaReviewInput,
   ResolveHandoverCustomerUpdateQaReviewInput,
@@ -166,12 +171,34 @@ export async function approveCommercialFactProposal(
   });
 }
 
+export async function bulkApproveCommercialFactProposals(
+  input: BulkApproveCommercialFactProposalsInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<CommercialFactProposalBulkDecisionResult>("/v1/commercial-fact-proposals/bulk-approve", {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
 export async function rejectCommercialFactProposal(
   proposalId: string,
   input: RejectCommercialFactProposalInput,
   operatorRole?: OperatorRole
 ) {
   return requestJson<CommercialFactProposal>(`/v1/commercial-fact-proposals/${proposalId}/reject`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function bulkRejectCommercialFactProposals(
+  input: BulkRejectCommercialFactProposalsInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<CommercialFactProposalBulkDecisionResult>("/v1/commercial-fact-proposals/bulk-reject", {
     headers: await getOperatorSessionHeaders(operatorRole),
     method: "POST",
     payload: input
@@ -187,6 +214,29 @@ export async function listActiveCommercialFactsFromApi(operatorRole?: OperatorRo
   });
 
   return payload.facts;
+}
+
+export async function listCommercialFactExpiryReviewsFromApi(operatorRole?: OperatorRole) {
+  const payload = await requestJson<{
+    reviews: CommercialFactExpiryReview[];
+  }>("/v1/commercial-facts/expiry-reviews", {
+    cache: "no-store",
+    headers: await getOperatorSessionHeaders(operatorRole)
+  });
+
+  return payload.reviews;
+}
+
+export async function reviewCommercialFactExpiry(
+  factId: string,
+  input: ReviewCommercialFactExpiryInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<CommercialFactExpiryReview>(`/v1/commercial-facts/${factId}/expiry-review`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
 }
 
 export async function createManualCommercialFact(input: CreateManualCommercialFactInput, operatorRole?: OperatorRole) {
@@ -348,6 +398,14 @@ export async function tryListCommercialFactProposals(operatorRole?: OperatorRole
 export async function tryListActiveCommercialFacts(operatorRole?: OperatorRole) {
   try {
     return await listActiveCommercialFactsFromApi(operatorRole);
+  } catch {
+    return [];
+  }
+}
+
+export async function tryListCommercialFactExpiryReviews(operatorRole?: OperatorRole) {
+  try {
+    return await listCommercialFactExpiryReviewsFromApi(operatorRole);
   } catch {
     return [];
   }

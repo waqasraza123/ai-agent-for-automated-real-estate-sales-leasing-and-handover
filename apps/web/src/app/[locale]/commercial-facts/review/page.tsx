@@ -10,7 +10,7 @@ import {
   statusRowWrapClassName
 } from "@real-estate-ai/ui";
 
-import { ProposalDecisionForms } from "@/components/commercial-source-forms";
+import { BulkProposalDecisionForms, ProposalDecisionForms } from "@/components/commercial-source-forms";
 import { ScreenIntro } from "@/components/screen-intro";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import { tryListCommercialFactProposals } from "@/lib/live-api";
@@ -38,11 +38,19 @@ export default async function CommercialFactReviewPage(props: PageProps) {
       />
 
       <Panel title={locale === "ar" ? "بانتظار الاعتماد" : "Pending approval"}>
-        <WorkflowPanelBody className="mt-4">
+        <WorkflowPanelBody
+          className="mt-4"
+          summary={
+            locale === "ar"
+              ? "استخدم القرار الجماعي عندما تكون المقترحات من نفس نسخة المصدر وتشارك نفس تاريخ الصلاحية أو سبب الرفض."
+              : "Use bulk decisions when proposals come from the same source version and share the same expiry or rejection rationale."
+          }
+        >
           {pending.length === 0 ? (
             <EmptyState summary={locale === "ar" ? "لا توجد مقترحات معلقة." : "No proposals are pending."} title={locale === "ar" ? "لا يوجد انتظار" : "No pending work"} />
           ) : (
             <div className="grid gap-4">
+              <BulkProposalDecisionForms canManage={canManage} locale={locale} proposals={pending} returnPath={`/${locale}/commercial-facts/review`} />
               {pending.map((proposal) => (
                 <WorkflowListItem
                   key={proposal.proposalId}

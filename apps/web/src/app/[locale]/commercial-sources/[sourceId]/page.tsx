@@ -16,7 +16,7 @@ import {
   twoColumnGridClassName
 } from "@real-estate-ai/ui";
 
-import { InventoryImportForm, ProposalDecisionForms } from "@/components/commercial-source-forms";
+import { BulkProposalDecisionForms, CommercialFactExpiryReviewForm, InventoryImportForm, ProposalDecisionForms } from "@/components/commercial-source-forms";
 import { ScreenIntro } from "@/components/screen-intro";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import { tryGetCommercialSourceDetail } from "@/lib/live-api";
@@ -36,6 +36,11 @@ export default async function CommercialSourceDetailPage(props: PageProps) {
   if (!source) {
     notFound();
   }
+
+  const pendingProposals = source.proposals.filter((proposal) => proposal.state === "pending_review");
+  const activeFactsNeedingReview = source.activeFacts.filter(
+    (fact) => fact.freshnessStatus === "expiring_soon" || fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired"
+  );
 
   return (
     <div className={pageStackClassName}>
@@ -94,11 +99,23 @@ export default async function CommercialSourceDetailPage(props: PageProps) {
       </Panel>
 
       <Panel title={locale === "ar" ? "مقترحات الحقائق" : "Fact proposals"}>
-        <WorkflowPanelBody className="mt-4">
+        <WorkflowPanelBody
+          className="mt-4"
+          summary={
+            pendingProposals.length > 1
+              ? locale === "ar"
+                ? "يمكن اعتماد أو رفض مجموعة من المقترحات عندما تشارك نفس مصدر القرار."
+                : "Approve or reject multiple proposals when they share the same decision source."
+              : undefined
+          }
+        >
           {source.proposals.length === 0 ? (
             <EmptyState summary={locale === "ar" ? "لا توجد مقترحات بعد." : "No proposals yet."} title={locale === "ar" ? "لا توجد مقترحات" : "No proposals"} />
           ) : (
             <div className="grid gap-4">
+              {pendingProposals.length > 1 ? (
+                <BulkProposalDecisionForms canManage={canManage} locale={locale} proposals={pendingProposals} returnPath={`/${locale}/commercial-sources/${source.sourceId}`} />
+              ) : null}
               {source.proposals.map((proposal) => (
                 <WorkflowListItem
                   key={proposal.proposalId}
@@ -113,6 +130,47 @@ export default async function CommercialSourceDetailPage(props: PageProps) {
                   title={proposal.title}
                 >
                   <ProposalDecisionForms canManage={canManage} locale={locale} proposal={proposal} returnPath={`/${locale}/commercial-sources/${source.sourceId}`} />
+                </WorkflowListItem>
+              ))}
+            </div>
+          )}
+        </WorkflowPanelBody>
+      </Panel>
+
+      <Panel title={locale === "ar" ? "مراجعة الحقائق النشطة" : "Active fact review"}>
+        <WorkflowPanelBody
+          className="mt-4"
+          summary={
+            locale === "ar"
+              ? "راجع صلاحية الحقائق المرتبطة بهذا المصدر قبل استخدامها في ردود واتساب التجارية."
+              : "Review source-linked facts before they are used in commercial WhatsApp replies."
+          }
+        >
+          {source.activeFacts.length === 0 ? (
+            <EmptyState summary={locale === "ar" ? "لم يعتمد هذا المصدر أي حقائق بعد." : "This source has no approved facts yet."} title={locale === "ar" ? "لا توجد حقائق" : "No facts"} />
+          ) : (
+            <div className="grid gap-4">
+              {source.activeFacts.map((fact) => (
+                <WorkflowListItem
+                  key={fact.factId}
+                  badges={
+                    <div className={statusRowWrapClassName}>
+                      <StatusBadge tone={fact.freshnessStatus === "active" ? "success" : fact.freshnessStatus === "expiring_soon" ? "warning" : "critical"}>{fact.freshnessStatus}</StatusBadge>
+                      <StatusBadge>{fact.kind}</StatusBadge>
+                      <StatusBadge>{fact.locale}</StatusBadge>
+                    </div>
+                  }
+                  meta={
+                    <p className={caseMetaClassName}>
+                      {locale === "ar" ? "تنتهي:" : "Expires:"} {fact.expiresAt ?? "-"}
+                    </p>
+                  }
+                  summary={fact.content}
+                  title={fact.title}
+                >
+                  {activeFactsNeedingReview.some((item) => item.factId === fact.factId) ? (
+                    <CommercialFactExpiryReviewForm canManage={canManage} fact={fact} locale={locale} returnPath={`/${locale}/commercial-sources/${source.sourceId}`} />
+                  ) : null}
                 </WorkflowListItem>
               ))}
             </div>

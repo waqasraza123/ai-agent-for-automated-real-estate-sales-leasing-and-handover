@@ -10,7 +10,9 @@ import {
   Panel,
   StatusBadge,
   WorkflowCard,
+  WorkflowListItem,
   WorkflowPanelBody,
+  caseMetaClassName,
   inlineLinkClassName,
   metricGridClassName,
   pageStackClassName,
@@ -18,10 +20,10 @@ import {
   twoColumnGridClassName
 } from "@real-estate-ai/ui";
 
-import { CommercialSourceCreateForm, ManualCommercialFactForm } from "@/components/commercial-source-forms";
+import { CommercialFactExpiryReviewForm, CommercialSourceCreateForm, ManualCommercialFactForm } from "@/components/commercial-source-forms";
 import { ScreenIntro } from "@/components/screen-intro";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
-import { tryListActiveCommercialFacts, tryListCommercialFactProposals, tryListCommercialSources } from "@/lib/live-api";
+import { tryListActiveCommercialFacts, tryListCommercialFactExpiryReviews, tryListCommercialFactProposals, tryListCommercialSources } from "@/lib/live-api";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +36,15 @@ export default async function CommercialSourcesPage(props: PageProps) {
   const messages = getMessages(locale);
   const role = await getCurrentOperatorRole();
   const canManage = canOperatorRolePerform("manage_commercial_sources", role);
-  const [sources, proposals, facts] = await Promise.all([
+  const [sources, proposals, facts, expiryReviews] = await Promise.all([
     tryListCommercialSources(role),
     tryListCommercialFactProposals(role),
-    tryListActiveCommercialFacts(role)
+    tryListActiveCommercialFacts(role),
+    tryListCommercialFactExpiryReviews(role)
   ]);
   const staleFacts = facts.filter((fact) => fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired");
   const expiringFacts = facts.filter((fact) => fact.freshnessStatus === "expiring_soon");
+  const factsNeedingReview = [...expiringFacts, ...staleFacts].slice(0, 12);
 
   return (
     <div className={pageStackClassName}>
@@ -75,6 +79,48 @@ export default async function CommercialSourcesPage(props: PageProps) {
         </Panel>
       </div>
 
+      <Panel title={locale === "ar" ? "مراجعة الصلاحية" : "Expiry review"}>
+        <WorkflowPanelBody
+          className="mt-4"
+          summary={
+            locale === "ar"
+              ? "راجع الحقائق التي اقتربت من الانتهاء أو أصبحت قديمة قبل أن تتسبب في إيقاف الردود التجارية."
+              : "Review facts that are expiring or stale before they start blocking commercial replies."
+          }
+        >
+          {factsNeedingReview.length === 0 ? (
+            <EmptyState
+              summary={locale === "ar" ? "كل الحقائق النشطة ضمن نافذة صلاحية مقبولة." : "All active facts are inside an acceptable freshness window."}
+              title={locale === "ar" ? "لا توجد مراجعة مطلوبة" : "No review required"}
+            />
+          ) : (
+            <div className="grid gap-4">
+              {factsNeedingReview.map((fact) => (
+                <WorkflowListItem
+                  key={fact.factId}
+                  badges={
+                    <div className={statusRowWrapClassName}>
+                      <StatusBadge tone={fact.freshnessStatus === "expiring_soon" ? "warning" : "critical"}>{fact.freshnessStatus}</StatusBadge>
+                      <StatusBadge>{fact.kind}</StatusBadge>
+                      <StatusBadge>{fact.locale}</StatusBadge>
+                    </div>
+                  }
+                  meta={
+                    <p className={caseMetaClassName}>
+                      {locale === "ar" ? "تنتهي:" : "Expires:"} {fact.expiresAt ?? "-"}
+                    </p>
+                  }
+                  summary={fact.content}
+                  title={fact.title}
+                >
+                  <CommercialFactExpiryReviewForm canManage={canManage} fact={fact} locale={locale} returnPath={`/${locale}/commercial-sources`} />
+                </WorkflowListItem>
+              ))}
+            </div>
+          )}
+        </WorkflowPanelBody>
+      </Panel>
+
       <Panel title={locale === "ar" ? "المصادر" : "Sources"}>
         <WorkflowPanelBody className="mt-4">
           {sources.length === 0 ? (
@@ -105,6 +151,34 @@ export default async function CommercialSourcesPage(props: PageProps) {
                   <Link className={inlineLinkClassName} href={`/${locale}/commercial-sources/${source.sourceId}`}>
                     {locale === "ar" ? "فتح المصدر" : "Open source"}
                   </Link>
+                </WorkflowCard>
+              ))}
+            </div>
+          )}
+        </WorkflowPanelBody>
+      </Panel>
+
+      <Panel title={locale === "ar" ? "سجل مراجعات الصلاحية" : "Expiry review history"}>
+        <WorkflowPanelBody className="mt-4">
+          {expiryReviews.length === 0 ? (
+            <EmptyState
+              summary={locale === "ar" ? "ستظهر قرارات التجديد والأرشفة هنا." : "Renewal and archive decisions will appear here."}
+              title={locale === "ar" ? "لا توجد مراجعات" : "No reviews"}
+            />
+          ) : (
+            <div className="grid gap-4">
+              {expiryReviews.slice(0, 12).map((review) => (
+                <WorkflowCard
+                  key={review.reviewId}
+                  badges={<StatusBadge tone={review.outcome === "renewed" ? "success" : review.outcome === "archived" ? "critical" : "warning"}>{review.outcome}</StatusBadge>}
+                  summary={review.summary}
+                  title={review.fact?.title ?? review.factId}
+                >
+                  <DetailGrid>
+                    <DetailItem label={locale === "ar" ? "المراجع" : "Reviewer"} value={review.reviewedByName ?? "-"} />
+                    <DetailItem label={locale === "ar" ? "المشروع" : "Project"} value={review.fact?.projectCode ?? "-"} />
+                    <DetailItem label={locale === "ar" ? "تاريخ القرار" : "Decision time"} value={review.createdAt} />
+                  </DetailGrid>
                 </WorkflowCard>
               ))}
             </div>

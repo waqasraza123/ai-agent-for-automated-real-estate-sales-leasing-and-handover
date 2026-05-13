@@ -3,6 +3,8 @@ import Fastify from "fastify";
 import {
   approveHandoverCustomerUpdateInputSchema,
   approveCommercialFactProposalInputSchema,
+  bulkApproveCommercialFactProposalsInputSchema,
+  bulkRejectCommercialFactProposalsInputSchema,
   completeHandoverInputSchema,
   confirmHandoverAppointmentInputSchema,
   createCommercialSourceInputSchema,
@@ -13,12 +15,14 @@ import {
   createWebsiteLeadInputSchema,
   importInventoryCsvInputSchema,
   listActiveCommercialFactsQuerySchema,
+  listCommercialFactExpiryReviewsQuerySchema,
   listCommercialFactProposalsQuerySchema,
   listGovernanceEventsQuerySchema,
   manageBulkCaseFollowUpInputSchema,
   prepareCaseReplyDraftQaReviewInputSchema,
   requestCaseQaReviewInputSchema,
   rejectCommercialFactProposalInputSchema,
+  reviewCommercialFactExpiryInputSchema,
   resolveCaseQaReviewInputSchema,
   resolveHandoverCustomerUpdateQaReviewInputSchema,
   sendCaseReplyInputSchema,
@@ -48,6 +52,8 @@ import {
 import {
   approvePersistedHandoverCustomerUpdate,
   approvePersistedCommercialFactProposal,
+  bulkApprovePersistedCommercialFactProposals,
+  bulkRejectPersistedCommercialFactProposals,
   completePersistedHandover,
   confirmPersistedHandoverAppointment,
   createPersistedCommercialSource,
@@ -59,12 +65,14 @@ import {
   getPersistedProjectCommercialReadinessSummary,
   importPersistedInventoryCsv,
   listPersistedActiveCommercialFacts,
+  listPersistedCommercialFactExpiryReviews,
   listPersistedCommercialFactProposals,
   listPersistedCommercialSources,
   resolvePersistedCaseQaReview,
   resolvePersistedHandoverPostCompletionFollowUp,
   requestPersistedCaseQaReview,
   rejectPersistedCommercialFactProposal,
+  reviewPersistedCommercialFactExpiry,
   resolvePersistedHandoverCustomerUpdateQaReview,
   sendPersistedCaseReply,
   savePersistedHandoverArchiveReview,
@@ -402,6 +410,25 @@ export function buildApiApp(dependencies: {
     return proposal;
   });
 
+  app.post("/v1/commercial-fact-proposals/bulk-approve", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = bulkApproveCommercialFactProposalsInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    return bulkApprovePersistedCommercialFactProposals(dependencies.store, result.data);
+  });
+
   app.post<{
     Params: {
       proposalId: string;
@@ -431,6 +458,25 @@ export function buildApiApp(dependencies: {
     }
 
     return proposal;
+  });
+
+  app.post("/v1/commercial-fact-proposals/bulk-reject", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = bulkRejectCommercialFactProposalsInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    return bulkRejectPersistedCommercialFactProposals(dependencies.store, result.data);
   });
 
   app.get("/v1/commercial-facts/active", async (request, reply) => {
@@ -471,6 +517,56 @@ export function buildApiApp(dependencies: {
     return {
       facts: facts.filter((fact) => fact.freshnessStatus === "expiring_soon" || fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired")
     };
+  });
+
+  app.get("/v1/commercial-facts/expiry-reviews", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["manager_revenue"])) {
+      return reply;
+    }
+
+    const result = listCommercialFactExpiryReviewsQuerySchema.safeParse(request.query);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    return {
+      reviews: await listPersistedCommercialFactExpiryReviews(dependencies.store, result.data)
+    };
+  });
+
+  app.post<{
+    Params: {
+      factId: string;
+    };
+  }>("/v1/commercial-facts/:factId/expiry-review", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = reviewCommercialFactExpiryInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const review = await reviewPersistedCommercialFactExpiry(dependencies.store, request.params.factId, result.data);
+
+    if (!review) {
+      return reply.status(404).send({
+        error: "commercial_fact_not_found"
+      });
+    }
+
+    return review;
   });
 
   app.get<{

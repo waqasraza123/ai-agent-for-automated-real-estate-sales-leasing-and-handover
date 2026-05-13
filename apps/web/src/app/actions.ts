@@ -9,6 +9,8 @@ import {
   operatorRoleSchema,
   approveHandoverCustomerUpdateInputSchema,
   approveCommercialFactProposalInputSchema,
+  bulkApproveCommercialFactProposalsInputSchema,
+  bulkRejectCommercialFactProposalsInputSchema,
   completeHandoverInputSchema,
   confirmHandoverAppointmentInputSchema,
   createCommercialSourceInputSchema,
@@ -27,6 +29,7 @@ import {
   qualifyCaseInputSchema,
   requestCaseQaReviewInputSchema,
   rejectCommercialFactProposalInputSchema,
+  reviewCommercialFactExpiryInputSchema,
   resolveCaseQaReviewInputSchema,
   resolveHandoverCustomerUpdateQaReviewInputSchema,
   resolveHandoverPostCompletionFollowUpInputSchema,
@@ -57,6 +60,8 @@ import {
   WebApiError,
   approveCommercialFactProposal,
   approveHandoverCustomerUpdate,
+  bulkApproveCommercialFactProposals,
+  bulkRejectCommercialFactProposals,
   completeHandover,
   confirmHandoverAppointment,
   createCommercialSource,
@@ -75,6 +80,7 @@ import {
   qualifyCase,
   requestCaseQaReview,
   rejectCommercialFactProposal,
+  reviewCommercialFactExpiry,
   resolveCaseQaReview,
   resolveHandoverCustomerUpdateQaReview,
   resolveHandoverPostCompletionFollowUp,
@@ -211,6 +217,37 @@ export async function approveCommercialFactProposalAction(_: FormActionState, fo
   }
 }
 
+export async function bulkApproveCommercialFactProposalsAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+  const result = bulkApproveCommercialFactProposalsInputSchema.safeParse({
+    approvedByName: normalizeOptionalString(formData.get("approvedByName")),
+    expiresAt: normalizeOptionalDateTime(formData.get("expiresAt")),
+    proposalIds: formData.getAll("proposalIds")
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    const output = await bulkApproveCommercialFactProposals(result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    revalidatePath(`/${locale}/commercial-sources`);
+    revalidatePath(`/${locale}/inventory`);
+
+    return {
+      message:
+        locale === "ar"
+          ? `تم اعتماد ${output.updatedCount} من ${output.requestedCount} مقترحات.`
+          : `Approved ${output.updatedCount} of ${output.requestedCount} proposals.`,
+      status: output.failedProposalIds.length > 0 ? "error" : "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
 export async function rejectCommercialFactProposalAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
   const locale = getLocale(formData.get("locale"));
   const proposalId = formData.get("proposalId");
@@ -235,6 +272,36 @@ export async function rejectCommercialFactProposalAction(_: FormActionState, for
     return {
       message: locale === "ar" ? "تم رفض المقترح مع حفظ السبب." : "Proposal rejected with the reason saved.",
       status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function bulkRejectCommercialFactProposalsAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+  const result = bulkRejectCommercialFactProposalsInputSchema.safeParse({
+    proposalIds: formData.getAll("proposalIds"),
+    rejectedByName: normalizeOptionalString(formData.get("rejectedByName")),
+    rejectionReason: formData.get("rejectionReason")
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    const output = await bulkRejectCommercialFactProposals(result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    revalidatePath(`/${locale}/commercial-sources`);
+
+    return {
+      message:
+        locale === "ar"
+          ? `تم رفض ${output.updatedCount} من ${output.requestedCount} مقترحات.`
+          : `Rejected ${output.updatedCount} of ${output.requestedCount} proposals.`,
+      status: output.failedProposalIds.length > 0 ? "error" : "success"
     };
   } catch (error) {
     return getActionError(locale, error);
@@ -267,6 +334,39 @@ export async function createManualCommercialFactAction(_: FormActionState, formD
     revalidatePath(`/${locale}/commercial-sources`);
     return {
       message: locale === "ar" ? "تم إنشاء الحقيقة التجارية اليدوية." : "Manual commercial fact created.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function reviewCommercialFactExpiryAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const factId = formData.get("factId");
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+  const result = reviewCommercialFactExpiryInputSchema.safeParse({
+    nextExpiresAt: normalizeOptionalDateTime(formData.get("nextExpiresAt")),
+    outcome: formData.get("outcome"),
+    reviewedByName: normalizeOptionalString(formData.get("reviewedByName")),
+    summary: formData.get("summary")
+  });
+
+  if (typeof factId !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    await reviewCommercialFactExpiry(factId, result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    revalidatePath(`/${locale}/commercial-sources`);
+    revalidatePath(`/${locale}/commercial-facts/review`);
+    return {
+      message: locale === "ar" ? "تم حفظ مراجعة صلاحية الحقيقة التجارية." : "Commercial fact expiry review saved.",
       status: "success"
     };
   } catch (error) {
