@@ -639,7 +639,22 @@ export async function preparePersistedCaseReplyDraftQaReview(
     throw new WorkflowRuleError("qa_review_already_pending");
   }
 
-  return store.prepareCaseReplyDraftQaReview(caseId, input);
+  const commercialFactPreview = await previewPersistedCaseReplyGrounding(store, caseId, {
+    draftMessage: input.draftMessage
+  });
+
+  if (!commercialFactPreview) {
+    return null;
+  }
+
+  return store.prepareCaseReplyDraftQaReview(caseId, {
+    ...input,
+    commercialFactCheckedAt: commercialFactPreview.checkedAt,
+    commercialFactGroundingStatus: commercialFactPreview.status,
+    commercialFactReferences: commercialFactPreview.references,
+    commercialFactRequiredKinds: commercialFactPreview.requiredKinds,
+    commercialFactWarnings: commercialFactPreview.warnings
+  });
 }
 
 export async function previewPersistedCaseReplyGrounding(

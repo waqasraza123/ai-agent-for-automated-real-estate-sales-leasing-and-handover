@@ -106,6 +106,21 @@ Managers can now inspect the commercial evidence behind a proposed customer repl
 - The preview supports both manager-prepared QA drafts and direct human replies, but it does not replace QA approval, send guardrails, or policy escalation.
 - Missing evidence should drive the operator back to the Commercial Source Control Center instead of encouraging unsupported customer promises.
 
+## Prepared Reply QA Evidence Carryover
+
+Prepared customer-reply QA records now persist the commercial evidence snapshot captured at draft-preparation time.
+
+- Preparing a reply draft for QA runs the same grounding inference as the preview endpoint.
+- `case_qa_reviews` now stores:
+  - `commercial_fact_checked_at`
+  - `commercial_fact_grounding_status`
+  - `commercial_fact_required_kinds`
+  - `commercial_fact_references`
+  - `commercial_fact_warnings`
+- The QA case surface renders the persisted grounding status, checked timestamp, required fact kinds, missing-evidence notes, and approved source references.
+- The sales conversation surface shows the same snapshot on the current reply-draft state so managers can confirm what evidence will travel with the QA gate.
+- The snapshot is intentionally immutable review context. It helps reviewers inspect the exact source facts used when the draft entered QA without re-running preview against a later source-store state.
+
 ## API Boundaries
 
 The source center is exposed only through trusted manager-session routes.

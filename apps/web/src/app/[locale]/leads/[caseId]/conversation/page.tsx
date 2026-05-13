@@ -93,6 +93,11 @@ export default async function ConversationPage(props: PageProps) {
     const currentReplyDraft =
       qaReviewDisplay?.subjectType === "prepared_reply_draft"
         ? {
+            commercialFactCheckedAt: qaReviewDisplay.commercialFactCheckedAt,
+            commercialFactGroundingLabel: qaReviewDisplay.commercialFactGroundingLabel,
+            commercialFactGroundingNote: qaReviewDisplay.commercialFactGroundingNote,
+            commercialFactReferences: qaReviewDisplay.commercialFactReferences,
+            commercialFactRequiredKinds: qaReviewDisplay.commercialFactRequiredKinds,
             draftMessage: qaReviewDisplay.draftMessage,
             reviewSummary: qaReviewDisplay.reviewSummary,
             sampleSummary: qaReviewDisplay.sampleSummary,
@@ -275,6 +280,29 @@ export default async function ConversationPage(props: PageProps) {
                 >
                   <p className="text-sm leading-7 text-ink-soft">{currentReplyDraft.draftMessage}</p>
                   {currentReplyDraft.triggerEvidence.length > 0 ? <p className={caseMetaClassName}>{currentReplyDraft.triggerEvidence.join(", ")}</p> : null}
+                  <div className="grid gap-2 text-sm leading-7 text-ink-soft">
+                    <p>
+                      {locale === "ar" ? "تأريض الحقائق التجارية: " : "Commercial fact grounding: "}
+                      {currentReplyDraft.commercialFactGroundingLabel}
+                      {currentReplyDraft.commercialFactCheckedAt ? ` · ${currentReplyDraft.commercialFactCheckedAt}` : ""}
+                    </p>
+                    {currentReplyDraft.commercialFactRequiredKinds.length > 0 ? (
+                      <p>
+                        {locale === "ar" ? "أنواع الحقائق المطلوبة: " : "Required fact kinds: "}
+                        {currentReplyDraft.commercialFactRequiredKinds.join(locale === "ar" ? "، " : ", ")}
+                      </p>
+                    ) : null}
+                    <p>{currentReplyDraft.commercialFactGroundingNote}</p>
+                    {currentReplyDraft.commercialFactReferences.length > 0 ? (
+                      <ul className="grid gap-1">
+                        {currentReplyDraft.commercialFactReferences.map((reference) => (
+                          <li key={reference.factId}>
+                            {reference.title} · {reference.sourceLabel}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                 </ReviewSummaryCard>
               </WorkflowPanelBody>
             ) : (

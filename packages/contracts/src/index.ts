@@ -550,6 +550,11 @@ export const persistedManagerInterventionSchema = z.object({
 });
 
 export const persistedCaseQaReviewSchema = z.object({
+  commercialFactCheckedAt: z.iso.datetime().nullable(),
+  commercialFactGroundingStatus: commercialFactGroundingStatusSchema,
+  commercialFactReferences: z.array(z.lazy(() => persistedCommercialFactReferenceSchema)),
+  commercialFactRequiredKinds: z.array(commercialFactKindSchema),
+  commercialFactWarnings: z.array(z.string()),
   createdAt: z.iso.datetime(),
   draftMessage: z.string().nullable(),
   policySignals: z.array(caseQaPolicySignalSchema),

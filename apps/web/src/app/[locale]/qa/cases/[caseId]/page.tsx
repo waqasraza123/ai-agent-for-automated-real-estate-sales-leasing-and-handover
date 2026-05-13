@@ -143,6 +143,49 @@ export default async function QaCaseDetailPage(props: PageProps) {
                         label: locale === "ar" ? "الأدلة المطابقة" : "Matched evidence",
                         value: currentQaReview.triggerEvidence.length > 0 ? currentQaReview.triggerEvidence.join(", ") : "—"
                       },
+                      ...(currentQaReview.subjectType === "prepared_reply_draft"
+                        ? [
+                            {
+                              label: locale === "ar" ? "تأريض الحقائق التجارية" : "Commercial fact grounding",
+                              value: currentQaReview.commercialFactGroundingLabel
+                            },
+                            {
+                              label: locale === "ar" ? "تم الفحص" : "Checked at",
+                              value: currentQaReview.commercialFactCheckedAt ?? "—"
+                            },
+                            {
+                              label: locale === "ar" ? "أنواع الحقائق المطلوبة" : "Required fact kinds",
+                              value:
+                                currentQaReview.commercialFactRequiredKinds.length > 0
+                                  ? currentQaReview.commercialFactRequiredKinds.join(locale === "ar" ? "، " : ", ")
+                                  : "—"
+                            },
+                            {
+                              label: locale === "ar" ? "ملاحظات التأريض" : "Grounding note",
+                              value: currentQaReview.commercialFactGroundingNote,
+                              valueClassName: currentQaReview.commercialFactWarnings.length > 0 ? "text-danger-700" : undefined
+                            },
+                            {
+                              label: locale === "ar" ? "حقائق المصدر المعتمدة" : "Approved source facts",
+                              value:
+                                currentQaReview.commercialFactReferences.length > 0 ? (
+                                  <div className="grid gap-2">
+                                    {currentQaReview.commercialFactReferences.map((reference) => (
+                                      <div key={reference.factId} className="grid gap-1">
+                                        <span className="font-semibold text-ink">{reference.title}</span>
+                                        <span>
+                                          {reference.kind} · {reference.sourceLabel}
+                                          {reference.sourceReference ? ` · ${reference.sourceReference}` : ""}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  "—"
+                                )
+                            }
+                          ]
+                        : []),
                       { label: locale === "ar" ? "آخر تحديث" : "Last updated", value: currentQaReview.updatedAt },
                       { label: locale === "ar" ? "قرار المراجع" : "Reviewer decision", value: currentQaReview.reviewSummary ?? "—" }
                     ]}
@@ -217,6 +260,12 @@ export default async function QaCaseDetailPage(props: PageProps) {
                       tone={currentQaReview.statusTone}
                     >
                       {currentQaReview.draftMessage ? <p className="text-sm leading-7 text-ink-soft">{currentQaReview.draftMessage}</p> : null}
+                      {currentQaReview.subjectType === "prepared_reply_draft" ? (
+                        <p className={caseMetaClassName}>
+                          {currentQaReview.commercialFactGroundingLabel}
+                          {currentQaReview.commercialFactCheckedAt ? ` · ${currentQaReview.commercialFactCheckedAt}` : ""}
+                        </p>
+                      ) : null}
                     </ReviewSummaryCard>
                   )
                 ) : null}
@@ -299,6 +348,12 @@ export default async function QaCaseDetailPage(props: PageProps) {
                 tone={qaReview.statusTone}
               >
                 {qaReview.draftMessage ? <p className="text-sm leading-7 text-ink-soft">{qaReview.draftMessage}</p> : null}
+                {qaReview.subjectType === "prepared_reply_draft" ? (
+                  <p className={caseMetaClassName}>
+                    {qaReview.commercialFactGroundingLabel}
+                    {qaReview.commercialFactCheckedAt ? ` · ${qaReview.commercialFactCheckedAt}` : ""}
+                  </p>
+                ) : null}
               </ReviewSummaryCard>
             )}
           />

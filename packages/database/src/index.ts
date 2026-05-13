@@ -857,6 +857,11 @@ const caseQaReviews = pgTable("case_qa_reviews", {
   caseId: uuid("case_id")
     .notNull()
     .references(() => cases.id, { onDelete: "cascade" }),
+  commercialFactCheckedAt: timestamp("commercial_fact_checked_at", { mode: "string", withTimezone: true }),
+  commercialFactGroundingStatus: text("commercial_fact_grounding_status").notNull().default("not_required"),
+  commercialFactReferences: jsonb("commercial_fact_references").$type<PersistedCommercialFactReference[]>().notNull().default(sql`'[]'::jsonb`),
+  commercialFactRequiredKinds: jsonb("commercial_fact_required_kinds").$type<CommercialFactKind[]>().notNull().default(sql`'[]'::jsonb`),
+  commercialFactWarnings: jsonb("commercial_fact_warnings").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   draftMessage: text("draft_message"),
   id: uuid("id").primaryKey(),
@@ -1151,7 +1156,16 @@ export interface LeadCaptureStore {
       uploadedAt: string;
     }
   ): Promise<PersistedCaseDetail | null>;
-  prepareCaseReplyDraftQaReview(caseId: string, input: PrepareCaseReplyDraftQaReviewInput): Promise<PersistedCaseDetail | null>;
+  prepareCaseReplyDraftQaReview(
+    caseId: string,
+    input: PrepareCaseReplyDraftQaReviewInput & {
+      commercialFactCheckedAt: string | null;
+      commercialFactGroundingStatus: CommercialFactGroundingStatus;
+      commercialFactReferences: PersistedCommercialFactReference[];
+      commercialFactRequiredKinds: CommercialFactKind[];
+      commercialFactWarnings: string[];
+    }
+  ): Promise<PersistedCaseDetail | null>;
   requestCaseQaReview(caseId: string, input: RequestCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   resolveCaseQaReview(caseId: string, qaReviewId: string, input: ResolveCaseQaReviewInput): Promise<PersistedCaseDetail | null>;
   sendCaseReply(
@@ -1998,6 +2012,11 @@ export async function createAlphaLeadCaptureStore(options?: {
       trigger_source text not null default 'manual_request',
       policy_signals jsonb not null default '[]'::jsonb,
       trigger_evidence jsonb not null default '[]'::jsonb,
+      commercial_fact_grounding_status text not null default 'not_required',
+      commercial_fact_required_kinds jsonb not null default '[]'::jsonb,
+      commercial_fact_references jsonb not null default '[]'::jsonb,
+      commercial_fact_warnings jsonb not null default '[]'::jsonb,
+      commercial_fact_checked_at timestamptz,
       reviewer_name text,
       review_summary text,
       reviewed_at timestamptz,
@@ -2010,6 +2029,11 @@ export async function createAlphaLeadCaptureStore(options?: {
     alter table case_qa_reviews add column if not exists trigger_evidence jsonb not null default '[]'::jsonb;
     alter table case_qa_reviews add column if not exists subject_type text not null default 'case_message';
     alter table case_qa_reviews add column if not exists draft_message text;
+    alter table case_qa_reviews add column if not exists commercial_fact_grounding_status text not null default 'not_required';
+    alter table case_qa_reviews add column if not exists commercial_fact_required_kinds jsonb not null default '[]'::jsonb;
+    alter table case_qa_reviews add column if not exists commercial_fact_references jsonb not null default '[]'::jsonb;
+    alter table case_qa_reviews add column if not exists commercial_fact_warnings jsonb not null default '[]'::jsonb;
+    alter table case_qa_reviews add column if not exists commercial_fact_checked_at timestamptz;
 
     create table if not exists automation_jobs (
       id uuid primary key,
@@ -2436,6 +2460,11 @@ export async function createAlphaLeadCaptureStore(options?: {
     const records = await db
       .select({
         caseId: caseQaReviews.caseId,
+        commercialFactCheckedAt: caseQaReviews.commercialFactCheckedAt,
+        commercialFactGroundingStatus: caseQaReviews.commercialFactGroundingStatus,
+        commercialFactReferences: caseQaReviews.commercialFactReferences,
+        commercialFactRequiredKinds: caseQaReviews.commercialFactRequiredKinds,
+        commercialFactWarnings: caseQaReviews.commercialFactWarnings,
         createdAt: caseQaReviews.createdAt,
         draftMessage: caseQaReviews.draftMessage,
         policySignals: caseQaReviews.policySignals,
@@ -3161,6 +3190,11 @@ export async function createAlphaLeadCaptureStore(options?: {
           .orderBy(desc(managerInterventions.createdAt)),
         db
           .select({
+            commercialFactCheckedAt: caseQaReviews.commercialFactCheckedAt,
+            commercialFactGroundingStatus: caseQaReviews.commercialFactGroundingStatus,
+            commercialFactReferences: caseQaReviews.commercialFactReferences,
+            commercialFactRequiredKinds: caseQaReviews.commercialFactRequiredKinds,
+            commercialFactWarnings: caseQaReviews.commercialFactWarnings,
             createdAt: caseQaReviews.createdAt,
             draftMessage: caseQaReviews.draftMessage,
             policySignals: caseQaReviews.policySignals,
@@ -3717,6 +3751,11 @@ export async function createAlphaLeadCaptureStore(options?: {
     transaction: AlphaTransaction,
     input: {
       caseId: string;
+      commercialFactCheckedAt: string | null;
+      commercialFactGroundingStatus: CommercialFactGroundingStatus;
+      commercialFactReferences: PersistedCommercialFactReference[];
+      commercialFactRequiredKinds: CommercialFactKind[];
+      commercialFactWarnings: string[];
       createdAt: string;
       draftMessage: string | null;
       policySignals: QaPolicySignal[];
@@ -3730,6 +3769,11 @@ export async function createAlphaLeadCaptureStore(options?: {
   ) => {
     await transaction.insert(caseQaReviews).values({
       caseId: input.caseId,
+      commercialFactCheckedAt: input.commercialFactCheckedAt,
+      commercialFactGroundingStatus: input.commercialFactGroundingStatus,
+      commercialFactReferences: input.commercialFactReferences,
+      commercialFactRequiredKinds: input.commercialFactRequiredKinds,
+      commercialFactWarnings: input.commercialFactWarnings,
       createdAt: input.createdAt,
       draftMessage: input.draftMessage,
       id: input.qaReviewId,
@@ -4892,6 +4936,11 @@ export async function createAlphaLeadCaptureStore(options?: {
         if (automaticQaReviewId) {
           await createQaReviewRecord(transaction, {
             caseId: createdCaseId,
+            commercialFactCheckedAt: null,
+            commercialFactGroundingStatus: "not_required",
+            commercialFactReferences: [],
+            commercialFactRequiredKinds: [],
+            commercialFactWarnings: [],
             createdAt,
             draftMessage: null,
             policySignals: automaticQaMatches.map((match) => match.signal),
@@ -5052,6 +5101,11 @@ export async function createAlphaLeadCaptureStore(options?: {
       await db.transaction(async (transaction) => {
         await createQaReviewRecord(transaction, {
           caseId,
+          commercialFactCheckedAt: null,
+          commercialFactGroundingStatus: "not_required",
+          commercialFactReferences: [],
+          commercialFactRequiredKinds: [],
+          commercialFactWarnings: [],
           createdAt,
           draftMessage: null,
           policySignals: [],
@@ -5125,6 +5179,11 @@ export async function createAlphaLeadCaptureStore(options?: {
       await db.transaction(async (transaction) => {
         await createQaReviewRecord(transaction, {
           caseId,
+          commercialFactCheckedAt: input.commercialFactCheckedAt,
+          commercialFactGroundingStatus: input.commercialFactGroundingStatus,
+          commercialFactReferences: input.commercialFactReferences,
+          commercialFactRequiredKinds: input.commercialFactRequiredKinds,
+          commercialFactWarnings: input.commercialFactWarnings,
           createdAt,
           draftMessage: input.draftMessage,
           policySignals: draftPolicyMatches.map((match) => match.signal),
@@ -5142,6 +5201,11 @@ export async function createAlphaLeadCaptureStore(options?: {
           eventType: triggerSource === "policy_rule" ? "qa_review_policy_opened" : "qa_review_requested",
           id: randomUUID(),
           payload: {
+            commercialFactCheckedAt: input.commercialFactCheckedAt,
+            commercialFactGroundingStatus: input.commercialFactGroundingStatus,
+            commercialFactReferences: input.commercialFactReferences,
+            commercialFactRequiredKinds: input.commercialFactRequiredKinds,
+            commercialFactWarnings: input.commercialFactWarnings,
             draftMessage: input.draftMessage,
             policySignals: draftPolicyMatches.map((match) => match.signal),
             qaReviewId,
@@ -5182,6 +5246,11 @@ export async function createAlphaLeadCaptureStore(options?: {
 
       const currentQaReview = await db
         .select({
+          commercialFactCheckedAt: caseQaReviews.commercialFactCheckedAt,
+          commercialFactGroundingStatus: caseQaReviews.commercialFactGroundingStatus,
+          commercialFactReferences: caseQaReviews.commercialFactReferences,
+          commercialFactRequiredKinds: caseQaReviews.commercialFactRequiredKinds,
+          commercialFactWarnings: caseQaReviews.commercialFactWarnings,
           createdAt: caseQaReviews.createdAt,
           draftMessage: caseQaReviews.draftMessage,
           policySignals: caseQaReviews.policySignals,
@@ -6022,6 +6091,11 @@ export async function createAlphaLeadCaptureStore(options?: {
         ) {
           await createQaReviewRecord(transaction, {
             caseId: matchedCaseId,
+            commercialFactCheckedAt: null,
+            commercialFactGroundingStatus: "not_required",
+            commercialFactReferences: [],
+            commercialFactRequiredKinds: [],
+            commercialFactWarnings: [],
             createdAt: input.receivedAt,
             draftMessage: null,
             policySignals: automaticQaMatches.map((match) => match.signal),
@@ -9264,6 +9338,11 @@ function hydrateManagerIntervention(value: {
 }
 
 function hydrateCaseQaReview(value: {
+  commercialFactCheckedAt: string | null;
+  commercialFactGroundingStatus: string | null;
+  commercialFactReferences: PersistedCommercialFactReference[] | null;
+  commercialFactRequiredKinds: string[] | null;
+  commercialFactWarnings: string[] | null;
   createdAt: string;
   draftMessage: string | null;
   policySignals: QaPolicySignal[] | null;
@@ -9280,6 +9359,11 @@ function hydrateCaseQaReview(value: {
   updatedAt: string;
 }): PersistedCaseQaReview {
   return {
+    commercialFactCheckedAt: value.commercialFactCheckedAt,
+    commercialFactGroundingStatus: toCommercialFactGroundingStatus(value.commercialFactGroundingStatus ?? "not_required"),
+    commercialFactReferences: (value.commercialFactReferences ?? []).map((fact) => hydratePersistedCommercialFactReference(fact)),
+    commercialFactRequiredKinds: (value.commercialFactRequiredKinds ?? []).map((kind) => toCommercialFactKind(kind)),
+    commercialFactWarnings: value.commercialFactWarnings ?? [],
     createdAt: value.createdAt,
     draftMessage: value.draftMessage,
     policySignals: (value.policySignals ?? []).map((signal) => toCaseQaPolicySignal(signal)),

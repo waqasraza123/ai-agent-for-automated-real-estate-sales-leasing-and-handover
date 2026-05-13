@@ -688,6 +688,46 @@ export function getPersistedAgentGroundingNote(
     : "This decision did not require a commercial fact reference before execution.";
 }
 
+export function getPersistedCommercialFactGroundingLabel(
+  locale: SupportedLocale,
+  status: NonNullable<PersistedCaseDetail["currentQaReview"]>["commercialFactGroundingStatus"]
+) {
+  const labels = {
+    ar: {
+      grounded: "مدعوم بحقائق معتمدة",
+      missing_required_evidence: "ينقصه دليل معتمد",
+      not_required: "لا يتطلب حقائق تجارية"
+    },
+    en: {
+      grounded: "Grounded on approved facts",
+      missing_required_evidence: "Missing approved evidence",
+      not_required: "No commercial facts required"
+    }
+  } as const;
+
+  return labels[locale][status];
+}
+
+export function getPersistedCommercialFactGroundingNote(
+  locale: SupportedLocale,
+  qaReview: NonNullable<PersistedCaseDetail["currentQaReview"]> | PersistedCaseDetail["qaReviews"][number]
+) {
+  if (qaReview.commercialFactWarnings.length > 0) {
+    return qaReview.commercialFactWarnings.join(locale === "ar" ? "، " : ", ");
+  }
+
+  if (qaReview.commercialFactReferences.length > 0) {
+    const sourceLabels = Array.from(new Set(qaReview.commercialFactReferences.map((fact) => fact.sourceLabel))).slice(0, 2);
+    return locale === "ar"
+      ? `يحمل سجل الجودة ${qaReview.commercialFactReferences.length} مرجعاً معتمداً: ${sourceLabels.join("، ")}.`
+      : `QA record carries ${qaReview.commercialFactReferences.length} approved references: ${sourceLabels.join(", ")}.`;
+  }
+
+  return locale === "ar"
+    ? "لم تحتج هذه المسودة إلى مرجع تجاري قبل اعتماد الجودة."
+    : "This draft did not require a commercial fact reference before QA approval.";
+}
+
 export function getPersistedDocumentDisplay(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.documentRequests.map((documentRequest) => ({
     analysisSummary: getDocumentAnalysisSummary(locale, documentRequest.latestUpload?.analysis ?? null),
@@ -1000,6 +1040,15 @@ export function getPersistedQaReviewDisplay(locale: SupportedLocale, caseDetail:
         : ("critical" as const);
 
   return {
+    commercialFactCheckedAt: caseDetail.currentQaReview.commercialFactCheckedAt
+      ? formatDateTime(caseDetail.currentQaReview.commercialFactCheckedAt, locale)
+      : null,
+    commercialFactGroundingLabel: getPersistedCommercialFactGroundingLabel(locale, caseDetail.currentQaReview.commercialFactGroundingStatus),
+    commercialFactGroundingNote: getPersistedCommercialFactGroundingNote(locale, caseDetail.currentQaReview),
+    commercialFactGroundingStatus: caseDetail.currentQaReview.commercialFactGroundingStatus,
+    commercialFactReferences: caseDetail.currentQaReview.commercialFactReferences,
+    commercialFactRequiredKinds: caseDetail.currentQaReview.commercialFactRequiredKinds,
+    commercialFactWarnings: caseDetail.currentQaReview.commercialFactWarnings,
     draftMessage: caseDetail.currentQaReview.draftMessage,
     policySignalLabels: caseDetail.currentQaReview.policySignals.map((signal) => getCaseQaPolicySignalLabel(locale, signal)),
     policySignals: caseDetail.currentQaReview.policySignals,
@@ -1127,6 +1176,13 @@ export function getPersistedActiveQaItemDisplay(locale: SupportedLocale, caseDet
 
 export function getPersistedQaReviewHistory(locale: SupportedLocale, caseDetail: PersistedCaseDetail) {
   return caseDetail.qaReviews.map((qaReview) => ({
+    commercialFactCheckedAt: qaReview.commercialFactCheckedAt ? formatDateTime(qaReview.commercialFactCheckedAt, locale) : null,
+    commercialFactGroundingLabel: getPersistedCommercialFactGroundingLabel(locale, qaReview.commercialFactGroundingStatus),
+    commercialFactGroundingNote: getPersistedCommercialFactGroundingNote(locale, qaReview),
+    commercialFactGroundingStatus: qaReview.commercialFactGroundingStatus,
+    commercialFactReferences: qaReview.commercialFactReferences,
+    commercialFactRequiredKinds: qaReview.commercialFactRequiredKinds,
+    commercialFactWarnings: qaReview.commercialFactWarnings,
     createdAt: formatDateTime(qaReview.createdAt, locale),
     draftMessage: qaReview.draftMessage,
     policySignalLabels: qaReview.policySignals.map((signal) => getCaseQaPolicySignalLabel(locale, signal)),
