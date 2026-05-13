@@ -57,11 +57,27 @@ export default async function RevenueManagerPage(props: PageProps) {
   ];
   const readinessProjects = Array.from(
     new Set([
+      ...commercialSources.map((source) => source.projectCode),
       ...commercialFacts.map((fact) => fact.projectCode),
       ...commercialProposals.map((proposal) => proposal.projectCode),
       ...commercialEvidenceGaps.map((gap) => gap.projectCode)
     ])
   ).sort();
+  const commercialReadinessOwnersByProject = new Map<string, string[]>();
+
+  for (const source of commercialSources) {
+    if (!source.ownerName) {
+      continue;
+    }
+
+    const owners = commercialReadinessOwnersByProject.get(source.projectCode) ?? [];
+
+    if (!owners.includes(source.ownerName)) {
+      owners.push(source.ownerName);
+      commercialReadinessOwnersByProject.set(source.projectCode, owners);
+    }
+  }
+
   const commercialReadinessKindBreakdown = readinessProjects
     .flatMap((projectCode) =>
       commercialFactKinds.map((kind) => {
@@ -76,6 +92,7 @@ export default async function RevenueManagerPage(props: PageProps) {
           expiringSoonFactsCount: factsForKind.filter((fact) => fact.freshnessStatus === "expiring_soon").length,
           kind,
           openEvidenceGapsCount: evidenceGapsForKind.length,
+          ownerNames: commercialReadinessOwnersByProject.get(projectCode) ?? [],
           pendingApprovalsCount: pendingProposalsForKind.length,
           projectCode,
           staleFactsCount: factsForKind.filter((fact) => fact.freshnessStatus === "stale" || fact.freshnessStatus === "expired").length

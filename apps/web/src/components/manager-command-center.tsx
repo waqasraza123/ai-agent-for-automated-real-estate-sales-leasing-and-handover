@@ -788,6 +788,7 @@ export function RevenueManagerCommandCenter(props: {
       expiringSoonFactsCount: number;
       kind: CommercialFactKind;
       openEvidenceGapsCount: number;
+      ownerNames: string[];
       pendingApprovalsCount: number;
       projectCode: string;
       staleFactsCount: number;
@@ -1127,6 +1128,13 @@ export function RevenueManagerCommandCenter(props: {
                           {item.kind}
                         </StatusBadge>
                         <StatusBadge>{item.projectCode}</StatusBadge>
+                        <StatusBadge tone={item.ownerNames.length > 0 ? "success" : "warning"}>
+                          {item.ownerNames.length > 0
+                            ? item.ownerNames.join(props.locale === "ar" ? "، " : ", ")
+                            : props.locale === "ar"
+                              ? "غير معين"
+                              : "Unassigned"}
+                        </StatusBadge>
                       </div>
                     }
                     summary={

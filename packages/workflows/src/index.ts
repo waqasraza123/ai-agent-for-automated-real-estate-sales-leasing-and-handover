@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type {
   ApproveHandoverCustomerUpdateInput,
+  AssignCommercialSourceOwnerInput,
   CaseAgentActionType,
   CaseAgentBlockedReason,
   CaseAgentDecision,
@@ -107,6 +108,14 @@ export class WorkflowRuleError extends Error {
 
 export async function createPersistedCommercialSource(store: LeadCaptureStore, input: CreateCommercialSourceInput) {
   return store.createCommercialSource(input);
+}
+
+export async function assignPersistedCommercialSourceOwner(
+  store: LeadCaptureStore,
+  sourceId: string,
+  input: AssignCommercialSourceOwnerInput
+) {
+  return store.assignCommercialSourceOwner(sourceId, input);
 }
 
 export async function listPersistedCommercialSources(store: LeadCaptureStore, input?: {

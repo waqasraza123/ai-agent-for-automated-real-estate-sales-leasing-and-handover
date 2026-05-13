@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import type {
   ApproveHandoverCustomerUpdateInput,
   ApproveCommercialFactProposalInput,
+  AssignCommercialSourceOwnerInput,
   BulkApproveCommercialFactProposalsInput,
   BulkRejectCommercialFactProposalsInput,
   CaseReplyGroundingPreview,
@@ -142,6 +143,18 @@ export async function createCommercialSource(input: CreateCommercialSourceInput,
   return requestJson<CommercialSourceDetail>("/v1/commercial-sources", {
     headers: await getOperatorSessionHeaders(operatorRole),
     method: "POST",
+    payload: input
+  });
+}
+
+export async function assignCommercialSourceOwner(
+  sourceId: string,
+  input: AssignCommercialSourceOwnerInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<CommercialSourceDetail>(`/v1/commercial-sources/${sourceId}/owner`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "PATCH",
     payload: input
   });
 }

@@ -2,6 +2,7 @@ import Fastify from "fastify";
 
 import {
   approveHandoverCustomerUpdateInputSchema,
+  assignCommercialSourceOwnerInputSchema,
   approveCommercialFactProposalInputSchema,
   bulkApproveCommercialFactProposalsInputSchema,
   bulkRejectCommercialFactProposalsInputSchema,
@@ -56,6 +57,7 @@ import {
 } from "@real-estate-ai/integrations";
 import {
   approvePersistedHandoverCustomerUpdate,
+  assignPersistedCommercialSourceOwner,
   approvePersistedCommercialFactProposal,
   bulkApprovePersistedCommercialFactProposals,
   bulkRejectPersistedCommercialFactProposals,
@@ -298,6 +300,37 @@ export function buildApiApp(dependencies: {
     }
 
     return reply.status(201).send(await createPersistedCommercialSource(dependencies.store, result.data));
+  });
+
+  app.patch<{
+    Params: {
+      sourceId: string;
+    };
+  }>("/v1/commercial-sources/:sourceId/owner", async (request, reply) => {
+    const permission = "manage_commercial_sources";
+
+    if (!requireOperatorPermission(request, reply, permission)) {
+      return reply;
+    }
+
+    const result = assignCommercialSourceOwnerInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const source = await assignPersistedCommercialSourceOwner(dependencies.store, request.params.sourceId, result.data);
+
+    if (!source) {
+      return reply.status(404).send({
+        error: "commercial_source_not_found"
+      });
+    }
+
+    return source;
   });
 
   app.get<{

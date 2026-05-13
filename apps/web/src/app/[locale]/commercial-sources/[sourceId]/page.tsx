@@ -16,7 +16,14 @@ import {
   twoColumnGridClassName
 } from "@real-estate-ai/ui";
 
-import { BulkProposalDecisionForms, CommercialFactExpiryReviewForm, InventoryImportForm, ProposalDecisionForms, SourceRefreshTaskResolutionForm } from "@/components/commercial-source-forms";
+import {
+  BulkProposalDecisionForms,
+  CommercialFactExpiryReviewForm,
+  CommercialSourceOwnerAssignmentForm,
+  InventoryImportForm,
+  ProposalDecisionForms,
+  SourceRefreshTaskResolutionForm
+} from "@/components/commercial-source-forms";
 import { ScreenIntro } from "@/components/screen-intro";
 import { getCurrentOperatorRole } from "@/lib/operator-session";
 import { tryGetCommercialSourceDetail, tryListCommercialSourceRefreshTasks } from "@/lib/live-api";
@@ -61,10 +68,30 @@ export default async function CommercialSourceDetailPage(props: PageProps) {
             <DetailGrid>
               <DetailItem label={locale === "ar" ? "النوع" : "Type"} value={source.sourceType} />
               <DetailItem label={locale === "ar" ? "الحالة" : "State"} value={source.state} />
+              <DetailItem label={locale === "ar" ? "مالك المصدر" : "Source owner"} value={source.ownerName ?? "-"} />
               <DetailItem label={locale === "ar" ? "حقائق نشطة" : "Active facts"} value={String(source.activeFactsCount)} />
               <DetailItem label={locale === "ar" ? "مقترحات معلقة" : "Pending proposals"} value={String(source.pendingProposalsCount)} />
               <DetailItem label={locale === "ar" ? "مهام تحديث مفتوحة" : "Open refresh tasks"} value={String(source.openRefreshTasksCount)} />
             </DetailGrid>
+          </WorkflowPanelBody>
+        </Panel>
+
+        <Panel title={locale === "ar" ? "تعيين المالك" : "Owner assignment"}>
+          <WorkflowPanelBody
+            className="mt-4"
+            summary={
+              locale === "ar"
+                ? "اربط مسؤولاً واضحاً بمهام التحديث وفجوات الأدلة لهذا المصدر."
+                : "Attach a clear owner to refresh tasks and evidence pressure for this source."
+            }
+          >
+            <CommercialSourceOwnerAssignmentForm
+              canManage={canManage}
+              currentOwnerName={source.ownerName}
+              locale={locale}
+              returnPath={`/${locale}/commercial-sources/${source.sourceId}`}
+              sourceId={source.sourceId}
+            />
           </WorkflowPanelBody>
         </Panel>
 
@@ -167,6 +194,8 @@ export default async function CommercialSourceDetailPage(props: PageProps) {
                   }
                   meta={
                     <p className={caseMetaClassName}>
+                      {locale === "ar" ? "المالك:" : "Owner:"} {source.ownerName ?? (locale === "ar" ? "غير معين" : "Unassigned")}
+                      {" · "}
                       {locale === "ar" ? "مطلوبة قبل:" : "Due:"} {task.dueAt ?? "-"}
                     </p>
                   }

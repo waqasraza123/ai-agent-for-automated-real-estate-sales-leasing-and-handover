@@ -77,9 +77,11 @@ Commercial-source hardening now includes production-style manager ergonomics aro
 
 Source-refresh-required is now an operational task, not only a review note.
 
+- Commercial sources carry an optional source owner, captured when the source is created or later assigned from the source detail page.
+- The owner is intentionally source-level rather than task-level for now: refresh tasks, source cards, source detail, and readiness rows all inherit the same accountable desk so one stale price sheet does not create several competing ownership records.
 - Choosing `source_refresh_required` during an expiry review opens or updates one open source-refresh task for the affected fact.
 - The task is linked to the commercial source, affected fact, reason, requester, and optional due timestamp.
-- The source center lists open refresh tasks across projects so managers can see source-owner workload before reply grounding starts failing.
+- The source center lists open refresh tasks across projects with the inherited source owner so managers can see source-owner workload before reply grounding starts failing.
 - The source detail page lists all refresh tasks for that source, including completed and dismissed history.
 - Managers can resolve a task as:
   - `completed`: a refreshed source was imported or otherwise reviewed, and the refresh work is closed.
@@ -161,7 +163,8 @@ Commercial readiness now breaks pressure down by fact kind so managers can see w
   - expiring-soon facts
   - stale or expired facts
 - The revenue manager command center aggregates the same breakdown across project and kind, sorted by open evidence gaps first, then pending approvals, then stale facts.
-- The readiness panel now shows the top project/kind pressure rows beside the existing high-level commercial-readiness counters.
+- The readiness panel now shows the top project/kind pressure rows beside the existing high-level commercial-readiness counters, including assigned source owners for each project when a source owner exists.
+- Evidence gaps are still project/kind records, but the source center now displays the current project owner set beside each open gap; gaps without any source owner stay explicitly unassigned instead of implying a hidden owner.
 - This keeps readiness reviews operational: managers can tell whether pricing, payment-plan, availability, policy, fee, handover-date, unit-status, visit-term, or document-requirement sources need attention before more replies are blocked.
 
 ## API Boundaries
@@ -170,6 +173,7 @@ The source center is exposed only through trusted manager-session routes.
 
 - `POST /v1/commercial-fact-proposals/bulk-approve`
 - `POST /v1/commercial-fact-proposals/bulk-reject`
+- `PATCH /v1/commercial-sources/:sourceId/owner`
 - `GET /v1/commercial-facts/expiry-reviews`
 - `POST /v1/commercial-facts/:factId/expiry-review`
 - `GET /v1/commercial-source-refresh-tasks`

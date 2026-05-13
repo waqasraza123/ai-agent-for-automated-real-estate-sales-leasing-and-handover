@@ -49,6 +49,20 @@ export default async function CommercialSourcesPage(props: PageProps) {
   const factsNeedingReview = [...expiringFacts, ...staleFacts].slice(0, 12);
   const openRefreshTasks = refreshTasks.filter((task) => task.status === "open");
   const openEvidenceGaps = evidenceGaps.filter((gap) => gap.status === "open");
+  const ownersByProject = new Map<string, string[]>();
+
+  for (const source of sources) {
+    if (!source.ownerName) {
+      continue;
+    }
+
+    const owners = ownersByProject.get(source.projectCode) ?? [];
+
+    if (!owners.includes(source.ownerName)) {
+      owners.push(source.ownerName);
+      ownersByProject.set(source.projectCode, owners);
+    }
+  }
 
   return (
     <div className={pageStackClassName}>
@@ -154,6 +168,8 @@ export default async function CommercialSourcesPage(props: PageProps) {
                   }
                   meta={
                     <p className={caseMetaClassName}>
+                      {locale === "ar" ? "المالك:" : "Owner:"} {task.source.ownerName ?? (locale === "ar" ? "غير معين" : "Unassigned")}
+                      {" · "}
                       {locale === "ar" ? "مطلوبة قبل:" : "Due:"} {task.dueAt ?? "-"}
                     </p>
                   }
@@ -196,6 +212,9 @@ export default async function CommercialSourcesPage(props: PageProps) {
                   }
                   meta={
                     <p className={caseMetaClassName}>
+                      {locale === "ar" ? "مالك المشروع:" : "Project owner:"}{" "}
+                      {(ownersByProject.get(gap.projectCode) ?? []).join(locale === "ar" ? "، " : ", ") || (locale === "ar" ? "غير معين" : "Unassigned")}
+                      {" · "}
                       {locale === "ar" ? "آخر تحديث:" : "Updated:"} {gap.updatedAt}
                     </p>
                   }
@@ -237,6 +256,7 @@ export default async function CommercialSourcesPage(props: PageProps) {
                 >
                   <DetailGrid>
                     <DetailItem label={locale === "ar" ? "المشروع" : "Project"} value={source.projectCode} />
+                    <DetailItem label={locale === "ar" ? "مالك المصدر" : "Source owner"} value={source.ownerName ?? "-"} />
                     <DetailItem label={locale === "ar" ? "الحقائق النشطة" : "Active facts"} value={String(source.activeFactsCount)} />
                     <DetailItem label={locale === "ar" ? "مقترحات معلقة" : "Pending proposals"} value={String(source.pendingProposalsCount)} />
                     <DetailItem label={locale === "ar" ? "مهام تحديث" : "Refresh tasks"} value={String(source.openRefreshTasksCount)} />

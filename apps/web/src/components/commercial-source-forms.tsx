@@ -27,6 +27,7 @@ import {
 } from "@real-estate-ai/ui";
 
 import {
+  assignCommercialSourceOwnerAction,
   approveCommercialFactProposalAction,
   bulkApproveCommercialFactProposalsAction,
   bulkRejectCommercialFactProposalsAction,
@@ -72,6 +73,10 @@ export function CommercialSourceCreateForm(props: {
             ))}
           </Select>
         </label>
+        <label className={fieldStackClassName}>
+          <span className={fieldLabelClassName}>{props.locale === "ar" ? "مالك المصدر" : "Source owner"}</span>
+          <TextInput disabled={!props.canManage} name="ownerName" placeholder={props.locale === "ar" ? "مسؤول تحديث المصدر" : "Source refresh owner"} />
+        </label>
         <label className={cx(fieldStackClassName, fieldSpanFullClassName)}>
           <span className={fieldLabelClassName}>{props.locale === "ar" ? "وصف مختصر" : "Short description"}</span>
           <TextArea disabled={!props.canManage} name="description" rows={3} />
@@ -83,6 +88,42 @@ export function CommercialSourceCreateForm(props: {
           disabledLabel={props.locale === "ar" ? "يتطلب صلاحية المدير" : "Manager permission required"}
           idleLabel={props.locale === "ar" ? "إنشاء المصدر" : "Create source"}
           pendingLabel={props.locale === "ar" ? "جارٍ الإنشاء..." : "Creating..."}
+        />
+        <p className={formFeedbackClassName(state.status)}>{state.message}</p>
+      </div>
+    </form>
+  );
+}
+
+export function CommercialSourceOwnerAssignmentForm(props: {
+  canManage: boolean;
+  currentOwnerName: string | null;
+  locale: SupportedLocale;
+  returnPath: string;
+  sourceId: string;
+}) {
+  const [state, action] = useActionState(assignCommercialSourceOwnerAction, initialFormActionState);
+
+  return (
+    <form action={action} className={formStackClassName}>
+      <input name="locale" type="hidden" value={props.locale} />
+      <input name="returnPath" type="hidden" value={props.returnPath} />
+      <input name="sourceId" type="hidden" value={props.sourceId} />
+      <label className={fieldStackClassName}>
+        <span className={fieldLabelClassName}>{props.locale === "ar" ? "مالك المصدر" : "Source owner"}</span>
+        <TextInput
+          defaultValue={props.currentOwnerName ?? ""}
+          disabled={!props.canManage}
+          name="ownerName"
+          placeholder={props.locale === "ar" ? "اتركه فارغاً لإزالة التعيين" : "Leave blank to clear assignment"}
+        />
+      </label>
+      <div className={formActionsRowClassName}>
+        <FormSubmitButton
+          disabled={!props.canManage}
+          disabledLabel={props.locale === "ar" ? "يتطلب صلاحية المدير" : "Manager permission required"}
+          idleLabel={props.locale === "ar" ? "حفظ المالك" : "Save owner"}
+          pendingLabel={props.locale === "ar" ? "جارٍ الحفظ..." : "Saving..."}
         />
         <p className={formFeedbackClassName(state.status)}>{state.message}</p>
       </div>

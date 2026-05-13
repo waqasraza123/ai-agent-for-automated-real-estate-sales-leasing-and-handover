@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import {
   operatorSessionCookieName,
   operatorRoleSchema,
+  assignCommercialSourceOwnerInputSchema,
   approveHandoverCustomerUpdateInputSchema,
   approveCommercialFactProposalInputSchema,
   bulkApproveCommercialFactProposalsInputSchema,
@@ -61,6 +62,7 @@ import {
 import { createSignedOperatorSession, getCurrentOperatorRole } from "@/lib/operator-session";
 import {
   WebApiError,
+  assignCommercialSourceOwner,
   approveCommercialFactProposal,
   approveHandoverCustomerUpdate,
   bulkApproveCommercialFactProposals,
@@ -135,6 +137,7 @@ export async function createCommercialSourceAction(_: FormActionState, formData:
   const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
   const result = createCommercialSourceInputSchema.safeParse({
     description: normalizeOptionalString(formData.get("description")),
+    ownerName: normalizeOptionalString(formData.get("ownerName")),
     projectCode: formData.get("projectCode"),
     sourceName: formData.get("sourceName"),
     sourceType: formData.get("sourceType"),
@@ -150,6 +153,35 @@ export async function createCommercialSourceAction(_: FormActionState, formData:
     revalidatePath(returnPath);
     return {
       message: locale === "ar" ? "تم إنشاء المصدر التجاري." : "Commercial source created.",
+      status: "success"
+    };
+  } catch (error) {
+    return getActionError(locale, error);
+  }
+}
+
+export async function assignCommercialSourceOwnerAction(_: FormActionState, formData: FormData): Promise<FormActionState> {
+  const locale = getLocale(formData.get("locale"));
+  const returnPath = normalizeReturnPath(formData.get("returnPath"), locale);
+  const sourceId = formData.get("sourceId");
+
+  if (typeof sourceId !== "string") {
+    return getLocalizedError(locale);
+  }
+
+  const result = assignCommercialSourceOwnerInputSchema.safeParse({
+    ownerName: normalizeOptionalString(formData.get("ownerName")) ?? null
+  });
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), status: "error" };
+  }
+
+  try {
+    await assignCommercialSourceOwner(sourceId, result.data, await getOperatorRole());
+    revalidatePath(returnPath);
+    return {
+      message: locale === "ar" ? "تم تحديث مالك المصدر." : "Source owner updated.",
       status: "success"
     };
   } catch (error) {

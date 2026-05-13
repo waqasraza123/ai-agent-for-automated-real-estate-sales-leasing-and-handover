@@ -235,10 +235,15 @@ export const manageBulkCaseFollowUpInputSchema = z.object({
 
 export const createCommercialSourceInputSchema = z.object({
   description: z.string().trim().max(500).optional(),
+  ownerName: z.string().trim().min(2).max(120).optional(),
   projectCode: z.string().trim().min(2).max(80),
   sourceName: z.string().trim().min(2).max(160),
   sourceType: commercialSourceTypeSchema,
   tenantId: z.string().trim().min(2).max(80).default("local-alpha")
+});
+
+export const assignCommercialSourceOwnerInputSchema = z.object({
+  ownerName: z.string().trim().min(2).max(120).nullable()
 });
 
 export const importInventoryCsvInputSchema = z.object({
@@ -665,6 +670,7 @@ export const commercialSourceSummarySchema = z.object({
   description: z.string().nullable(),
   latestVersion: commercialSourceVersionSchema.nullable(),
   openRefreshTasksCount: z.number().int().nonnegative(),
+  ownerName: z.string().nullable(),
   pendingProposalsCount: z.number().int().nonnegative(),
   projectCode: z.string(),
   sourceId: z.uuid(),
@@ -1263,6 +1269,7 @@ export type CaseAgentTriggerType = z.infer<typeof caseAgentTriggerTypeSchema>;
 export type CaseAgentUrgencyLevel = z.infer<typeof caseAgentUrgencyLevelSchema>;
 export type ApprovedCommercialFact = z.infer<typeof approvedCommercialFactSchema>;
 export type ApproveCommercialFactProposalInput = z.infer<typeof approveCommercialFactProposalInputSchema>;
+export type AssignCommercialSourceOwnerInput = z.infer<typeof assignCommercialSourceOwnerInputSchema>;
 export type CommercialFact = z.infer<typeof commercialFactSchema>;
 export type CommercialEvidenceGap = z.infer<typeof commercialEvidenceGapSchema>;
 export type CommercialEvidenceGapList = z.infer<typeof commercialEvidenceGapListSchema>;

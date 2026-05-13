@@ -4,6 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type {
   ApproveHandoverCustomerUpdateInput,
   ApprovedCommercialFact,
+  AssignCommercialSourceOwnerInput,
   AutomationStatus,
   BulkApproveCommercialFactProposalsInput,
   BulkRejectCommercialFactProposalsInput,
@@ -430,6 +431,7 @@ const commercialSources = pgTable("commercial_sources", {
   createdAt: timestamp("created_at", { mode: "string", withTimezone: true }).defaultNow().notNull(),
   description: text("description"),
   id: uuid("id").primaryKey(),
+  ownerName: text("owner_name"),
   projectCode: text("project_code").notNull(),
   sourceName: text("source_name").notNull(),
   sourceType: text("source_type").notNull(),
@@ -1026,6 +1028,7 @@ export interface LeadCaptureStore {
     requestedCount: number;
     updatedCount: number;
   }>;
+  assignCommercialSourceOwner(sourceId: string, input: AssignCommercialSourceOwnerInput): Promise<CommercialSourceDetail | null>;
   createCommercialSource(input: CreateCommercialSourceInput): Promise<CommercialSourceDetail>;
   createManualCommercialFact(input: CreateManualCommercialFactInput): Promise<CommercialFact>;
   getCommercialSourceDetail(sourceId: string): Promise<CommercialSourceDetail | null>;
@@ -1637,10 +1640,13 @@ export async function createAlphaLeadCaptureStore(options?: {
       source_name text not null,
       source_type text not null,
       state text not null,
+      owner_name text,
       description text,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
+
+    alter table commercial_sources add column if not exists owner_name text;
 
     create table if not exists commercial_source_versions (
       id uuid primary key,
@@ -3897,6 +3903,7 @@ export async function createAlphaLeadCaptureStore(options?: {
           description: source.description,
           latestVersion: latestVersion ? hydrateCommercialSourceVersion(latestVersion) : null,
           openRefreshTasksCount: refreshTaskRecords.filter((task) => task.sourceId === source.id && task.status === "open").length,
+          ownerName: source.ownerName,
           pendingProposalsCount: proposalRecords.filter((proposal) => proposal.sourceId === source.id && proposal.state === "pending_review").length,
           projectCode: source.projectCode,
           sourceId: source.id,
@@ -4030,6 +4037,7 @@ export async function createAlphaLeadCaptureStore(options?: {
             description: source.description,
             latestVersion: latestVersion ? hydrateCommercialSourceVersion(latestVersion) : null,
             openRefreshTasksCount: taskRecords.filter((task) => task.sourceId === source.id && task.status === "open").length,
+            ownerName: source.ownerName,
             pendingProposalsCount: proposalRecords.filter((proposal) => proposal.sourceId === source.id && proposal.state === "pending_review").length,
             projectCode: source.projectCode,
             sourceId: source.id,
@@ -4263,6 +4271,7 @@ export async function createAlphaLeadCaptureStore(options?: {
       }),
       latestVersion: versions[0] ?? null,
       openRefreshTasksCount: refreshTaskRecords.filter((task) => task.status === "open").length,
+      ownerName: sourceRecord.ownerName,
       pendingProposalsCount: proposals.filter((proposal) => proposal.state === "pending_review").length,
       projectCode: sourceRecord.projectCode,
       proposals,
@@ -4471,6 +4480,7 @@ export async function createAlphaLeadCaptureStore(options?: {
         createdAt: now,
         description: input.description ?? null,
         id: sourceId,
+        ownerName: input.ownerName ?? null,
         projectCode: normalizeProjectCode(input.projectCode),
         sourceName: input.sourceName,
         sourceType: input.sourceType,
@@ -4491,86 +4501,24 @@ export async function createAlphaLeadCaptureStore(options?: {
       return listCommercialSourcesLocal(input);
     },
     async getCommercialSourceDetail(sourceId) {
+      return getCommercialSourceDetailLocal(sourceId);
+    },
+    async assignCommercialSourceOwner(sourceId, input) {
       const sourceRecord = (await db.select().from(commercialSources).where(eq(commercialSources.id, sourceId))).at(0);
 
       if (!sourceRecord) {
         return null;
       }
 
-      const [versionRecords, proposalRecords, factRecords, evidenceRecords, inventoryRecords, unitRecords, refreshTaskRecords] = await Promise.all([
-        db.select().from(commercialSourceVersions).where(eq(commercialSourceVersions.sourceId, sourceId)).orderBy(desc(commercialSourceVersions.createdAt)),
-        db.select().from(commercialFactProposals).where(eq(commercialFactProposals.sourceId, sourceId)).orderBy(desc(commercialFactProposals.updatedAt)),
-        db.select().from(commercialFacts).where(eq(commercialFacts.sourceId, sourceId)).orderBy(desc(commercialFacts.updatedAt)),
-        db.select().from(commercialFactEvidence).where(eq(commercialFactEvidence.sourceId, sourceId)),
-        db.select().from(inventoryUnitSnapshots).orderBy(desc(inventoryUnitSnapshots.createdAt)),
-        db.select().from(inventoryUnits),
-        db.select().from(commercialSourceRefreshTasks).where(eq(commercialSourceRefreshTasks.sourceId, sourceId))
-      ]);
-      const sourceLookup = new Map([[sourceRecord.id, sourceRecord]]);
-      const versionLookup = new Map(versionRecords.map((version) => [version.id, version]));
-      const unitLookup = new Map(unitRecords.map((unit) => [unit.id, unit]));
-      const versions = versionRecords.map((version) => hydrateCommercialSourceVersion(version));
-      const proposals = proposalRecords.map((proposal) =>
-        hydrateCommercialFactProposal(
-          proposal,
-          evidenceRecords.filter((evidence) => evidence.proposalId === proposal.id),
-          sourceLookup,
-          versionLookup
-        )
-      );
-      const activeFacts = factRecords
-        .filter((fact) => fact.status === "active")
-        .map((fact) =>
-          hydrateCommercialFact(
-            fact,
-            evidenceRecords.filter((evidence) => evidence.factId === fact.id),
-            sourceLookup,
-            versionLookup,
-            new Date().toISOString()
-          )
-        );
+      await db
+        .update(commercialSources)
+        .set({
+          ownerName: input.ownerName,
+          updatedAt: new Date().toISOString()
+        })
+        .where(eq(commercialSources.id, sourceId));
 
-      return {
-        activeFacts,
-        activeFactsCount: activeFacts.length,
-        createdAt: sourceRecord.createdAt,
-        description: sourceRecord.description,
-        inventorySnapshots: inventoryRecords
-          .filter((snapshot) => versionLookup.has(snapshot.sourceVersionId))
-          .map((snapshot) => {
-            const unit = unitLookup.get(snapshot.unitId);
-
-            return {
-              areaSqm: snapshot.areaSqm,
-              availabilityStatus: toInventoryUnitStatus(snapshot.availabilityStatus),
-              bedrooms: snapshot.bedrooms,
-              floor: snapshot.floor,
-              handoverDate: snapshot.handoverDate,
-              paymentPlanCode: snapshot.paymentPlanCode,
-              priceSar: snapshot.priceSar,
-              projectCode: snapshot.projectCode,
-              snapshotId: snapshot.id,
-              sourceUpdatedAt: snapshot.sourceUpdatedAt,
-              sourceVersionId: snapshot.sourceVersionId,
-              unitCode: unit?.unitCode ?? "unknown",
-              unitId: snapshot.unitId,
-              unitType: snapshot.unitType,
-              view: snapshot.view
-            };
-        }),
-        latestVersion: versions[0] ?? null,
-        openRefreshTasksCount: refreshTaskRecords.filter((task) => task.status === "open").length,
-        pendingProposalsCount: proposals.filter((proposal) => proposal.state === "pending_review").length,
-        projectCode: sourceRecord.projectCode,
-        proposals,
-        sourceId: sourceRecord.id,
-        sourceName: sourceRecord.sourceName,
-        sourceType: toCommercialSourceType(sourceRecord.sourceType),
-        state: toCommercialSourceLifecycleState(sourceRecord.state),
-        tenantId: sourceRecord.tenantId,
-        updatedAt: sourceRecord.updatedAt,
-        versions
-      } satisfies CommercialSourceDetail;
+      return getCommercialSourceDetailLocal(sourceId);
     },
     async recordCommercialInventoryImport(sourceId, input) {
       const sourceRecord = (await db.select().from(commercialSources).where(eq(commercialSources.id, sourceId))).at(0);
