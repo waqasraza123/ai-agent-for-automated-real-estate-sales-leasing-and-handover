@@ -144,6 +144,11 @@ Missing evidence now creates a manager-visible readiness item instead of only re
 - The Commercial Source Control Center now shows open evidence gaps with the blocked draft context and missing-kind warnings.
 - Revenue manager commercial-readiness metrics now include open evidence-gap pressure alongside stale facts, pending approvals, and blocked commercial replies.
 - Managers can resolve or dismiss a gap with a summary after adding, renewing, or approving the required commercial fact.
+- Open evidence gaps now resolve automatically when a matching approved fact becomes usable:
+  - approving a pending fact proposal closes gaps for the same tenant, project, and fact kind
+  - creating a manual approved fact closes gaps for the same tenant, project, and fact kind
+  - renewing an existing active fact closes gaps for the same tenant, project, and fact kind
+- Automatic resolution records who approved or renewed the fact when that actor is available, plus the fact title that satisfied the gap.
 
 ## API Boundaries
 

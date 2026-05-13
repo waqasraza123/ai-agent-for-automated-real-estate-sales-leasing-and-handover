@@ -4158,6 +4158,41 @@ export async function createAlphaLeadCaptureStore(options?: {
     return hydrateCommercialEvidenceGap(gapRecord);
   };
 
+  const resolveOpenCommercialEvidenceGapsForFact = async (
+    transaction: AlphaTransaction,
+    input: {
+      approvedByName: string | null;
+      factKind: CommercialFactKind;
+      factTitle: string;
+      now: string;
+      projectCode: string;
+      tenantId: string;
+    }
+  ) => {
+    const projectCode = normalizeProjectCode(input.projectCode);
+    const resolutionSummary = input.approvedByName
+      ? `Resolved automatically when ${input.approvedByName} approved commercial fact "${input.factTitle}".`
+      : `Resolved automatically when commercial fact "${input.factTitle}" was approved.`;
+
+    await transaction
+      .update(commercialEvidenceGaps)
+      .set({
+        resolutionSummary,
+        resolvedAt: input.now,
+        resolvedByName: input.approvedByName,
+        status: "resolved",
+        updatedAt: input.now
+      })
+      .where(
+        and(
+          eq(commercialEvidenceGaps.tenantId, input.tenantId),
+          eq(commercialEvidenceGaps.projectCode, projectCode),
+          eq(commercialEvidenceGaps.kind, input.factKind),
+          eq(commercialEvidenceGaps.status, "open")
+        )
+      );
+  };
+
   const getCommercialSourceDetailLocal = async (sourceId: string): Promise<CommercialSourceDetail | null> => {
     const sourceRecord = (await db.select().from(commercialSources).where(eq(commercialSources.id, sourceId))).at(0);
 
@@ -4321,6 +4356,15 @@ export async function createAlphaLeadCaptureStore(options?: {
           unitCode: evidence.unitCode
         });
       }
+
+      await resolveOpenCommercialEvidenceGapsForFact(transaction, {
+        approvedByName: input.approvedByName ?? null,
+        factKind: toCommercialFactKind(proposal.kind),
+        factTitle: proposal.title,
+        now,
+        projectCode: proposal.projectCode,
+        tenantId: proposal.tenantId
+      });
     });
 
     return (await listCommercialFactProposalsLocal({ tenantId: proposal.tenantId })).find((item) => item.proposalId === proposalId) ?? null;
@@ -4814,6 +4858,14 @@ export async function createAlphaLeadCaptureStore(options?: {
           sourceVersionId: versionId,
           unitCode: input.unitCode ?? null
         });
+        await resolveOpenCommercialEvidenceGapsForFact(transaction, {
+          approvedByName: input.evidenceLabel,
+          factKind: input.kind,
+          factTitle: input.title,
+          now,
+          projectCode,
+          tenantId: input.tenantId
+        });
       });
 
       return (await listActiveCommercialFactsLocal({ tenantId: input.tenantId })).find((fact) => fact.factId === factId)!;
@@ -4906,6 +4958,15 @@ export async function createAlphaLeadCaptureStore(options?: {
               })
               .where(eq(commercialSourceRefreshTasks.id, openRefreshTask.id));
           }
+
+          await resolveOpenCommercialEvidenceGapsForFact(transaction, {
+            approvedByName: input.reviewedByName ?? fact.approvedByName,
+            factKind: toCommercialFactKind(fact.kind),
+            factTitle: fact.title,
+            now,
+            projectCode: fact.projectCode,
+            tenantId: fact.tenantId
+          });
         }
 
         if (input.outcome === "archived") {
