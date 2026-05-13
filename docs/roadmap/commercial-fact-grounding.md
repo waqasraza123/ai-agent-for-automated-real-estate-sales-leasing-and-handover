@@ -88,6 +88,24 @@ Source-refresh-required is now an operational task, not only a review note.
 - Archiving a fact automatically dismisses any open refresh task for that fact.
 - Source summaries expose `openRefreshTasksCount`, so commercial source lists can show refresh pressure next to proposal and active-fact counts.
 
+## Evidence-Aware Reply Authoring
+
+Managers can now inspect the commercial evidence behind a proposed customer reply before the text enters QA or WhatsApp delivery.
+
+- `POST /v1/cases/:caseId/reply-grounding-preview` accepts a proposed reply draft and returns:
+  - required commercial fact kinds inferred from the draft text
+  - approved source-linked references that would ground the reply
+  - missing evidence warnings when required fact kinds are absent
+  - `not_required`, `grounded`, or `missing_required_evidence` status
+- The preview uses the same approved fact store as the case-agent grounding path:
+  - project-scoped facts are matched to the case project
+  - global facts can still apply where configured
+  - expired or inactive facts are excluded by the store lookup
+  - response locale follows the current case/customer language path
+- The conversation console now includes a commercial evidence preview panel beside manual reply and prepared-reply QA controls.
+- The preview supports both manager-prepared QA drafts and direct human replies, but it does not replace QA approval, send guardrails, or policy escalation.
+- Missing evidence should drive the operator back to the Commercial Source Control Center instead of encouraging unsupported customer promises.
+
 ## API Boundaries
 
 The source center is exposed only through trusted manager-session routes.
@@ -98,6 +116,7 @@ The source center is exposed only through trusted manager-session routes.
 - `POST /v1/commercial-facts/:factId/expiry-review`
 - `GET /v1/commercial-source-refresh-tasks`
 - `POST /v1/commercial-source-refresh-tasks/:taskId/resolve`
+- `POST /v1/cases/:caseId/reply-grounding-preview`
 
 These routes require the same `manage_commercial_sources` or revenue-manager workspace boundary as the existing commercial-source APIs.
 

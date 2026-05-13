@@ -21,6 +21,7 @@ import {
   listGovernanceEventsQuerySchema,
   manageBulkCaseFollowUpInputSchema,
   prepareCaseReplyDraftQaReviewInputSchema,
+  previewCaseReplyGroundingInputSchema,
   requestCaseQaReviewInputSchema,
   rejectCommercialFactProposalInputSchema,
   reviewCommercialFactExpiryInputSchema,
@@ -64,6 +65,7 @@ import {
   createPersistedManualCommercialFact,
   getPersistedCommercialSourceDetail,
   preparePersistedCaseReplyDraftQaReview,
+  previewPersistedCaseReplyGrounding,
   getPersistedProjectCommercialReadinessSummary,
   importPersistedInventoryCsv,
   listPersistedActiveCommercialFacts,
@@ -783,6 +785,35 @@ export function buildApiApp(dependencies: {
 
       throw error;
     }
+  });
+
+  app.post<{
+    Params: {
+      caseId: string;
+    };
+  }>("/v1/cases/:caseId/reply-grounding-preview", async (request, reply) => {
+    if (!requireAnyOperatorWorkspace(request, reply, ["sales", "manager_revenue", "qa"])) {
+      return reply;
+    }
+
+    const result = previewCaseReplyGroundingInputSchema.safeParse(request.body);
+
+    if (!result.success) {
+      return reply.status(400).send({
+        error: "invalid_request",
+        issues: result.error.issues
+      });
+    }
+
+    const preview = await previewPersistedCaseReplyGrounding(dependencies.store, request.params.caseId, result.data);
+
+    if (!preview) {
+      return reply.status(404).send({
+        error: "case_not_found"
+      });
+    }
+
+    return reply.status(200).send(preview);
   });
 
   app.post<{

@@ -340,6 +340,10 @@ export const prepareCaseReplyDraftQaReviewInputSchema = z.object({
   requestedByName: z.string().trim().min(2).max(120).optional()
 });
 
+export const previewCaseReplyGroundingInputSchema = z.object({
+  draftMessage: z.string().trim().min(10).max(2000)
+});
+
 export const sendCaseReplyInputSchema = z.object({
   message: z.string().trim().min(10).max(2000),
   nextAction: z.string().trim().min(4).max(200),
@@ -792,6 +796,16 @@ export const commercialSourceRefreshTaskListSchema = z.object({
   tasks: z.array(commercialSourceRefreshTaskSchema)
 });
 
+export const caseReplyGroundingPreviewSchema = z.object({
+  caseId: z.uuid(),
+  checkedAt: z.iso.datetime(),
+  draftMessage: z.string(),
+  references: z.array(persistedCommercialFactReferenceSchema),
+  requiredKinds: z.array(commercialFactKindSchema),
+  status: commercialFactGroundingStatusSchema,
+  warnings: z.array(z.string())
+});
+
 export const caseAgentDecisionSchema = z.object({
   actionType: caseAgentActionTypeSchema,
   blockedReason: caseAgentBlockedReasonSchema.nullable(),
@@ -1182,6 +1196,7 @@ export type BulkRejectCommercialFactProposalsInput = z.infer<typeof bulkRejectCo
 export type CaseAgentActionType = z.infer<typeof caseAgentActionTypeSchema>;
 export type CaseAgentBlockedReason = z.infer<typeof caseAgentBlockedReasonSchema>;
 export type CaseAgentDecision = z.infer<typeof caseAgentDecisionSchema>;
+export type CaseReplyGroundingPreview = z.infer<typeof caseReplyGroundingPreviewSchema>;
 export type CaseAgentIntentCategory = z.infer<typeof caseAgentIntentCategorySchema>;
 export type CaseAgentObjectionCategory = z.infer<typeof caseAgentObjectionCategorySchema>;
 export type CaseAgentRiskLevel = z.infer<typeof caseAgentRiskLevelSchema>;
@@ -1285,6 +1300,7 @@ export type OperatorRole = z.infer<typeof operatorRoleSchema>;
 export type OperatorSessionPayload = z.infer<typeof operatorSessionPayloadSchema>;
 export type OperatorWorkspace = z.infer<typeof operatorWorkspaceSchema>;
 export type PrepareCaseReplyDraftQaReviewInput = z.infer<typeof prepareCaseReplyDraftQaReviewInputSchema>;
+export type PreviewCaseReplyGroundingInput = z.infer<typeof previewCaseReplyGroundingInputSchema>;
 export type ListGovernanceEventsQuery = z.infer<typeof listGovernanceEventsQuerySchema>;
 export type ProjectCommercialReadinessSummary = z.infer<typeof projectCommercialReadinessSummarySchema>;
 export type RejectCommercialFactProposalInput = z.infer<typeof rejectCommercialFactProposalInputSchema>;

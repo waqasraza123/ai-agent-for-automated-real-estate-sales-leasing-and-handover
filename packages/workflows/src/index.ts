@@ -12,6 +12,7 @@ import type {
   CaseAgentSentiment,
   CaseAgentTriggerType,
   CaseAgentUrgencyLevel,
+  CaseReplyGroundingPreview,
   CommercialFactGroundingStatus,
   CommercialFactKind,
   CommercialFactUsageScope,
@@ -41,6 +42,7 @@ import type {
   ManageCaseFollowUpInput,
   PlanHandoverAppointmentInput,
   PrepareCaseReplyDraftQaReviewInput,
+  PreviewCaseReplyGroundingInput,
   RequestCaseQaReviewInput,
   PrepareHandoverCustomerUpdateDeliveryInput,
   PersistedCaseDetail,
@@ -638,6 +640,52 @@ export async function preparePersistedCaseReplyDraftQaReview(
   }
 
   return store.prepareCaseReplyDraftQaReview(caseId, input);
+}
+
+export async function previewPersistedCaseReplyGrounding(
+  store: LeadCaptureStore,
+  caseId: string,
+  input: PreviewCaseReplyGroundingInput
+): Promise<CaseReplyGroundingPreview | null> {
+  const caseDetail = await store.getCaseDetail(caseId);
+
+  if (!caseDetail) {
+    return null;
+  }
+
+  const checkedAt = new Date().toISOString();
+  const requiredKinds = getRequiredCommercialFactKindsForReplyDraft(input.draftMessage);
+
+  if (requiredKinds.length === 0) {
+    return {
+      caseId,
+      checkedAt,
+      draftMessage: input.draftMessage,
+      references: [],
+      requiredKinds,
+      status: "not_required",
+      warnings: []
+    };
+  }
+
+  const references = await store.listApprovedCommercialFacts({
+    kinds: requiredKinds,
+    locale: getCaseResponseLocale(caseDetail, getLatestInboundMessage(caseDetail)),
+    now: checkedAt,
+    projectInterest: caseDetail.projectInterest
+  });
+  const groundedKinds = new Set(references.map((fact) => fact.kind));
+  const missingKinds = requiredKinds.filter((kind) => !groundedKinds.has(kind));
+
+  return {
+    caseId,
+    checkedAt,
+    draftMessage: input.draftMessage,
+    references: references.map(toPersistedCommercialFactReference).slice(0, 8),
+    requiredKinds,
+    status: missingKinds.length === 0 ? "grounded" : "missing_required_evidence",
+    warnings: missingKinds.map((kind) => buildMissingCommercialFactWarning(caseDetail.preferredLocale, kind))
+  };
 }
 
 export async function resolvePersistedCaseQaReview(
@@ -3635,6 +3683,51 @@ function getRequiredCommercialFactKinds(
     caseDetail.documentRequests.some((documentRequest) => documentRequest.status !== "accepted")
   ) {
     requiredKinds.add("document_requirement");
+  }
+
+  return Array.from(requiredKinds);
+}
+
+function getRequiredCommercialFactKindsForReplyDraft(message: string): CommercialFactKind[] {
+  const requiredKinds = new Set<CommercialFactKind>();
+  const textCorpus = normalizeConversationText(message);
+  const hasPricingCommitment =
+    containsAnyKeyword(textCorpus, pricingCommitmentKeywords) ||
+    /(?:sar|ريال|﷼|\$|usd)\s*\d|\d+\s*(?:sar|ريال|﷼|usd)|\d+\s*%/.test(textCorpus);
+
+  if (hasPricingCommitment) {
+    requiredKinds.add("pricing");
+    requiredKinds.add("payment_plan");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, availabilityKeywords)) {
+    requiredKinds.add("availability");
+    requiredKinds.add("unit_status");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, feeKeywords)) {
+    requiredKinds.add("fees");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, handoverDateKeywords)) {
+    requiredKinds.add("handover_date");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, visitTermKeywords)) {
+    requiredKinds.add("visit_terms");
+    requiredKinds.add("policy");
+  }
+
+  if (containsAnyKeyword(textCorpus, documentKeywords)) {
+    requiredKinds.add("document_requirement");
+  }
+
+  if (containsAnyKeyword(textCorpus, unsafeCommercialCommitmentKeywords) && requiredKinds.size === 0) {
+    requiredKinds.add("policy");
   }
 
   return Array.from(requiredKinds);

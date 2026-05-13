@@ -25,6 +25,7 @@ import {
   manageCaseFollowUpInputSchema,
   planHandoverAppointmentInputSchema,
   prepareCaseReplyDraftQaReviewInputSchema,
+  previewCaseReplyGroundingInputSchema,
   prepareHandoverCustomerUpdateDeliveryInputSchema,
   qualifyCaseInputSchema,
   requestCaseQaReviewInputSchema,
@@ -77,6 +78,7 @@ import {
   manageCaseFollowUp,
   planHandoverAppointment,
   prepareCaseReplyDraftQaReview,
+  previewCaseReplyGrounding,
   prepareHandoverCustomerUpdateDelivery,
   qualifyCase,
   requestCaseQaReview,
@@ -701,6 +703,40 @@ export async function resolveCaseQaReviewAction(_: FormActionState, formData: Fo
     }
 
     return getActionError(locale, error);
+  }
+}
+
+export async function previewCaseReplyGroundingAction(
+  _: FormActionState & { preview?: Awaited<ReturnType<typeof previewCaseReplyGrounding>> | null },
+  formData: FormData
+): Promise<FormActionState & { preview?: Awaited<ReturnType<typeof previewCaseReplyGrounding>> | null }> {
+  const locale = getLocale(formData.get("locale"));
+  const caseId = formData.get("caseId");
+  const result = previewCaseReplyGroundingInputSchema.safeParse({
+    draftMessage: formData.get("draftMessage")
+  });
+
+  if (typeof caseId !== "string") {
+    return { ...getLocalizedError(locale), preview: null };
+  }
+
+  if (!result.success) {
+    return { message: getValidationMessage(locale), preview: null, status: "error" };
+  }
+
+  try {
+    const preview = await previewCaseReplyGrounding(caseId, result.data, await getOperatorRole());
+
+    return {
+      message:
+        locale === "ar"
+          ? "تم تحديث معاينة أدلة الرد التجارية."
+          : "Commercial reply evidence preview updated.",
+      preview,
+      status: "success"
+    };
+  } catch (error) {
+    return { ...getActionError(locale, error), preview: null };
   }
 }
 

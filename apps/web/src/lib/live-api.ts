@@ -5,6 +5,7 @@ import type {
   ApproveCommercialFactProposalInput,
   BulkApproveCommercialFactProposalsInput,
   BulkRejectCommercialFactProposalsInput,
+  CaseReplyGroundingPreview,
   CommercialFact,
   CommercialFactExpiryReview,
   CommercialFactProposalBulkDecisionResult,
@@ -37,6 +38,7 @@ import type {
   PersistedHandoverCaseDetail,
   ProjectCommercialReadinessSummary,
   QualifyCaseInput,
+  PreviewCaseReplyGroundingInput,
   RejectCommercialFactProposalInput,
   ReviewCommercialFactExpiryInput,
   ResolveCommercialSourceRefreshTaskInput,
@@ -323,6 +325,18 @@ export async function prepareCaseReplyDraftQaReview(
   operatorRole?: OperatorRole
 ) {
   return requestJson<PersistedCaseDetail>(`/v1/cases/${caseId}/reply-draft/qa-review`, {
+    headers: await getOperatorSessionHeaders(operatorRole),
+    method: "POST",
+    payload: input
+  });
+}
+
+export async function previewCaseReplyGrounding(
+  caseId: string,
+  input: PreviewCaseReplyGroundingInput,
+  operatorRole?: OperatorRole
+) {
+  return requestJson<CaseReplyGroundingPreview>(`/v1/cases/${caseId}/reply-grounding-preview`, {
     headers: await getOperatorSessionHeaders(operatorRole),
     method: "POST",
     payload: input

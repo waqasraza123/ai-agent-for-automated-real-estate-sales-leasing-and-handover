@@ -16,6 +16,7 @@ import {
 
 import { CaseRouteTabs } from "@/components/case-route-tabs";
 import { CaseManualReplyForm } from "@/components/case-manual-reply-form";
+import { CaseReplyGroundingPreviewForm } from "@/components/case-reply-grounding-preview-form";
 import { CaseReplyDraftQaRequestForm } from "@/components/case-reply-draft-qa-request-form";
 import { MessageThread } from "@/components/message-thread";
 import { PlaceholderNotice } from "@/components/placeholder-notice";
@@ -202,6 +203,23 @@ export default async function ConversationPage(props: PageProps) {
             </WorkflowPanelBody>
           </Panel>
         ) : null}
+
+        <Panel title={locale === "ar" ? "معاينة أدلة الرد التجاري" : "Commercial reply evidence preview"}>
+          <WorkflowPanelBody
+            className="mt-4"
+            summary={
+              locale === "ar"
+                ? "افحص مسودة الرد قبل إرسالها للجودة أو واتساب لترى حقائق الأسعار والتوفر والسياسات المعتمدة التي ستدعمها."
+                : "Inspect a proposed reply before QA or WhatsApp delivery to see the approved pricing, availability, and policy facts that support it."
+            }
+          >
+            <CaseReplyGroundingPreviewForm
+              caseId={persistedCase.caseId}
+              defaultDraftMessage={hasApprovedReplyDraft ? currentReplyDraft?.draftMessage : currentReplyDraft?.draftMessage ?? latestAgentRun?.proposedMessage ?? null}
+              locale={locale}
+            />
+          </WorkflowPanelBody>
+        </Panel>
 
         <div className={twoColumnGridClassName}>
           <Panel title={manualReplyCopy.title}>
